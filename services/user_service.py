@@ -104,10 +104,25 @@ class UserService:
                 stmt = select(UserMapping).where(
                     UserMapping.phone_number.in_(list(variations)),
                     UserMapping.is_active == True
-                ).limit(1)
+                )
 
                 result = await self.db.execute(stmt)
-                user = result.scalars().first()
+                users = result.scalars().all()
+
+                # If different users share phone-variation siblings, refuse rather
+                # than return a nondeterministic one (cross-account takeover risk).
+                distinct_ids = {u.id for u in users}
+                if len(distinct_ids) > 1:
+                    err = ConversationError(
+                        ErrorCode.USER_NOT_FOUND,
+                        f"Ambiguous phone ***{phone[-4:]} matched {len(distinct_ids)} distinct users",
+                        metadata={"sender_suffix": phone[-4:], "distinct_count": len(distinct_ids)},
+                    )
+                    logger.error(f"{err}")
+                    span.set_attribute("result.ambiguous", True)
+                    return None
+
+                user = users[0] if users else None
 
                 if user:
                     logger.info(f"Found active user for phone '***{phone[-4:]}' using variation '***{user.phone_number[-4:]}'")
