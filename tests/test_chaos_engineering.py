@@ -144,7 +144,7 @@ class TestCircuitBreaker:
         gw.client.get = AsyncMock(side_effect=httpx.ReadTimeout("timeout"))
 
         for _ in range(3):
-            result = await gw.execute(HttpMethod.GET, "/test", max_retries=0)
+            result = await gw.execute(HttpMethod.GET, "/test", max_retries=0, tenant_id="test")
 
         # Circuit should be open now
         assert gw._consecutive_failures >= gw.CIRCUIT_FAILURE_THRESHOLD
@@ -163,7 +163,7 @@ class TestCircuitBreaker:
         gw._consecutive_failures = 5
         gw._circuit_open_until = time.monotonic() + 60  # Open for 60s
 
-        result = await gw.execute(HttpMethod.GET, "/test")
+        result = await gw.execute(HttpMethod.GET, "/test", tenant_id="test")
 
         assert result.success is False
         assert result.error_code == "GATEWAY_CIRCUIT_OPEN"
@@ -194,7 +194,7 @@ class TestCircuitBreaker:
         gw.client = AsyncMock()
         gw.client.get = AsyncMock(return_value=mock_response)
 
-        result = await gw.execute(HttpMethod.GET, "/test", max_retries=0)
+        result = await gw.execute(HttpMethod.GET, "/test", max_retries=0, tenant_id="test")
 
         assert result.success is True
         assert gw._consecutive_failures == 0

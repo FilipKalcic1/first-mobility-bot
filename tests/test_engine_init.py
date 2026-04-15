@@ -43,7 +43,6 @@ def _make_engine():
         "ResponseFormatter": patch("services.engine.ResponseFormatter"),
         "DependencyResolver": patch("services.engine.DependencyResolver"),
         "ErrorLearningService": patch("services.engine.ErrorLearningService"),
-        "get_drift_detector": patch("services.engine.get_drift_detector"),
         "CostTracker": patch("services.engine.CostTracker"),
         "get_response_extractor": patch("services.engine.get_response_extractor"),
         "get_query_router": patch("services.engine.get_query_router"),
@@ -127,7 +126,6 @@ class TestInit:
              patch("services.engine.ResponseFormatter"), \
              patch("services.engine.DependencyResolver"), \
              patch("services.engine.ErrorLearningService"), \
-             patch("services.engine.get_drift_detector"), \
              patch("services.engine.CostTracker"), \
              patch("services.engine.get_response_extractor"), \
              patch("services.engine.get_query_router"), \

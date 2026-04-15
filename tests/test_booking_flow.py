@@ -194,7 +194,7 @@ async def test_booking_flow():
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(os.environ.get("APP_ENV") == "testing", reason="Integration test - requires real services")
+@pytest.mark.skipif(os.environ.get("RUN_INTEGRATION_TESTS") != "1", reason="Integration test - set RUN_INTEGRATION_TESTS=1 to run")
 async def test_api_directly():
     """Quick API test without full engine."""
 

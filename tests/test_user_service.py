@@ -212,7 +212,7 @@ class TestGetActiveIdentity:
         """Should return user when DB finds a match."""
         fake_user = _make_user_mapping("+385991234567")
         result_mock = MagicMock()
-        result_mock.scalars.return_value.first.return_value = fake_user
+        result_mock.scalars.return_value.all.return_value = [fake_user]
         mock_db.execute.return_value = result_mock
 
         user = await user_service.get_active_identity("+385991234567")
@@ -224,7 +224,7 @@ class TestGetActiveIdentity:
     async def test_user_not_found(self, user_service, mock_db):
         """Should return None when no matching user."""
         result_mock = MagicMock()
-        result_mock.scalars.return_value.first.return_value = None
+        result_mock.scalars.return_value.all.return_value = []
         mock_db.execute.return_value = result_mock
 
         user = await user_service.get_active_identity("+385991234567")
@@ -502,7 +502,7 @@ class TestVerifyUserIdentity:
         """When neither DB nor API has user, recommendation is 'not found'."""
         # DB returns None
         result_mock = MagicMock()
-        result_mock.scalars.return_value.first.return_value = None
+        result_mock.scalars.return_value.all.return_value = []
         mock_db.execute.return_value = result_mock
 
         # API returns empty
@@ -521,7 +521,7 @@ class TestVerifyUserIdentity:
         """DB and API agree -- recommendation should say OK."""
         fake_user = _make_user_mapping("+385991234567", person_id="person-match")
         result_mock = MagicMock()
-        result_mock.scalars.return_value.first.return_value = fake_user
+        result_mock.scalars.return_value.all.return_value = [fake_user]
         mock_db.execute.return_value = result_mock
 
         mock_gateway.execute.return_value = FakeAPIResponse(
@@ -542,7 +542,7 @@ class TestVerifyUserIdentity:
         """DB person_id differs from API -- recommendation flags stale data."""
         fake_user = _make_user_mapping("+385991234567", person_id="old-person")
         result_mock = MagicMock()
-        result_mock.scalars.return_value.first.return_value = fake_user
+        result_mock.scalars.return_value.all.return_value = [fake_user]
         mock_db.execute.return_value = result_mock
 
         mock_gateway.execute.return_value = FakeAPIResponse(
@@ -559,7 +559,7 @@ class TestVerifyUserIdentity:
     async def test_verify_without_gateway(self, user_service_no_gateway, mock_db):
         """Without gateway, API section should remain None."""
         result_mock = MagicMock()
-        result_mock.scalars.return_value.first.return_value = None
+        result_mock.scalars.return_value.all.return_value = []
         mock_db = user_service_no_gateway.db
         mock_db.execute = AsyncMock(return_value=result_mock)
 
@@ -628,7 +628,7 @@ class TestPhoneVariations:
     async def test_plus385_generates_expected_variations(self, user_service, mock_db):
         """For +385991234567 we expect: the original, digits-only, without +, with leading 0."""
         result_mock = MagicMock()
-        result_mock.scalars.return_value.first.return_value = None
+        result_mock.scalars.return_value.all.return_value = []
         mock_db.execute.return_value = result_mock
 
         await user_service.get_active_identity("+385991234567")
@@ -643,7 +643,7 @@ class TestPhoneVariations:
     async def test_local_format_generates_international(self, user_service, mock_db):
         """A local '0991234567' number should produce '385991234567' variation."""
         result_mock = MagicMock()
-        result_mock.scalars.return_value.first.return_value = None
+        result_mock.scalars.return_value.all.return_value = []
         mock_db.execute.return_value = result_mock
 
         await user_service.get_active_identity("0991234567")
