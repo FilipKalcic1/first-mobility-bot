@@ -65,6 +65,10 @@ Known limits (document to buyer, not bugs):
 | Dead one-shot scripts purged | `02267e0` | 15 files, 3265 LOC removed |
 | CRITICAL security findings closed | `deb9a40` | PII leak, key injection, CORS wildcard |
 | MAJOR observability findings | `c2b385c` | Silent-failure paths now log |
+| Croatian date parsed as UTC | `1ad0189` | `danas`/`sutra` use `Europe/Zagreb` (fallback `+01` on tzdata-less hosts) |
+| Phone-variation nondeterminism | `8dc3e4f` | Ambiguous lookups refuse; closes cross-account takeover vector |
+| LLM JSON extractor greediness | `9967743` | Brace-depth scanner replaces `\{[\s\S]*\}` regex |
+| Token refresh KeyError | `4a2d726` | Missing `access_token` → `GatewayError` + cooldown |
 
 ## Files the buyer should read first (in order)
 
