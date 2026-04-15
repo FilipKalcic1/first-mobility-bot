@@ -33,6 +33,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# SECURITY: allowlist of safe custom headers accepted from user context
+_SAFE_HEADERS = frozenset({"x-correlation-id", "x-request-id", "accept-language"})
+
 
 class ToolExecutor:
     """
@@ -472,8 +475,6 @@ class ToolExecutor:
             "Accept": "application/json"
         }
 
-        # SECURITY: Only allow safe, explicitly allowlisted custom headers
-        _SAFE_HEADERS = {"x-correlation-id", "x-request-id", "accept-language"}
         custom_headers = execution_context.user_context.get("headers", {})
         for key, value in custom_headers.items():
             if key.lower() in _SAFE_HEADERS:
