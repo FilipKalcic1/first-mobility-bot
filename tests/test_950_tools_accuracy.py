@@ -261,7 +261,7 @@ async def run_search_accuracy_test(test_cases: List[Dict], top_k: int = 10) -> D
     Returns detailed accuracy metrics.
     """
     # Lazy import to avoid loading everything for phrase tests
-    from services.tool_registry import ToolRegistry
+    from services.registry import ToolRegistry
     from services.unified_search import get_unified_search
 
     # Initialize registry

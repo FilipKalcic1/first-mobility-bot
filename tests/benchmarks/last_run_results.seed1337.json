@@ -1,0 +1,5283 @@
+{
+  "seed": 1337,
+  "sample_size": 100,
+  "paraphrases_per_tool": 3,
+  "total_queries": 276,
+  "top1_hits": 50,
+  "top5_hits": 81,
+  "top20_hits": 127,
+  "per_tool": [
+    {
+      "tool_id": "delete_CostCenters",
+      "index": 12,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_DocumentTypes",
+      "index": 17,
+      "top1": 0,
+      "top5": 1,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_DocumentTypes_DeleteByCriteria",
+      "index": 18,
+      "top1": 1,
+      "top5": 3,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_Expenses_id_documents_documentId",
+      "index": 44,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_LatestEquipmentCalendar_DeleteByCriteria",
+      "index": 46,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_LatestPersonPeriodicActivities_DeleteByCriteria",
+      "index": 55,
+      "top1": 0,
+      "top5": 1,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_Metadata_id_documents_documentId",
+      "index": 66,
+      "top1": 0,
+      "top5": 0,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_MileageReports_DeleteByCriteria",
+      "index": 68,
+      "top1": 0,
+      "top5": 0,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_OrgUnits_id",
+      "index": 73,
+      "top1": 1,
+      "top5": 2,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_Persons",
+      "index": 107,
+      "top1": 1,
+      "top5": 2,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_Pools",
+      "index": 111,
+      "top1": 0,
+      "top5": 0,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_Tags_id",
+      "index": 121,
+      "top1": 0,
+      "top5": 2,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_TenantPermissions_id_documents_documentId",
+      "index": 134,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_AvailabilityProjection_GroupBy",
+      "index": 169,
+      "top1": 1,
+      "top5": 1,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "get_AverageFuelExpensesAndMileages_from_to_GroupBy",
+      "index": 175,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_Companies_id_documents_documentId",
+      "index": 201,
+      "top1": 1,
+      "top5": 1,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_CostCenters_Agg",
+      "index": 205,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_CostCenters_id_documents",
+      "index": 209,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_EquipmentCalendarOn_on_ProjectTo",
+      "index": 234,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Equipment_Agg",
+      "index": 252,
+      "top1": 1,
+      "top5": 1,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_ExpenseTypes_Agg",
+      "index": 271,
+      "top1": 1,
+      "top5": 1,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "get_LatestEquipmentCalendar_Agg",
+      "index": 291,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_LatestVehicleCalendar",
+      "index": 314,
+      "top1": 2,
+      "top5": 2,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "get_LatestVehicleCalendar_Agg",
+      "index": 315,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_LatestVehicleCalendar_id",
+      "index": 318,
+      "top1": 0,
+      "top5": 2,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "get_LatestVehicleContracts_Agg",
+      "index": 321,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Lookup_CompanyId",
+      "index": 340,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Lookup_CostCenterId",
+      "index": 341,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Lookup_OrgUnitId",
+      "index": 356,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Lookup_PeriodicActivityTypeId",
+      "index": 361,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Lookup_ProviderId",
+      "index": 368,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Lookup_TimeZones",
+      "index": 373,
+      "top1": 2,
+      "top5": 2,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Lookup_TripTypeId",
+      "index": 374,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "get_Metadata_id_documents_documentId",
+      "index": 392,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_MileageReports_id_documents",
+      "index": 400,
+      "top1": 1,
+      "top5": 2,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "get_MonthlyMileages",
+      "index": 408,
+      "top1": 0,
+      "top5": 1,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_MonthlyMileages_Agg",
+      "index": 413,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_OrgUnits_Agg",
+      "index": 417,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_PeriodicActivities",
+      "index": 435,
+      "top1": 2,
+      "top5": 2,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "get_PeriodicActivitiesSchedules_id_documents_documentId",
+      "index": 442,
+      "top1": 0,
+      "top5": 1,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_PeriodicActivityTypes",
+      "index": 453,
+      "top1": 0,
+      "top5": 3,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "get_PersonActivityTypes_Agg",
+      "index": 463,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_PersonActivityTypes_id_documents_documentId",
+      "index": 468,
+      "top1": 0,
+      "top5": 0,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "get_PersonData_personIdOrEmail",
+      "index": 471,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_Roles",
+      "index": 517,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 2
+    },
+    {
+      "tool_id": "get_Tags",
+      "index": 538,
+      "top1": 1,
+      "top5": 1,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Tags_id_metadata",
+      "index": 546,
+      "top1": 3,
+      "top5": 3,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Teams_id",
+      "index": 560,
+      "top1": 0,
+      "top5": 2,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Teams_id_documents_documentId",
+      "index": 562,
+      "top1": 3,
+      "top5": 3,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Tenants_id_documents_documentId_thumb",
+      "index": 582,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_TripTypes",
+      "index": 584,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 2
+    },
+    {
+      "tool_id": "get_TripTypes_Agg",
+      "index": 585,
+      "top1": 0,
+      "top5": 0,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "get_TripTypes_id_documents_documentId_thumb",
+      "index": 591,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_Trips_id_documents",
+      "index": 599,
+      "top1": 1,
+      "top5": 1,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "get_VehicleCalendarOn_on_ProjectTo",
+      "index": 608,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_VehicleContracts",
+      "index": 617,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_VehicleContracts_GroupBy",
+      "index": 619,
+      "top1": 0,
+      "top5": 1,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_VehicleContracts_id_metadata",
+      "index": 625,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_VehicleTypes_GroupBy",
+      "index": 632,
+      "top1": 0,
+      "top5": 1,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_VehicleTypes_ProjectTo",
+      "index": 633,
+      "top1": 1,
+      "top5": 1,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "get_VehicleTypes_id",
+      "index": 634,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_VehiclesHistoricalEntries_id_documents_documentId",
+      "index": 650,
+      "top1": 1,
+      "top5": 1,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "get_VehiclesMonthlyExpenses",
+      "index": 653,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_WhatCanIDo",
+      "index": 668,
+      "top1": 2,
+      "top5": 2,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "patch_CostCenters_id",
+      "index": 672,
+      "top1": 0,
+      "top5": 1,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "patch_Expenses_id",
+      "index": 679,
+      "top1": 1,
+      "top5": 2,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "patch_PeriodicActivitiesSchedules_id",
+      "index": 684,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "patch_Persons_id",
+      "index": 691,
+      "top1": 0,
+      "top5": 1,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "patch_TeamMembers_id",
+      "index": 695,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "post_AddCase_parse",
+      "index": 707,
+      "top1": 2,
+      "top5": 3,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "post_Cases",
+      "index": 713,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "post_Cases_multipatch",
+      "index": 715,
+      "top1": 0,
+      "top5": 1,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "post_Equipment",
+      "index": 726,
+      "top1": 3,
+      "top5": 3,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "post_MileageReports_id_documents",
+      "index": 749,
+      "top1": 0,
+      "top5": 1,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "post_OrgUnits_id_documents",
+      "index": 755,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "post_PeriodicActivities_multipatch",
+      "index": 767,
+      "top1": 1,
+      "top5": 1,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "post_PersonPeriodicActivities_multipatch",
+      "index": 779,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "post_SchedulingModels_multipatch",
+      "index": 792,
+      "top1": 0,
+      "top5": 0,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "post_SendEmail",
+      "index": 793,
+      "top1": 1,
+      "top5": 1,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "post_TenantPermissions_id_documents",
+      "index": 808,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "post_TenantPermissions_multipatch",
+      "index": 809,
+      "top1": 2,
+      "top5": 2,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "post_TripTypes_id_documents",
+      "index": 814,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "post_Trips_id_documents",
+      "index": 817,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "post_Upsert_People",
+      "index": 819,
+      "top1": 1,
+      "top5": 1,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "post_VehicleAssignments",
+      "index": 820,
+      "top1": 1,
+      "top5": 1,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "post_VehicleCalendar",
+      "index": 823,
+      "top1": 1,
+      "top5": 1,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "put_CaseTypes_id_documents_documentId_SetAsDefault",
+      "index": 840,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "put_Companies_id",
+      "index": 844,
+      "top1": 1,
+      "top5": 2,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "put_DocumentTypes_id_documents_documentId",
+      "index": 852,
+      "top1": 1,
+      "top5": 1,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "put_Expenses_id_documents_documentId_SetAsDefault",
+      "index": 871,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "put_Metadata_id",
+      "index": 872,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "put_PeriodicActivitiesSchedules_id",
+      "index": 884,
+      "top1": 2,
+      "top5": 3,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "put_PersonOrgUnits_id_documents_documentId",
+      "index": 897,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "put_PersonOrgUnits_id_documents_documentId_SetAsDefault",
+      "index": 898,
+      "top1": 1,
+      "top5": 2,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "put_PersonPeriodicActivities_id",
+      "index": 899,
+      "top1": 0,
+      "top5": 0,
+      "top20": 1,
+      "n": 3
+    },
+    {
+      "tool_id": "put_Pools_id_documents_documentId",
+      "index": 909,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "put_Tags_id",
+      "index": 914,
+      "top1": 3,
+      "top5": 3,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "put_Teams_id_documents_documentId_SetAsDefault",
+      "index": 922,
+      "top1": 1,
+      "top5": 3,
+      "top20": 3,
+      "n": 3
+    },
+    {
+      "tool_id": "put_VehicleCalendar_id_documents_documentId",
+      "index": 936,
+      "top1": 0,
+      "top5": 0,
+      "top20": 2,
+      "n": 3
+    },
+    {
+      "tool_id": "put_Vehicles_id",
+      "index": 947,
+      "top1": 2,
+      "top5": 2,
+      "top20": 2,
+      "n": 3
+    }
+  ],
+  "misses": [
+    {
+      "expected": "delete_CostCenters",
+      "query": "Trebam deaktitivirati više poslovnih jedinica koje su suvišne u našem sustavu.",
+      "top5": [
+        [
+          "get_OrgUnits",
+          2.0
+        ],
+        [
+          "get_OrgUnits_tree_companyId",
+          1.0
+        ],
+        [
+          "get_OrgUnits_id",
+          1.0
+        ],
+        [
+          "post_OrgUnits_multipatch",
+          1.0
+        ],
+        [
+          "delete_OrgUnits_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_CostCenters",
+      "query": "Želim izbrisati više stavki koje se odnose na upravne jedinice koje više nisu relevantne.",
+      "top5": [
+        [
+          "get_OrgUnits",
+          2.0
+        ],
+        [
+          "get_OrgUnits_tree_companyId",
+          1.0
+        ],
+        [
+          "get_OrgUnits_id",
+          1.0
+        ],
+        [
+          "post_OrgUnits_multipatch",
+          1.0
+        ],
+        [
+          "delete_OrgUnits_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_CostCenters",
+      "query": "Trebam izbrisati nekoliko poslovnih lokacija temeljem filtriranih stavki.",
+      "top5": [
+        [
+          "delete_PeriodicActivityTypes_DeleteByCriteria",
+          0.8313
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8511
+        ],
+        [
+          "get_AvailabilityProjection_ProjectTo",
+          0.8301
+        ],
+        [
+          "delete_PeriodicActivitiesSchedules_DeleteByCriteria",
+          0.8279
+        ],
+        [
+          "get_PeriodicActivityTypes",
+          0.8273
+        ]
+      ],
+      "top1_score": 0.8313,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "delete_DocumentTypes",
+      "query": "Mogu li istovremeno izbrisati zastarjele obrasce?",
+      "top5": [
+        [
+          "delete_PeriodicActivityTypes",
+          0.82
+        ],
+        [
+          "delete_VehiclesHistoricalEntries",
+          0.8092
+        ],
+        [
+          "delete_Expenses",
+          0.808
+        ],
+        [
+          "delete_VehicleContracts",
+          0.807
+        ],
+        [
+          "delete_Vehicles_id_documents_documentId",
+          0.8047
+        ]
+      ],
+      "top1_score": 0.82,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "delete_Expenses_id_documents_documentId",
+      "query": "Želim se riješiti isprave koja se više ne koristi.",
+      "top5": [
+        [
+          "delete_Cases",
+          0.8044
+        ],
+        [
+          "delete_PeriodicActivityTypes",
+          0.8121
+        ],
+        [
+          "delete_LatestPeriodicActivities",
+          0.8092
+        ],
+        [
+          "delete_Cases_DeleteByCriteria",
+          0.8077
+        ],
+        [
+          "delete_LatestVehicleCalendar_DeleteByCriteria",
+          0.8054
+        ]
+      ],
+      "top1_score": 0.8044,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_Expenses_id_documents_documentId",
+      "query": "Treba mi pomoć u brisanju zapisa koji više nije relevantan.",
+      "top5": [
+        [
+          "delete_LatestPeriodicActivities",
+          0.828
+        ],
+        [
+          "delete_PeriodicActivityTypes",
+          0.8435
+        ],
+        [
+          "delete_PeriodicActivityTypes_DeleteByCriteria",
+          0.8336
+        ],
+        [
+          "delete_PeriodicActivityTypes_id",
+          0.8324
+        ],
+        [
+          "delete_LatestPeriodicActivities_DeleteByCriteria",
+          0.8298
+        ]
+      ],
+      "top1_score": 0.828,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_LatestEquipmentCalendar_DeleteByCriteria",
+      "query": "Treba mi da se eliminiraju stavke iz hodograma na temelju unaprijed postavljenih pravila.",
+      "top5": [
+        [
+          "delete_Expenses_DeleteByCriteria",
+          0.8336
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8532
+        ],
+        [
+          "get_AvailabilityProjection_ProjectTo",
+          0.8376
+        ],
+        [
+          "get_Master_ProjectTo",
+          0.8356
+        ],
+        [
+          "get_Master",
+          0.8343
+        ]
+      ],
+      "top1_score": 0.8336,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "POST"
+    },
+    {
+      "expected": "delete_LatestEquipmentCalendar_DeleteByCriteria",
+      "query": "Pomozi mi da izbacim više unosa iz agende koji zadovoljavaju specifične zahtjeve.",
+      "top5": [
+        [
+          "delete_PeriodicActivityTypes_DeleteByCriteria",
+          0.8099
+        ],
+        [
+          "get_VehicleInputHelper_DistinctBrands",
+          0.8185
+        ],
+        [
+          "get_Master",
+          0.8162
+        ],
+        [
+          "get_PeriodicActivityTypes",
+          0.8162
+        ],
+        [
+          "delete_PeriodicActivityTypes",
+          0.8141
+        ]
+      ],
+      "top1_score": 0.8099,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_LatestPersonPeriodicActivities_DeleteByCriteria",
+      "query": "Trebam izbrisati nedavne podatke koji se temelje na specifičnim pravilima.",
+      "top5": [
+        [
+          "delete_LatestPeriodicActivities",
+          0.8204
+        ],
+        [
+          "get_Master_id_metadata",
+          0.8269
+        ],
+        [
+          "get_AvailabilityProjection_ProjectTo",
+          0.8246
+        ],
+        [
+          "get_Master",
+          0.8245
+        ],
+        [
+          "delete_PeriodicActivityTypes_DeleteByCriteria",
+          0.8239
+        ]
+      ],
+      "top1_score": 0.8204,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_LatestPersonPeriodicActivities_DeleteByCriteria",
+      "query": "Molim te da eliminiraš novije stavke u skladu s definiranim smjernicama.",
+      "top5": [
+        [
+          "delete_LatestPeriodicActivities",
+          0.8185
+        ],
+        [
+          "delete_Cases",
+          0.8274
+        ],
+        [
+          "delete_Cases_DeleteByCriteria",
+          0.8272
+        ],
+        [
+          "delete_SchedulingModels_DeleteByCriteria",
+          0.8265
+        ],
+        [
+          "delete_VehicleContracts_DeleteByCriteria",
+          0.8248
+        ]
+      ],
+      "top1_score": 0.8185,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "delete_Metadata_id_documents_documentId",
+      "query": "Trebam osloboditi prostor tako da obrišem akt koji se više ne koristi.",
+      "top5": [
+        [
+          "delete_PeriodicActivityTypes_id_documents_documentId",
+          0.8329
+        ],
+        [
+          "delete_PeriodicActivityTypes",
+          0.8353
+        ],
+        [
+          "delete_VehicleContracts_id_documents_documentId",
+          0.8288
+        ],
+        [
+          "delete_PersonPeriodicActivities_id_documents_documentId",
+          0.8264
+        ],
+        [
+          "delete_TenantPermissions_id_documents_documentId",
+          0.8258
+        ]
+      ],
+      "top1_score": 0.8329,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_MileageReports_DeleteByCriteria",
+      "query": "Tražim način da se oslobodim svih podataka o vožnji koji nisu u skladu s odabranim smjernicama.",
+      "top5": [
+        [
+          "get_Trips",
+          2.0
+        ],
+        [
+          "get_Trips_FileIds",
+          1.0
+        ],
+        [
+          "get_Trips_id",
+          1.0
+        ],
+        [
+          "post_Trips_multipatch",
+          1.0
+        ],
+        [
+          "delete_Trips_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_Pools",
+      "query": "Treba mi pomoć da maknem više akvaticnih prostora iz evidencije.",
+      "top5": [
+        [
+          "delete_PeriodicActivityTypes",
+          0.8168
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8243
+        ],
+        [
+          "get_Master",
+          0.8146
+        ],
+        [
+          "get_Pools_id_documents_documentId",
+          0.8116
+        ],
+        [
+          "get_Pools_id_documents_documentId_thumb",
+          0.8103
+        ]
+      ],
+      "top1_score": 0.8168,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "NONE"
+    },
+    {
+      "expected": "delete_Tags_id",
+      "query": "Želim trajno izbrisati tag koji više nije potreban.",
+      "top5": [
+        [
+          "get_Tags",
+          2.0
+        ],
+        [
+          "get_Tags_id",
+          1.0
+        ],
+        [
+          "post_Tags_multipatch",
+          1.0
+        ],
+        [
+          "delete_Tags_DeleteByCriteria",
+          1.0
+        ],
+        [
+          "get_Tags_id_documents",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_TenantPermissions_id_documents_documentId",
+      "query": "Želim se riješiti starog obrasca koji više nije relevantan za upravljanje pravima pristupa.",
+      "top5": [
+        [
+          "delete_Cases_DeleteByCriteria",
+          0.8075
+        ],
+        [
+          "delete_PeriodicActivityTypes",
+          0.8087
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8077
+        ],
+        [
+          "get_Roles",
+          0.8074
+        ],
+        [
+          "delete_TenantPermissions_DeleteByCriteria",
+          0.8056
+        ]
+      ],
+      "top1_score": 0.8075,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_TenantPermissions_id_documents_documentId",
+      "query": "Pomozi mi da se oslobodim nevažnog obrasca u vezi s autorizacijom korisnika.",
+      "top5": [
+        [
+          "get_Vehicles",
+          2.0
+        ],
+        [
+          "get_Vehicles_vehicleId_external_info",
+          1.0
+        ],
+        [
+          "get_Vehicles_id",
+          1.0
+        ],
+        [
+          "post_Vehicles_multipatch",
+          1.0
+        ],
+        [
+          "delete_Vehicles_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_AvailabilityProjection_GroupBy",
+      "query": "Možete li mi prikazati plan termina u kojem su slobodni resursi razdijeljeni prema određenim mjerilima?",
+      "top5": [
+        [
+          "get_EquipmentCalendar_GroupBy",
+          0.8726
+        ],
+        [
+          "get_Lookup_CalendarEntryTypes",
+          0.875
+        ],
+        [
+          "get_EquipmentCalendarOn_on_GroupBy",
+          0.871
+        ],
+        [
+          "get_PeriodicActivitiesSchedules",
+          0.8705
+        ],
+        [
+          "get_EquipmentCalendar_id",
+          0.8698
+        ]
+      ],
+      "top1_score": 0.8726,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Companies_id_documents_documentId",
+      "query": "Zanima me koji su spisi vezani uz tu instituciju.",
+      "top5": [
+        [
+          "get_PersonOrgUnits_id_documents",
+          0.8133
+        ],
+        [
+          "get_PeriodicActivityTypes",
+          0.8166
+        ],
+        [
+          "get_Master",
+          0.8154
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents_documentId",
+          0.8112
+        ],
+        [
+          "get_PeriodicActivitiesSchedules",
+          0.8079
+        ]
+      ],
+      "top1_score": 0.8133,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Companies_id_documents_documentId",
+      "query": "Možete li mi prikazati akt koji pripada toj organizaciji?",
+      "top5": [
+        [
+          "get_OrgUnits",
+          2.0
+        ],
+        [
+          "get_OrgUnits_tree_companyId",
+          1.0
+        ],
+        [
+          "get_OrgUnits_id",
+          1.0
+        ],
+        [
+          "post_OrgUnits_multipatch",
+          1.0
+        ],
+        [
+          "delete_OrgUnits_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_CostCenters_Agg",
+      "query": "Molim te da mi prikažeš agregirane rezultate za izdatke unutar specifičnih radnih jedinica.",
+      "top5": [
+        [
+          "get_PersonOrgUnits_Agg",
+          1.0347
+        ],
+        [
+          "get_OrgUnits",
+          1.015
+        ],
+        [
+          "get_OrgUnits_Agg",
+          0.9863
+        ],
+        [
+          "get_PersonOrgUnits",
+          0.9642
+        ],
+        [
+          "get_PersonOrgUnits_id_documents_documentId",
+          0.9579
+        ]
+      ],
+      "top1_score": 1.0347,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_CostCenters_Agg",
+      "query": "Možeš li mi dati sažetak o financijskim iznosima za određene sektore?",
+      "top5": [
+        [
+          "get_OrgUnits",
+          2.0
+        ],
+        [
+          "get_OrgUnits_tree_companyId",
+          1.0
+        ],
+        [
+          "get_OrgUnits_id",
+          1.0
+        ],
+        [
+          "post_OrgUnits_multipatch",
+          1.0
+        ],
+        [
+          "delete_OrgUnits_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_CostCenters_Agg",
+      "query": "Trebam prikazati zbroj vrijednosti prema različitim jedinicama.",
+      "top5": [
+        [
+          "get_TeamMembers_Agg",
+          0.9919
+        ],
+        [
+          "get_Teams_Agg",
+          0.985
+        ],
+        [
+          "get_Teams",
+          0.9732
+        ],
+        [
+          "get_TeamMembers",
+          0.9341
+        ],
+        [
+          "get_Teams_GroupBy",
+          0.9109
+        ]
+      ],
+      "top1_score": 0.9919,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_CostCenters_id_documents",
+      "query": "Možeš li mi pokazati zapise vezane uz određeni iznos?",
+      "top5": [
+        [
+          "get_Expenses_id",
+          0.8106
+        ],
+        [
+          "get_Expenses_FileIds",
+          0.8205
+        ],
+        [
+          "get_AverageFuelExpensesAndMileages_from_to",
+          0.8184
+        ],
+        [
+          "get_MileageReports_id_documents",
+          0.8157
+        ],
+        [
+          "get_Cases_id_documents",
+          0.8138
+        ]
+      ],
+      "top1_score": 0.8106,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_CostCenters_id_documents",
+      "query": "Kako mogu dobiti preglede vezane uz potvrde mog upravljačkog područja?",
+      "top5": [
+        [
+          "get_Vehicles_id_documents",
+          0.8332
+        ],
+        [
+          "get_Vehicles_id_documents_documentId_thumb",
+          0.8507
+        ],
+        [
+          "get_Vehicles_id_documents_documentId",
+          0.8456
+        ],
+        [
+          "get_Trips_id_documents_documentId",
+          0.8437
+        ],
+        [
+          "get_Persons_id_documents",
+          0.8423
+        ]
+      ],
+      "top1_score": 0.8332,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_CostCenters_id_documents",
+      "query": "Zanima me koji su zapisi dostupni za moj sektor povezan s iznosima.",
+      "top5": [
+        [
+          "get_OrgUnits",
+          2.0
+        ],
+        [
+          "get_OrgUnits_tree_companyId",
+          1.0
+        ],
+        [
+          "get_OrgUnits_id",
+          1.0
+        ],
+        [
+          "post_OrgUnits_multipatch",
+          1.0
+        ],
+        [
+          "delete_OrgUnits_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_EquipmentCalendarOn_on_ProjectTo",
+      "query": "Mogu li dobiti pregled rezervacijskog plana vezanog uz projekt i pripadajuća motorna sredstva?",
+      "top5": [
+        [
+          "get_VehicleCalendar",
+          2.0
+        ],
+        [
+          "get_VehicleCalendar_id",
+          1.0
+        ],
+        [
+          "post_VehicleCalendar_multipatch",
+          1.0
+        ],
+        [
+          "delete_VehicleCalendar_DeleteByCriteria",
+          1.0
+        ],
+        [
+          "get_VehicleCalendar_id_documents",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_EquipmentCalendarOn_on_ProjectTo",
+      "query": "Možeš li mi pokazati plan termina i informacije o prijevoznih sredstvima za taj projekt?",
+      "top5": [
+        [
+          "get_VehicleCalendar_id_documents",
+          0.8694
+        ],
+        [
+          "get_VehicleCalendar_id_metadata",
+          0.8735
+        ],
+        [
+          "get_VehicleCalendar_id_documents_documentId",
+          0.8714
+        ],
+        [
+          "put_VehicleCalendar_id_documents_documentId",
+          0.8702
+        ],
+        [
+          "get_Lookup_CalendarEntryTypes",
+          0.869
+        ]
+      ],
+      "top1_score": 0.8694,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_EquipmentCalendarOn_on_ProjectTo",
+      "query": "Molim te da mi prikažeš informacije o dostupnim resursima prema rasporedu projekta.",
+      "top5": [
+        [
+          "get_PeriodicActivitiesSchedules",
+          0.8409
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8408
+        ],
+        [
+          "get_EquipmentCalendar_id",
+          0.8376
+        ],
+        [
+          "get_AvailabilityProjection_GroupBy",
+          0.8316
+        ],
+        [
+          "get_PeriodicActivitiesSchedules_id_documents_documentId",
+          0.8309
+        ]
+      ],
+      "top1_score": 0.8409,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Equipment_Agg",
+      "query": "Mogu li dobiti minimalnu vrijednost za stavke koje odgovaraju određenim kriterijima?",
+      "top5": [
+        [
+          "get_AvailabilityProjection_Agg",
+          0.8166
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8373
+        ],
+        [
+          "get_AvailabilityProjection_ProjectTo",
+          0.8281
+        ],
+        [
+          "get_PeriodicActivityTypes_Agg",
+          0.8175
+        ],
+        [
+          "get_AverageFuelExpensesAndMileages_from_to_ProjectTo",
+          0.8152
+        ]
+      ],
+      "top1_score": 0.8166,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Equipment_Agg",
+      "query": "Želim saznati minimalnu i maksimalnu vrijednost stavki prema određenim kriterijima.",
+      "top5": [
+        [
+          "get_MonthlyMileagesAssigned_Agg",
+          0.8203
+        ],
+        [
+          "get_Expenses_Agg",
+          0.8327
+        ],
+        [
+          "get_MonthlyFuelExpensesAndMileages_Agg",
+          0.8325
+        ],
+        [
+          "get_VehiclesMonthlyExpenses_Agg",
+          0.8289
+        ],
+        [
+          "get_PeriodicActivityTypes_Agg",
+          0.8272
+        ]
+      ],
+      "top1_score": 0.8203,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_ExpenseTypes_Agg",
+      "query": "Treba mi sažetak financijskih stavki prema tipu i različitim iznosima.",
+      "top5": [
+        [
+          "get_Teams",
+          2.0
+        ],
+        [
+          "get_Teams_id",
+          1.0
+        ],
+        [
+          "post_Teams_multipatch",
+          1.0
+        ],
+        [
+          "delete_Teams_DeleteByCriteria",
+          1.0
+        ],
+        [
+          "get_Teams_id_documents",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_LatestEquipmentCalendar_Agg",
+      "query": "Želim saznati minimalne i maksimalne vrijednosti stavki unutar definiranog razdoblja.",
+      "top5": [
+        [
+          "get_MonthlyFuelExpensesAndMileages_Agg",
+          0.8372
+        ],
+        [
+          "get_Expenses_Agg",
+          0.8363
+        ],
+        [
+          "get_PeriodicActivityTypes_Agg",
+          0.8327
+        ],
+        [
+          "get_VehiclesMonthlyExpenses_Agg",
+          0.8315
+        ],
+        [
+          "get_AverageFuelExpensesAndMileages_from_to_ProjectTo",
+          0.8289
+        ]
+      ],
+      "top1_score": 0.8372,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_LatestEquipmentCalendar_Agg",
+      "query": "Trebam pregledati prosječne i ukupne brojke svih artikala unutar ovog vremenskog okvira.",
+      "top5": [
+        [
+          "get_Master_Agg",
+          0.8566
+        ],
+        [
+          "get_AverageFuelExpensesAndMileages_from_to_ProjectTo",
+          0.86
+        ],
+        [
+          "get_AverageFuelExpensesAndMileages_from_to_Agg",
+          0.8498
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8496
+        ],
+        [
+          "get_MonthlyFuelExpensesAndMileages_Agg",
+          0.8492
+        ]
+      ],
+      "top1_score": 0.8566,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_LatestEquipmentCalendar_Agg",
+      "query": "Trebam pregledati zbroj svih stavki temeljen na kriterijima iz plana termina.",
+      "top5": [
+        [
+          "get_AvailabilityProjection",
+          0.865
+        ],
+        [
+          "get_Master",
+          0.8482
+        ],
+        [
+          "get_PeriodicActivitiesSchedules",
+          0.8474
+        ],
+        [
+          "get_PeriodicActivityTypes",
+          0.842
+        ],
+        [
+          "get_AvailabilityProjection_ProjectTo",
+          0.8417
+        ]
+      ],
+      "top1_score": 0.865,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar_Agg",
+      "query": "Trebam informacije o najnovijim proračunatim vrijednostima za kombije prema rasporedu.",
+      "top5": [
+        [
+          "get_Expenses",
+          2.0
+        ],
+        [
+          "get_Expenses_FileIds",
+          1.0
+        ],
+        [
+          "get_Expenses_id",
+          1.0
+        ],
+        [
+          "post_Expenses_multipatch",
+          1.0
+        ],
+        [
+          "delete_Expenses_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar_Agg",
+      "query": "Želio bih dobiti pregled agregiranih informacija o prijevoznim sredstvima s obzirom na plan termina.",
+      "top5": [
+        [
+          "get_VehiclesAssignmentsOverview_on_GroupBy",
+          0.8588
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on_Agg",
+          0.8587
+        ],
+        [
+          "get_Vehicles_Agg",
+          0.8574
+        ],
+        [
+          "get_Vehicles_GroupBy",
+          0.8529
+        ],
+        [
+          "get_Vehicles_id_documents_documentId",
+          0.8527
+        ]
+      ],
+      "top1_score": 0.8588,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar_id",
+      "query": "Želio bih pregledati ažurirane podatke o limuzini u svom planu termina.",
+      "top5": [
+        [
+          "put_Vehicles_id_documents_documentId",
+          0.8421
+        ],
+        [
+          "put_VehicleContracts_id_documents_documentId",
+          0.8421
+        ],
+        [
+          "put_VehicleContracts_id",
+          0.8414
+        ],
+        [
+          "post_SyncExternalIdAndLicencePlate",
+          0.841
+        ],
+        [
+          "post_VehicleBoard_Infleet",
+          0.8393
+        ]
+      ],
+      "top1_score": 0.8421,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_LatestVehicleContracts_Agg",
+      "query": "Želim dobiti zbirne vrijednosti za prijevozna sredstva prema određenim filtrima.",
+      "top5": [
+        [
+          "get_VehiclesAssignmentsOverview_on_Agg",
+          0.8455
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on",
+          0.8506
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on_GroupBy",
+          0.8392
+        ],
+        [
+          "get_MonthlyFuelExpensesAndMileages_Agg",
+          0.8391
+        ],
+        [
+          "get_Vehicles_Agg",
+          0.8384
+        ]
+      ],
+      "top1_score": 0.8455,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_LatestVehicleContracts_Agg",
+      "query": "Trebam pregled zbirnih podataka o limuzinama s primjenom specifičnih filtera.",
+      "top5": [
+        [
+          "get_Master_GroupBy",
+          0.8475
+        ],
+        [
+          "get_AvailabilityProjection_ProjectTo",
+          0.8442
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8434
+        ],
+        [
+          "get_VehicleContracts_ProjectTo",
+          0.836
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on_ProjectTo",
+          0.8352
+        ]
+      ],
+      "top1_score": 0.8475,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Lookup_CompanyId",
+      "query": "Mogu li dobiti informacije o korporacijama?",
+      "top5": [
+        [
+          "get_Companies_id",
+          0.8404
+        ],
+        [
+          "get_Companies_id_metadata",
+          0.8405
+        ],
+        [
+          "get_Companies_id_documents_documentId",
+          0.8371
+        ],
+        [
+          "get_Companies",
+          0.8356
+        ],
+        [
+          "get_Companies_id_documents",
+          0.8356
+        ]
+      ],
+      "top1_score": 0.8404,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Lookup_CompanyId",
+      "query": "Možeš li mi reći koje su sve trgovačke kuće na raspolaganju?",
+      "top5": [
+        [
+          "get_Tenants",
+          0.7953
+        ],
+        [
+          "get_WhatCanIDo",
+          0.8147
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8104
+        ],
+        [
+          "get_VehicleInputHelper_DistinctBrands",
+          0.8042
+        ],
+        [
+          "get_AvailableVehicles_ProjectTo",
+          0.8013
+        ]
+      ],
+      "top1_score": 0.7953,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_CompanyId",
+      "query": "Zanima me popis svih poslovnih entiteta.",
+      "top5": [
+        [
+          "get_Companies",
+          0.8412
+        ],
+        [
+          "get_Companies_id_metadata",
+          0.8412
+        ],
+        [
+          "post_Companies",
+          0.8388
+        ],
+        [
+          "get_Companies_id",
+          0.8354
+        ],
+        [
+          "get_Companies_id_documents",
+          0.8327
+        ]
+      ],
+      "top1_score": 0.8412,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_CostCenterId",
+      "query": "Možeš li mi reći informacije o mjestima trošenja?",
+      "top5": [
+        [
+          "get_CostCenters_id_metadata",
+          0.831
+        ],
+        [
+          "get_CostCenters_GroupBy",
+          0.8286
+        ],
+        [
+          "put_CostCenters_id_documents_documentId",
+          0.8263
+        ],
+        [
+          "get_VehiclesMonthlyExpenses_id_metadata",
+          0.821
+        ],
+        [
+          "get_CostCenters_id",
+          0.8203
+        ]
+      ],
+      "top1_score": 0.831,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Lookup_CostCenterId",
+      "query": "Tražim podatke o lokacijama gdje se evidentiraju financijski izdaci.",
+      "top5": [
+        [
+          "get_Expenses_id_metadata",
+          0.817
+        ],
+        [
+          "get_Expenses_FileIds",
+          0.8223
+        ],
+        [
+          "get_Expenses_ProjectTo",
+          0.8142
+        ],
+        [
+          "get_Stats_FleetAverageMonthlyExpenses",
+          0.8134
+        ],
+        [
+          "get_CostCenters_id_metadata",
+          0.8133
+        ]
+      ],
+      "top1_score": 0.817,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_CostCenterId",
+      "query": "Možeš li mi reći o kojim se jedinicama trošenja može informirati?",
+      "top5": [
+        [
+          "get_OrgUnits",
+          2.0
+        ],
+        [
+          "get_OrgUnits_tree_companyId",
+          1.0
+        ],
+        [
+          "get_OrgUnits_id",
+          1.0
+        ],
+        [
+          "post_OrgUnits_multipatch",
+          1.0
+        ],
+        [
+          "delete_OrgUnits_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_OrgUnitId",
+      "query": "Želio bih znati koje sve grane postoje unutar tvrtke.",
+      "top5": [
+        [
+          "get_Companies",
+          0.9978
+        ],
+        [
+          "get_Companies_Agg",
+          0.9513
+        ],
+        [
+          "delete_Companies",
+          0.9481
+        ],
+        [
+          "get_Companies_GroupBy",
+          0.9427
+        ],
+        [
+          "delete_Companies_DeleteByCriteria",
+          0.9258
+        ]
+      ],
+      "top1_score": 0.9978,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "POST"
+    },
+    {
+      "expected": "get_Lookup_OrgUnitId",
+      "query": "Možeš li mi prikazati sve upravne segmente?",
+      "top5": [
+        [
+          "get_OrgUnits_id_documents",
+          0.8161
+        ],
+        [
+          "get_Vehicles_id_documents_documentId",
+          0.8233
+        ],
+        [
+          "get_DashboardItems",
+          0.8222
+        ],
+        [
+          "get_Vehicles_id_documents_documentId_thumb",
+          0.8206
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on_GroupBy",
+          0.8198
+        ]
+      ],
+      "top1_score": 0.8161,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Lookup_OrgUnitId",
+      "query": "Zanima me popis svih upravnih cjelina koje imamo u sustavu.",
+      "top5": [
+        [
+          "get_OrgUnits",
+          0.8351
+        ],
+        [
+          "get_OrgUnits_id_documents_documentId",
+          0.8292
+        ],
+        [
+          "get_PersonOrgUnits_id_documents",
+          0.8284
+        ],
+        [
+          "get_OrgUnits_id_metadata",
+          0.8281
+        ],
+        [
+          "get_OrgUnits_ProjectTo",
+          0.8272
+        ]
+      ],
+      "top1_score": 0.8351,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_PeriodicActivityTypeId",
+      "query": "Trebam saznati koje su isprave za razne vrste ponavljajućih obaveza.",
+      "top5": [
+        [
+          "get_PeriodicActivityTypes_id_documents",
+          0.8201
+        ],
+        [
+          "get_PeriodicActivityTypes",
+          0.841
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents_documentId",
+          0.8399
+        ],
+        [
+          "delete_PeriodicActivityTypes",
+          0.831
+        ],
+        [
+          "get_PeriodicActivityTypes_id",
+          0.8257
+        ]
+      ],
+      "top1_score": 0.8201,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_PeriodicActivityTypeId",
+      "query": "Možeš li mi pokazati imena i oznake raznih vrsta kontinuiranih procedura?",
+      "top5": [
+        [
+          "get_PeriodicActivityTypes",
+          0.8252
+        ],
+        [
+          "delete_PeriodicActivityTypes",
+          0.8261
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents_documentId",
+          0.8239
+        ],
+        [
+          "get_PeriodicActivityTypes_id",
+          0.819
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents_documentId_thumb",
+          0.819
+        ]
+      ],
+      "top1_score": 0.8252,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Lookup_PeriodicActivityTypeId",
+      "query": "Mogu li dobiti popis identifikatora i naziva razreda redovnih prijevoznih sredstava?",
+      "top5": [
+        [
+          "get_Vehicles_id_documents_documentId",
+          0.8504
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on_GroupBy",
+          0.8463
+        ],
+        [
+          "get_Vehicles_id_documents_documentId_thumb",
+          0.8451
+        ],
+        [
+          "get_Vehicles_id",
+          0.8424
+        ],
+        [
+          "get_ExpensesInputHelper_CompanyVehicles_companyId_date",
+          0.842
+        ]
+      ],
+      "top1_score": 0.8504,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_ProviderId",
+      "query": "Možeš li mi priskrbiti popis svih davatelja resursa?",
+      "top5": [
+        [
+          "get_Pools",
+          0.8092
+        ],
+        [
+          "get_Pools_id_documents_documentId",
+          0.821
+        ],
+        [
+          "get_Pools_id_documents_documentId_thumb",
+          0.8159
+        ],
+        [
+          "get_Pools_id",
+          0.8118
+        ],
+        [
+          "get_Pools_id_documents",
+          0.809
+        ]
+      ],
+      "top1_score": 0.8092,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_ProviderId",
+      "query": "Zanima me tko su svi opskrbljivači u sustavu.",
+      "top5": [
+        [
+          "get_Persons",
+          0.8035
+        ],
+        [
+          "get_Persons_Agg",
+          0.8063
+        ],
+        [
+          "get_Persons_id_metadata",
+          0.8056
+        ],
+        [
+          "get_Persons_id_documents",
+          0.8046
+        ],
+        [
+          "get_Persons_ProjectTo",
+          0.8044
+        ]
+      ],
+      "top1_score": 0.8035,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Lookup_TimeZones",
+      "query": "Zanima me popis svih razlika u satima širom svijeta.",
+      "top5": [
+        [
+          "get_LatestMileageReports_ProjectTo",
+          0.7926
+        ],
+        [
+          "get_PeriodicActivityTypes",
+          0.7989
+        ],
+        [
+          "delete_PeriodicActivityTypes",
+          0.796
+        ],
+        [
+          "get_VehicleInputHelper_DistinctBrands",
+          0.7948
+        ],
+        [
+          "get_EquipmentCalendar_id",
+          0.7938
+        ]
+      ],
+      "top1_score": 0.7926,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_TripTypeId",
+      "query": "Mogu li dobiti popis svih vrsta prijevoznih aranžmana?",
+      "top5": [
+        [
+          "get_Vehicles_id_documents_documentId",
+          0.8432
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on_GroupBy",
+          0.842
+        ],
+        [
+          "get_VehicleContracts_GroupBy",
+          0.8376
+        ],
+        [
+          "get_Vehicles_id_documents_documentId_thumb",
+          0.8373
+        ],
+        [
+          "get_VehicleCalendarOn_on_GroupBy",
+          0.8363
+        ]
+      ],
+      "top1_score": 0.8432,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_MileageReports_id_documents",
+      "query": "Tražim informacije o obrascu koji se odnosi na pređene relacije.",
+      "top5": [
+        [
+          "get_Master_ProjectTo",
+          0.8185
+        ],
+        [
+          "get_AvailabilityProjection_ProjectTo",
+          0.8152
+        ],
+        [
+          "get_Partners_ProjectTo",
+          0.8136
+        ],
+        [
+          "get_Master",
+          0.8124
+        ],
+        [
+          "get_Master_GroupBy",
+          0.8121
+        ]
+      ],
+      "top1_score": 0.8185,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_MonthlyMileages",
+      "query": "Zanima me analiza svih mjesečnih putnih podataka za motorna sredstva.",
+      "top5": [
+        [
+          "get_Trips",
+          2.0
+        ],
+        [
+          "get_Trips_FileIds",
+          1.0
+        ],
+        [
+          "get_Trips_id",
+          1.0
+        ],
+        [
+          "post_Trips_multipatch",
+          1.0
+        ],
+        [
+          "delete_Trips_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_MonthlyMileages",
+      "query": "Treba mi pregled svih mjesečnih podataka o putovanjima.",
+      "top5": [
+        [
+          "get_Trips",
+          2.0
+        ],
+        [
+          "get_Trips_FileIds",
+          1.0
+        ],
+        [
+          "get_Trips_id",
+          1.0
+        ],
+        [
+          "post_Trips_multipatch",
+          1.0
+        ],
+        [
+          "delete_Trips_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_MonthlyMileages_Agg",
+      "query": "Želim dobiti zbroj svih prijevoznih sredstava za protekli mjesec.",
+      "top5": [
+        [
+          "get_VehiclesMonthlyExpenses",
+          0.8221
+        ],
+        [
+          "get_ExpensesInputHelper_CompanyVehicles_companyId_date",
+          0.8252
+        ],
+        [
+          "get_Vehicles_vehicleId_external_info",
+          0.8229
+        ],
+        [
+          "get_Vehicles_Agg",
+          0.8223
+        ],
+        [
+          "get_Stats_NumOfVehiclesWithoutMileageSince",
+          0.8219
+        ]
+      ],
+      "top1_score": 0.8221,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_MonthlyMileages_Agg",
+      "query": "Treba mi pregled podataka o potrošnji limuzina za prethodni mjesec.",
+      "top5": [
+        [
+          "get_VehiclesMonthlyExpenses",
+          0.8269
+        ],
+        [
+          "get_Demo",
+          0.834
+        ],
+        [
+          "get_VehicleInputHelper_PreviousVehicle_fullModelName",
+          0.8334
+        ],
+        [
+          "get_VehicleBoard_id",
+          0.8305
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8296
+        ]
+      ],
+      "top1_score": 0.8269,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_OrgUnits_Agg",
+      "query": "Mogu li dobiti ukupne vrijednosti za sve grane poduzeća?",
+      "top5": [
+        [
+          "get_Companies",
+          2.0
+        ],
+        [
+          "get_Companies_id",
+          1.0
+        ],
+        [
+          "post_Companies_multipatch",
+          1.0
+        ],
+        [
+          "delete_Companies_DeleteByCriteria",
+          1.0
+        ],
+        [
+          "get_Companies_id_documents",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_OrgUnits_Agg",
+      "query": "Kako mogu analizirati zbirne brojke vezane za naše timove?",
+      "top5": [
+        [
+          "get_TeamMembers_Agg",
+          0.8462
+        ],
+        [
+          "get_TeamMembers_GroupBy",
+          0.8415
+        ],
+        [
+          "get_Teams_GroupBy",
+          0.8404
+        ],
+        [
+          "get_Teams_Agg",
+          0.8397
+        ],
+        [
+          "get_Teams_id_metadata",
+          0.8343
+        ]
+      ],
+      "top1_score": 0.8462,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_OrgUnits_Agg",
+      "query": "Zanima me analiza vrijednosti svih grupa unutar poduzeća.",
+      "top5": [
+        [
+          "get_Companies",
+          2.0
+        ],
+        [
+          "get_Companies_id",
+          1.0
+        ],
+        [
+          "post_Companies_multipatch",
+          1.0
+        ],
+        [
+          "delete_Companies_DeleteByCriteria",
+          1.0
+        ],
+        [
+          "get_Companies_id_documents",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_PeriodicActivities",
+      "query": "Trebam informacije o svim ponavljajućim poslovima s podrškom za sortiranje rezultata.",
+      "top5": [
+        [
+          "get_AvailabilityProjection",
+          0.8605
+        ],
+        [
+          "get_AvailabilityProjection_ProjectTo",
+          0.8529
+        ],
+        [
+          "get_PeriodicActivityTypes",
+          0.8506
+        ],
+        [
+          "get_Master",
+          0.8431
+        ],
+        [
+          "get_DocumentTypes_ProjectTo",
+          0.8355
+        ]
+      ],
+      "top1_score": 0.8605,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_PeriodicActivitiesSchedules_id_documents_documentId",
+      "query": "Trebam informacije o ponavljajućim agendama i njihovim zapisima.",
+      "top5": [
+        [
+          "get_PeriodicActivitiesSchedules",
+          0.8257
+        ],
+        [
+          "get_Master",
+          0.8333
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents",
+          0.83
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents_documentId",
+          0.8295
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8254
+        ]
+      ],
+      "top1_score": 0.8257,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_PeriodicActivitiesSchedules_id_documents_documentId",
+      "query": "Trebam pregledati raspodjelu koja se odnosi na određene isprave.",
+      "top5": [
+        [
+          "get_OrgUnits",
+          2.0
+        ],
+        [
+          "get_OrgUnits_tree_companyId",
+          1.0
+        ],
+        [
+          "get_OrgUnits_id",
+          1.0
+        ],
+        [
+          "post_OrgUnits_multipatch",
+          1.0
+        ],
+        [
+          "delete_OrgUnits_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonActivityTypes_Agg",
+      "query": "Želim pregledati prosječne rezultate vezane za određene skupine i njihove zadatke.",
+      "top5": [
+        [
+          "get_AverageFuelExpensesAndMileages_from_to_GroupBy",
+          0.8422
+        ],
+        [
+          "get_Master_Agg",
+          0.8459
+        ],
+        [
+          "get_Pools_Agg",
+          0.8386
+        ],
+        [
+          "get_AverageFuelExpensesAndMileages_from_to_ProjectTo",
+          0.838
+        ],
+        [
+          "get_Master_GroupBy",
+          0.8351
+        ]
+      ],
+      "top1_score": 0.8422,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_PersonActivityTypes_Agg",
+      "query": "Trebam informacije o ukupnim iznosima povezanima s različitim vrstama radnji koje obavljaju članovi tima.",
+      "top5": [
+        [
+          "get_TeamMembers",
+          2.0
+        ],
+        [
+          "get_TeamMembers_id",
+          1.0
+        ],
+        [
+          "post_TeamMembers_multipatch",
+          1.0
+        ],
+        [
+          "delete_TeamMembers_DeleteByCriteria",
+          1.0
+        ],
+        [
+          "get_TeamMembers_id_documents",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonActivityTypes_Agg",
+      "query": "Želio bih dobiti sažete informacije o raznim vrstama djelovanja i sudionicima.",
+      "top5": [
+        [
+          "get_PeriodicActivityTypes",
+          0.8295
+        ],
+        [
+          "get_PeriodicActivityTypes_id",
+          0.8268
+        ],
+        [
+          "get_Cases_id_documents_documentId",
+          0.8215
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents_documentId",
+          0.8199
+        ],
+        [
+          "put_CaseTypes_id",
+          0.8181
+        ]
+      ],
+      "top1_score": 0.8295,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_PersonActivityTypes_id_documents_documentId",
+      "query": "Trebam vidjeti potvrdu koja pripada određenom razredu obveza.",
+      "top5": [
+        [
+          "get_VehicleContracts_id_documents",
+          0.813
+        ],
+        [
+          "get_VehicleContracts_id_documents_documentId_thumb",
+          0.8135
+        ],
+        [
+          "get_VehicleContracts_id_documents_documentId",
+          0.8111
+        ],
+        [
+          "get_VehicleContracts_id",
+          0.8102
+        ],
+        [
+          "get_VehicleContracts_GroupBy",
+          0.8099
+        ]
+      ],
+      "top1_score": 0.813,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Roles",
+      "query": "Molim te, daj mi informacije o svim pravima korištenja unutar našeg okvira.",
+      "top5": [
+        [
+          "get_TenantPermissions_id_metadata",
+          0.8403
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8441
+        ],
+        [
+          "get_Master",
+          0.838
+        ],
+        [
+          "get_Master_id_metadata",
+          0.8377
+        ],
+        [
+          "get_TenantPermissions",
+          0.8374
+        ]
+      ],
+      "top1_score": 0.8403,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Roles",
+      "query": "Možeš li mi pokazati sve vrste prava koja su dostupna za korisnike?",
+      "top5": [
+        [
+          "get_Persons",
+          2.0
+        ],
+        [
+          "post_Persons_ResendInvitation_personId",
+          1.0
+        ],
+        [
+          "get_Persons_id",
+          1.0
+        ],
+        [
+          "post_Persons_multipatch",
+          1.0
+        ],
+        [
+          "delete_Persons_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Tags",
+      "query": "Želio bih pregledati sve kategorizacije koje su dostupne.",
+      "top5": [
+        [
+          "get_Lookup_CategoryId",
+          0.8239
+        ],
+        [
+          "get_PeriodicActivityTypes",
+          0.8389
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8335
+        ],
+        [
+          "get_Master_GroupBy",
+          0.8292
+        ],
+        [
+          "get_VehicleTypes_ProjectTo",
+          0.8251
+        ]
+      ],
+      "top1_score": 0.8239,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Tags",
+      "query": "Trebam pregledati sve karakteristike vezane uz ovaj projekt.",
+      "top5": [
+        [
+          "get_Master_id_metadata",
+          0.8421
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8344
+        ],
+        [
+          "get_PeriodicActivityTypes_id_metadata",
+          0.8343
+        ],
+        [
+          "get_Metadata_id_metadata",
+          0.8309
+        ],
+        [
+          "get_Master_ProjectTo",
+          0.8307
+        ]
+      ],
+      "top1_score": 0.8421,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Teams_id",
+      "query": "Možeš li mi pomoći da provjerim pojedinačni sastav?",
+      "top5": [
+        [
+          "get_Teams_id_metadata",
+          0.802
+        ],
+        [
+          "get_VehicleInputHelper_DistinctBrands",
+          0.8035
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on_GroupBy",
+          0.8015
+        ],
+        [
+          "post_VehicleBoard_Infleet",
+          0.7955
+        ],
+        [
+          "get_Equipment_GroupBy",
+          0.7955
+        ]
+      ],
+      "top1_score": 0.802,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "NONE"
+    },
+    {
+      "expected": "get_Tenants_id_documents_documentId_thumb",
+      "query": "Trebam pregledati minijaturu jednog spisa, koji je označen određenim identifikatorom.",
+      "top5": [
+        [
+          "get_PeriodicActivityTypes_id_documents_documentId_thumb",
+          0.8338
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents_documentId",
+          0.824
+        ],
+        [
+          "get_Persons_id_documents_documentId",
+          0.8222
+        ],
+        [
+          "get_Master_id",
+          0.8221
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents",
+          0.8189
+        ]
+      ],
+      "top1_score": 0.8338,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Tenants_id_documents_documentId_thumb",
+      "query": "Želim provjeriti prikaz jedne potvrde koristeći njen jedinstveni broj.",
+      "top5": [
+        [
+          "get_Cases_id_documents_documentId",
+          0.8089
+        ],
+        [
+          "get_Demo",
+          0.8197
+        ],
+        [
+          "get_Vehicles_id_documents_documentId_thumb",
+          0.8097
+        ],
+        [
+          "get_Persons_id_documents_documentId",
+          0.8079
+        ],
+        [
+          "get_VehicleBoard_id",
+          0.8074
+        ]
+      ],
+      "top1_score": 0.8089,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Tenants_id_documents_documentId_thumb",
+      "query": "Možeš li mi pokazati vizualizaciju jednog zapisa s obzirom na njegov identitet?",
+      "top5": [
+        [
+          "get_Persons_id_documents_documentId",
+          0.8069
+        ],
+        [
+          "get_Persons_id_documents_documentId_thumb",
+          0.8132
+        ],
+        [
+          "get_Master_id",
+          0.8119
+        ],
+        [
+          "get_VehiclesHistoricalEntries_id_documents_documentId_thumb",
+          0.8068
+        ],
+        [
+          "get_VehicleBoard_id",
+          0.8067
+        ]
+      ],
+      "top1_score": 0.8069,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_TripTypes",
+      "query": "Tražim informacije o svim opcijama za transfere koje su na raspolaganju.",
+      "top5": [
+        [
+          "get_WhatCanIDo",
+          0.8312
+        ],
+        [
+          "get_AvailableVehicles_ProjectTo",
+          0.819
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8153
+        ],
+        [
+          "get_AvailableVehicles",
+          0.8151
+        ],
+        [
+          "get_PeriodicActivityTypes",
+          0.8149
+        ]
+      ],
+      "top1_score": 0.8312,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_TripTypes",
+      "query": "Kako mogu dobiti pregled svih mogućih načina prijevoza u ovoj aplikaciji?",
+      "top5": [
+        [
+          "get_VehiclesAssignmentsOverview_on_GroupBy",
+          0.8493
+        ],
+        [
+          "get_Vehicles_id_documents_documentId",
+          0.8464
+        ],
+        [
+          "get_Vehicles_vehicleId_external_info",
+          0.8444
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on",
+          0.8435
+        ],
+        [
+          "get_Vehicles_id_documents",
+          0.8415
+        ]
+      ],
+      "top1_score": 0.8493,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_TripTypes_Agg",
+      "query": "Zanima me pregled zbroja za različite kategorije motornih sredstava.",
+      "top5": [
+        [
+          "get_VehiclesAssignmentsOverview_on_GroupBy",
+          0.8444
+        ],
+        [
+          "get_EquipmentTypes_id_documents",
+          0.8349
+        ],
+        [
+          "get_Vehicles_id_documents_documentId_thumb",
+          0.8335
+        ],
+        [
+          "get_VehicleTypes_id_documents",
+          0.8318
+        ],
+        [
+          "get_Vehicles_id_documents_documentId",
+          0.8278
+        ]
+      ],
+      "top1_score": 0.8444,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Trips_id_documents",
+      "query": "Možeš li mi prikazati akt vezan za moju rezervaciju?",
+      "top5": [
+        [
+          "get_VehicleCalendar",
+          2.0
+        ],
+        [
+          "get_VehicleCalendar_id",
+          1.0
+        ],
+        [
+          "post_VehicleCalendar_multipatch",
+          1.0
+        ],
+        [
+          "delete_VehicleCalendar_DeleteByCriteria",
+          1.0
+        ],
+        [
+          "get_VehicleCalendar_id_documents",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_VehicleCalendarOn_on_ProjectTo",
+      "query": "Želim pregledati stavke vezane uz motorna sredstva u planu termina, uz mogućnost prilagodbe prikaza.",
+      "top5": [
+        [
+          "get_VehiclesAssignmentsOverview_on_ProjectTo",
+          0.847
+        ],
+        [
+          "post_VehicleBoard_Infleet",
+          0.8502
+        ],
+        [
+          "get_PeriodicActivitiesSchedules",
+          0.8487
+        ],
+        [
+          "get_VehicleBoard_id",
+          0.8469
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on_GroupBy",
+          0.8459
+        ]
+      ],
+      "top1_score": 0.847,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_VehicleCalendarOn_on_ProjectTo",
+      "query": "Tražim informacije o kombijima unutar agende, uz mogućnost odabira specifičnih stavki.",
+      "top5": [
+        [
+          "get_VehiclesAssignmentsOverview_on_ProjectTo",
+          0.8323
+        ],
+        [
+          "get_ExpensesInputHelper_CompanyVehicles_companyId_date",
+          0.8397
+        ],
+        [
+          "get_VehicleInputHelper_PreviousVehicle_fullModelName",
+          0.8324
+        ],
+        [
+          "get_VehicleInputHelper_DistinctBrands",
+          0.8321
+        ],
+        [
+          "get_VehicleCalendar_Agg",
+          0.8316
+        ]
+      ],
+      "top1_score": 0.8323,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_VehicleContracts",
+      "query": "Želim da mi prikažeš sve isprave vezane uz to prijevozno sredstvo.",
+      "top5": [
+        [
+          "get_Vehicles_id_documents",
+          0.8551
+        ],
+        [
+          "get_Vehicles_id_documents_documentId",
+          0.8669
+        ],
+        [
+          "get_Equipment_Available_from_to",
+          0.8664
+        ],
+        [
+          "get_Equipment_id_documents_documentId_thumb",
+          0.8625
+        ],
+        [
+          "get_Equipment_id_documents_documentId",
+          0.8593
+        ]
+      ],
+      "top1_score": 0.8551,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_VehicleContracts",
+      "query": "Molim te da mi prikažeš sve potvrde vezane uz moj motorni uređaj.",
+      "top5": [
+        [
+          "get_Equipment",
+          2.0
+        ],
+        [
+          "get_Equipment_Available_from_to",
+          1.0
+        ],
+        [
+          "get_Equipment_id",
+          1.0
+        ],
+        [
+          "post_Equipment_multipatch",
+          1.0
+        ],
+        [
+          "delete_Equipment_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_VehicleContracts",
+      "query": "Možeš li mi pokazati sve akte povezane s tim limuzinom?",
+      "top5": [
+        [
+          "get_Teams",
+          2.0
+        ],
+        [
+          "get_Teams_id",
+          1.0
+        ],
+        [
+          "post_Teams_multipatch",
+          1.0
+        ],
+        [
+          "delete_Teams_DeleteByCriteria",
+          1.0
+        ],
+        [
+          "get_Teams_id_documents",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_VehicleContracts_GroupBy",
+      "query": "Molim vas da mi prikažete sve dostupne isprave vezane uz kombije u ovoj skupini.",
+      "top5": [
+        [
+          "get_Cases_id_documents",
+          0.8131
+        ],
+        [
+          "get_Pools_id_documents_documentId",
+          0.8142
+        ],
+        [
+          "get_Pools_id_documents_documentId_thumb",
+          0.8128
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8108
+        ],
+        [
+          "get_Cases_id_documents_documentId",
+          0.8083
+        ]
+      ],
+      "top1_score": 0.8131,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_VehicleContracts_GroupBy",
+      "query": "Želim vidjeti sve potvrde za limuzine koje su u vezi s ovom klasifikacijom.",
+      "top5": [
+        [
+          "get_VehicleContracts_id_documents",
+          0.8143
+        ],
+        [
+          "get_VehicleTypes_id_documents",
+          0.8202
+        ],
+        [
+          "get_Vehicles_id_documents_documentId_thumb",
+          0.8148
+        ],
+        [
+          "get_Vehicles_id_documents_documentId",
+          0.8135
+        ],
+        [
+          "get_VehicleTypes_id_documents_documentId_thumb",
+          0.8116
+        ]
+      ],
+      "top1_score": 0.8143,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_VehicleContracts_id_metadata",
+      "query": "Želim vidjeti podatke o ispravama koje se tiču specifične limuzine.",
+      "top5": [
+        [
+          "get_VehiclesHistoricalEntries",
+          0.8264
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on_ProjectTo",
+          0.8258
+        ],
+        [
+          "get_VehiclesHistoricalEntries_ProjectTo",
+          0.8224
+        ],
+        [
+          "get_VehicleContracts_ProjectTo",
+          0.8223
+        ],
+        [
+          "get_LatestVehicleContracts_ProjectTo",
+          0.8214
+        ]
+      ],
+      "top1_score": 0.8264,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_VehicleContracts_id_metadata",
+      "query": "Možete li mi reći koje su karakteristike vezane uz ovo kombi?",
+      "top5": [
+        [
+          "get_Vehicles_id_metadata",
+          0.8417
+        ],
+        [
+          "get_VehicleTypes_id_metadata",
+          0.8414
+        ],
+        [
+          "get_VehicleInputHelper_DistinctBrands",
+          0.8392
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on_ProjectTo",
+          0.8387
+        ],
+        [
+          "patch_Vehicles_id",
+          0.8367
+        ]
+      ],
+      "top1_score": 0.8417,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_VehicleTypes_GroupBy",
+      "query": "Interesiraju me informacije o različitim tipovima transportnih sredstava organizirane na temelju određenih parametara.",
+      "top5": [
+        [
+          "get_Teams",
+          2.0
+        ],
+        [
+          "get_Teams_id",
+          1.0
+        ],
+        [
+          "post_Teams_multipatch",
+          1.0
+        ],
+        [
+          "delete_Teams_DeleteByCriteria",
+          1.0
+        ],
+        [
+          "get_Teams_id_documents",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_VehicleTypes_GroupBy",
+      "query": "Mogu li dobiti pregled rasporeda motornih sredstava s primijenjenim filtrima?",
+      "top5": [
+        [
+          "get_VehiclesAssignmentsOverview_on",
+          0.8506
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on_GroupBy",
+          0.8455
+        ],
+        [
+          "get_EquipmentCalendar_GroupBy",
+          0.8411
+        ],
+        [
+          "get_EquipmentCalendarOn_on_GroupBy",
+          0.8403
+        ],
+        [
+          "get_AvailableVehicles_ProjectTo",
+          0.8398
+        ]
+      ],
+      "top1_score": 0.8506,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_VehicleTypes_ProjectTo",
+      "query": "Želim vidjeti sve dostupne limuzine s mogućnošću prilagodbe prikaza i rasporeda informacija.",
+      "top5": [
+        [
+          "get_AvailableVehicles_ProjectTo",
+          0.8565
+        ],
+        [
+          "get_AvailableVehicles",
+          0.8504
+        ],
+        [
+          "put_VehicleCalendar_id",
+          0.8444
+        ],
+        [
+          "get_VehicleCalendarOn_on_GroupBy",
+          0.843
+        ],
+        [
+          "put_VehicleCalendar_id_documents_documentId",
+          0.841
+        ]
+      ],
+      "top1_score": 0.8565,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_VehicleTypes_id",
+      "query": "Želim dobiti podatke o specifičnom prijevoznom sredstvu uzimajući u obzir njegov identifikator.",
+      "top5": [
+        [
+          "get_Vehicles_id",
+          0.8551
+        ],
+        [
+          "get_Vehicles_id_documents_documentId",
+          0.85
+        ],
+        [
+          "get_ExpensesInputHelper_CompanyVehicles_companyId_date",
+          0.8464
+        ],
+        [
+          "get_Lookup_DriverId_id",
+          0.8462
+        ],
+        [
+          "get_Vehicles_vehicleId_external_info",
+          0.8453
+        ]
+      ],
+      "top1_score": 0.8551,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_VehicleTypes_id",
+      "query": "Možeš li mi prikazati informacije vezane uz određeni model kombija prema njegovom ID-u?",
+      "top5": [
+        [
+          "get_Vehicles_id",
+          0.8446
+        ],
+        [
+          "get_VehicleInputHelper_PreviousVehicle_fullModelName",
+          0.8675
+        ],
+        [
+          "get_VehicleInputHelper_DistinctModels",
+          0.862
+        ],
+        [
+          "get_VehicleInputHelper_DistinctMakes",
+          0.8514
+        ],
+        [
+          "get_VehicleTypes_id_metadata",
+          0.8486
+        ]
+      ],
+      "top1_score": 0.8446,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_VehiclesHistoricalEntries_id_documents_documentId",
+      "query": "Mogu li dobiti detalje o ispravi vezanoj uz određeno motorno sredstvo?",
+      "top5": [
+        [
+          "get_Equipment_id_documents_documentId",
+          0.8755
+        ],
+        [
+          "get_Equipment_id",
+          0.8705
+        ],
+        [
+          "get_Vehicles_id_documents_documentId",
+          0.8701
+        ],
+        [
+          "get_Equipment_id_metadata",
+          0.8691
+        ],
+        [
+          "get_Equipment_Available_from_to",
+          0.8689
+        ]
+      ],
+      "top1_score": 0.8755,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_VehiclesHistoricalEntries_id_documents_documentId",
+      "query": "Mogu li dobiti detalje o specifičnom spisu vezanom uz određeno motorno sredstvo?",
+      "top5": [
+        [
+          "get_Equipment_id_documents_documentId",
+          0.8728
+        ],
+        [
+          "get_Equipment_id_metadata",
+          0.8724
+        ],
+        [
+          "get_Equipment_ProjectTo",
+          0.8699
+        ],
+        [
+          "get_Equipment_id",
+          0.869
+        ],
+        [
+          "get_EquipmentCalendarOnPersonVehicle_on",
+          0.8664
+        ]
+      ],
+      "top1_score": 0.8728,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_WhatCanIDo",
+      "query": "Možete li mi objasniti što sve mogu izvesti kao korisnik?",
+      "top5": [
+        [
+          "get_Persons",
+          2.0
+        ],
+        [
+          "post_Persons_ResendInvitation_personId",
+          1.0
+        ],
+        [
+          "get_Persons_id",
+          1.0
+        ],
+        [
+          "post_Persons_multipatch",
+          1.0
+        ],
+        [
+          "delete_Persons_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "patch_CostCenters_id",
+      "query": "Trebam prilagoditi informacije vezane uz financijski sektor.",
+      "top5": [
+        [
+          "get_OrgUnits",
+          2.0
+        ],
+        [
+          "get_OrgUnits_tree_companyId",
+          1.0
+        ],
+        [
+          "get_OrgUnits_id",
+          1.0
+        ],
+        [
+          "post_OrgUnits_multipatch",
+          1.0
+        ],
+        [
+          "delete_OrgUnits_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "patch_CostCenters_id",
+      "query": "Moliću te da ažuriraš specifične aspekte odjela za financije.",
+      "top5": [
+        [
+          "get_OrgUnits",
+          2.0
+        ],
+        [
+          "get_OrgUnits_tree_companyId",
+          1.0
+        ],
+        [
+          "get_OrgUnits_id",
+          1.0
+        ],
+        [
+          "post_OrgUnits_multipatch",
+          1.0
+        ],
+        [
+          "delete_OrgUnits_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "patch_Expenses_id",
+      "query": "Treba mi pomoć u ažuriranju nekih informacija vezanih uz svoje izdatke.",
+      "top5": [
+        [
+          "put_PeriodicActivityTypes_id_documents_documentId",
+          0.8378
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8482
+        ],
+        [
+          "get_Master",
+          0.8411
+        ],
+        [
+          "get_AvailabilityProjection_ProjectTo",
+          0.839
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents",
+          0.8348
+        ]
+      ],
+      "top1_score": 0.8378,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "NONE"
+    },
+    {
+      "expected": "patch_PeriodicActivitiesSchedules_id",
+      "query": "Trebam unijeti izmjene za određene točke u mom hodogramu.",
+      "top5": [
+        [
+          "patch_VehiclesHistoricalEntries_id",
+          0.826
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8421
+        ],
+        [
+          "get_VehiclesHistoricalEntries_ProjectTo",
+          0.8348
+        ],
+        [
+          "get_Master_ProjectTo",
+          0.8316
+        ],
+        [
+          "get_Master",
+          0.83
+        ]
+      ],
+      "top1_score": 0.826,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "patch_PeriodicActivitiesSchedules_id",
+      "query": "Trebam izvršiti ispravke na rokovniku za redovne zadatke.",
+      "top5": [
+        [
+          "put_PeriodicActivitiesSchedules_id",
+          0.8202
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents_documentId",
+          0.8347
+        ],
+        [
+          "get_PeriodicActivitiesSchedules",
+          0.8311
+        ],
+        [
+          "get_Cases_id_documents",
+          0.8263
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents",
+          0.8261
+        ]
+      ],
+      "top1_score": 0.8202,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "patch_Persons_id",
+      "query": "Treba mi da prepraviš neke detalje vezane uz jednog člana.",
+      "top5": [
+        [
+          "get_TeamMembers_id_documents_documentId",
+          0.8251
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8278
+        ],
+        [
+          "get_Persons_ProjectTo",
+          0.8269
+        ],
+        [
+          "get_TeamMembers_ProjectTo",
+          0.825
+        ],
+        [
+          "get_Master",
+          0.8211
+        ]
+      ],
+      "top1_score": 0.8251,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "patch_Persons_id",
+      "query": "Trebam unijeti novosti za pojedince u sustavu.",
+      "top5": [
+        [
+          "post_AddCase",
+          0.843
+        ],
+        [
+          "post_AddCase_parse",
+          0.8447
+        ],
+        [
+          "get_Persons_ProjectTo",
+          0.833
+        ],
+        [
+          "get_Persons_id_documents",
+          0.8328
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8293
+        ]
+      ],
+      "top1_score": 0.843,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "patch_TeamMembers_id",
+      "query": "Želim modificirati podatke o osobi koja je dio naše grupe.",
+      "top5": [
+        [
+          "get_Persons",
+          2.0
+        ],
+        [
+          "post_Persons_ResendInvitation_personId",
+          1.0
+        ],
+        [
+          "get_Persons_id",
+          1.0
+        ],
+        [
+          "post_Persons_multipatch",
+          1.0
+        ],
+        [
+          "delete_Persons_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "patch_TeamMembers_id",
+      "query": "Treba mi pomoć u prepravci informacija vezanih uz jednog od suradnika u našem timu.",
+      "top5": [
+        [
+          "get_Persons",
+          2.0
+        ],
+        [
+          "post_Persons_ResendInvitation_personId",
+          1.0
+        ],
+        [
+          "get_Persons_id",
+          1.0
+        ],
+        [
+          "post_Persons_multipatch",
+          1.0
+        ],
+        [
+          "delete_Persons_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "NONE"
+    },
+    {
+      "expected": "patch_TeamMembers_id",
+      "query": "Želim unaprijediti podatke o osobi u timu.",
+      "top5": [
+        [
+          "get_Persons",
+          2.0
+        ],
+        [
+          "post_Persons_ResendInvitation_personId",
+          1.0
+        ],
+        [
+          "get_Persons_id",
+          1.0
+        ],
+        [
+          "post_Persons_multipatch",
+          1.0
+        ],
+        [
+          "delete_Persons_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_Cases",
+      "query": "Želim unijeti informaciju o novom prijevoznom sredstvu.",
+      "top5": [
+        [
+          "post_Vehicles",
+          0.8376
+        ],
+        [
+          "get_Vehicles_vehicleId_external_info",
+          0.847
+        ],
+        [
+          "get_Vehicles_id_documents_documentId",
+          0.8457
+        ],
+        [
+          "get_ExpensesInputHelper_CompanyVehicles_companyId_date",
+          0.8431
+        ],
+        [
+          "post_Vehicles_id_documents",
+          0.8415
+        ]
+      ],
+      "top1_score": 0.8376,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_Cases",
+      "query": "Možeš li zabilježiti podatke o nedavnom motoru koji je došao u našu evidenciju?",
+      "top5": [
+        [
+          "put_VehiclesHistoricalEntries_id",
+          0.8267
+        ],
+        [
+          "get_VehiclesHistoricalEntries",
+          0.8396
+        ],
+        [
+          "get_VehiclesHistoricalEntries_id_documents",
+          0.8336
+        ],
+        [
+          "get_VehiclesHistoricalEntries_id_documents_documentId_thumb",
+          0.8319
+        ],
+        [
+          "get_VehiclesHistoricalEntries_id",
+          0.8311
+        ]
+      ],
+      "top1_score": 0.8267,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "post_Cases",
+      "query": "Molim te, zabilježi detalje o jednom od naših kombija u bazi podataka.",
+      "top5": [
+        [
+          "post_VehiclesHistoricalEntries",
+          0.8354
+        ],
+        [
+          "get_VehicleInputHelper_DistinctBrands",
+          0.8383
+        ],
+        [
+          "put_VehiclesHistoricalEntries_id",
+          0.837
+        ],
+        [
+          "delete_VehiclesHistoricalEntries",
+          0.8347
+        ],
+        [
+          "patch_VehiclesHistoricalEntries_id",
+          0.8344
+        ]
+      ],
+      "top1_score": 0.8354,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_Cases_multipatch",
+      "query": "Mogu li prilagoditi nekoliko datoteka u jednom potezu?",
+      "top5": [
+        [
+          "put_DocumentTypes_id_documents_documentId",
+          0.9417
+        ],
+        [
+          "delete_DocumentTypes_id_documents_documentId",
+          0.9311
+        ],
+        [
+          "get_DocumentTypes_id_documents",
+          0.9278
+        ],
+        [
+          "post_DocumentTypes_id_documents",
+          0.9277
+        ],
+        [
+          "put_DocumentTypes_id_documents_documentId_SetAsDefault",
+          0.9262
+        ]
+      ],
+      "top1_score": 0.9417,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_MileageReports_id_documents",
+      "query": "Trebam uložiti akt koji se povezuje s evidencijom o potrošnji mog vozila.",
+      "top5": [
+        [
+          "get_Vehicles",
+          2.0
+        ],
+        [
+          "get_Vehicles_vehicleId_external_info",
+          1.0
+        ],
+        [
+          "get_Vehicles_id",
+          1.0
+        ],
+        [
+          "post_Vehicles_multipatch",
+          1.0
+        ],
+        [
+          "delete_Vehicles_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "post_MileageReports_id_documents",
+      "query": "Molim te da priložiš akte za izvještavanje o troškovima vožnje.",
+      "top5": [
+        [
+          "get_Expenses",
+          2.0
+        ],
+        [
+          "get_Expenses_FileIds",
+          1.0
+        ],
+        [
+          "get_Expenses_id",
+          1.0
+        ],
+        [
+          "post_Expenses_multipatch",
+          1.0
+        ],
+        [
+          "delete_Expenses_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_OrgUnits_id_documents",
+      "query": "Molim te da unesete nove akte za određenu radnu skupinu.",
+      "top5": [
+        [
+          "post_AddCase_parse",
+          0.8249
+        ],
+        [
+          "post_PeriodicActivityTypes",
+          0.8242
+        ],
+        [
+          "post_Teams",
+          0.8235
+        ],
+        [
+          "delete_PeriodicActivityTypes",
+          0.822
+        ],
+        [
+          "post_AddCase",
+          0.8207
+        ]
+      ],
+      "top1_score": 0.8249,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_OrgUnits_id_documents",
+      "query": "Želim unijeti akte u sustav za određenu grupaciju.",
+      "top5": [
+        [
+          "get_Teams",
+          2.0
+        ],
+        [
+          "get_Teams_id",
+          1.0
+        ],
+        [
+          "post_Teams_multipatch",
+          1.0
+        ],
+        [
+          "delete_Teams_DeleteByCriteria",
+          1.0
+        ],
+        [
+          "get_Teams_id_documents",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_OrgUnits_id_documents",
+      "query": "Kako mogu priložiti zapise za ovu strukturu?",
+      "top5": [
+        [
+          "post_Cases_id_documents",
+          0.8244
+        ],
+        [
+          "post_Metadata_id_documents",
+          0.8289
+        ],
+        [
+          "post_AddCase",
+          0.8262
+        ],
+        [
+          "post_AddCase_parse",
+          0.8232
+        ],
+        [
+          "put_Metadata_id_documents_documentId",
+          0.8213
+        ]
+      ],
+      "top1_score": 0.8244,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_PeriodicActivities_multipatch",
+      "query": "Trebam provesti kolektivne izmjene za različite ciklične obaveze.",
+      "top5": [
+        [
+          "delete_PeriodicActivityTypes",
+          0.8182
+        ],
+        [
+          "get_PeriodicActivityTypes",
+          0.8296
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8248
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents_documentId",
+          0.8242
+        ],
+        [
+          "get_PeriodicActivitiesSchedules",
+          0.8211
+        ]
+      ],
+      "top1_score": 0.8182,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_PersonPeriodicActivities_multipatch",
+      "query": "Molim te da obaviš promjene na više stavki koje se odnose na pojedince.",
+      "top5": [
+        [
+          "post_Persons_multipatch",
+          0.8129
+        ],
+        [
+          "get_Persons_ProjectTo",
+          0.8227
+        ],
+        [
+          "get_Persons",
+          0.8189
+        ],
+        [
+          "patch_Persons_id",
+          0.8124
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8118
+        ]
+      ],
+      "top1_score": 0.8129,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "post_PersonPeriodicActivities_multipatch",
+      "query": "Trebam ažurirati nekoliko planova koji se tiču ljudi u jednom pozivu.",
+      "top5": [
+        [
+          "post_Persons_multipatch",
+          0.8301
+        ],
+        [
+          "get_Persons_ProjectTo",
+          0.8263
+        ],
+        [
+          "post_PeriodicActivityTypes_multipatch",
+          0.8253
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8236
+        ],
+        [
+          "get_Master",
+          0.8217
+        ]
+      ],
+      "top1_score": 0.8301,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "post_SchedulingModels_multipatch",
+      "query": "Kako mogu prilagoditi detalje za različite hronogramke u isto vrijeme?",
+      "top5": [
+        [
+          "post_PeriodicActivitiesSchedules_multipatch",
+          0.8439
+        ],
+        [
+          "patch_PeriodicActivitiesSchedules_id",
+          0.8462
+        ],
+        [
+          "put_PeriodicActivitiesSchedules_id",
+          0.8457
+        ],
+        [
+          "delete_PeriodicActivitiesSchedules",
+          0.8392
+        ],
+        [
+          "get_PeriodicActivitiesSchedules",
+          0.8356
+        ]
+      ],
+      "top1_score": 0.8439,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_SendEmail",
+      "query": "Želim poslati poruku putem elektroničke pošte kako bih informirao klijenta.",
+      "top5": [
+        [
+          "get_Partners",
+          2.0
+        ],
+        [
+          "post_Partners_linktenant_partnerId",
+          1.0
+        ],
+        [
+          "post_Partners_unlinktenant_partnerId",
+          1.0
+        ],
+        [
+          "get_Partners_id",
+          1.0
+        ],
+        [
+          "post_Partners_multipatch",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_TenantPermissions_id_documents",
+      "query": "Želim povezati spis s određenim pravima korištenja za korisnika sustava.",
+      "top5": [
+        [
+          "get_Persons",
+          2.0
+        ],
+        [
+          "post_Persons_ResendInvitation_personId",
+          1.0
+        ],
+        [
+          "get_Persons_id",
+          1.0
+        ],
+        [
+          "post_Persons_multipatch",
+          1.0
+        ],
+        [
+          "delete_Persons_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_TenantPermissions_id_documents",
+      "query": "Trebam unijeti akt koji se odnosi na privilegije stanara.",
+      "top5": [
+        [
+          "post_Persons_id_documents",
+          0.8225
+        ],
+        [
+          "get_Persons_id_documents_documentId",
+          0.8358
+        ],
+        [
+          "get_Persons_id_documents",
+          0.831
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents_documentId",
+          0.8256
+        ],
+        [
+          "get_Persons_id_documents_documentId_thumb",
+          0.8248
+        ]
+      ],
+      "top1_score": 0.8225,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "post_TenantPermissions_id_documents",
+      "query": "Htjela bih unijeti obrazac vezan uz privilegije koje ima stanar.",
+      "top5": [
+        [
+          "post_Persons_id_documents",
+          0.8267
+        ],
+        [
+          "get_Persons_id_documents_documentId",
+          0.8369
+        ],
+        [
+          "get_Persons_id_documents",
+          0.8336
+        ],
+        [
+          "get_Persons_id_documents_documentId_thumb",
+          0.8332
+        ],
+        [
+          "put_Persons_id_documents_documentId_SetAsDefault",
+          0.8255
+        ]
+      ],
+      "top1_score": 0.8267,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "post_Trips_id_documents",
+      "query": "Želim unijeti zapise povezanih s mojim odredištem.",
+      "top5": [
+        [
+          "post_VehiclesHistoricalEntries_id_documents",
+          0.8209
+        ],
+        [
+          "get_Cases_id_documents",
+          0.8217
+        ],
+        [
+          "post_VehiclesHistoricalEntries",
+          0.821
+        ],
+        [
+          "post_Cases_id_documents",
+          0.8206
+        ],
+        [
+          "put_Cases_id_documents_documentId",
+          0.8198
+        ]
+      ],
+      "top1_score": 0.8209,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_Trips_id_documents",
+      "query": "Želim u sustav unijeti zapisnike za svoje avanture.",
+      "top5": [
+        [
+          "post_AddCase",
+          0.8318
+        ],
+        [
+          "post_VehiclesHistoricalEntries",
+          0.827
+        ],
+        [
+          "post_AddCase_parse",
+          0.8207
+        ],
+        [
+          "post_VehiclesHistoricalEntries_id_documents",
+          0.8147
+        ],
+        [
+          "post_VehiclesHistoricalEntries_multipatch",
+          0.8141
+        ]
+      ],
+      "top1_score": 0.8318,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_Upsert_People",
+      "query": "Možeš li unijeti ili izmijeniti informacije o ljudima temeljem njihovih identifikacijskih kodova i kodova tvrtki?",
+      "top5": [
+        [
+          "put_Companies_id_documents_documentId",
+          1.0127
+        ],
+        [
+          "put_Companies_id",
+          0.9845
+        ],
+        [
+          "put_Companies_id_documents_documentId_SetAsDefault",
+          0.957
+        ],
+        [
+          "get_Companies_id_metadata",
+          0.9568
+        ],
+        [
+          "patch_Companies_id",
+          0.9525
+        ]
+      ],
+      "top1_score": 1.0127,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "PUT"
+    },
+    {
+      "expected": "post_VehicleAssignments",
+      "query": "Kako mogu ažurirati vrijeme korištenja motornog sredstva?",
+      "top5": [
+        [
+          "put_VehicleCalendar_id",
+          0.854
+        ],
+        [
+          "put_Equipment_id",
+          0.8527
+        ],
+        [
+          "put_EquipmentCalendar_id",
+          0.8521
+        ],
+        [
+          "post_SyncExternalIdAndLicencePlate",
+          0.8515
+        ],
+        [
+          "post_VehicleCalendar_multipatch",
+          0.8484
+        ]
+      ],
+      "top1_score": 0.854,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_VehicleCalendar",
+      "query": "Molim te, pomozi mi da evidentiram upotrebu kombija u agendi.",
+      "top5": [
+        [
+          "get_Vehicles_id_documents_documentId",
+          0.8363
+        ],
+        [
+          "get_ExpensesInputHelper_CompanyVehicles_companyId_date",
+          0.8331
+        ],
+        [
+          "get_Vehicles_id_documents_documentId_thumb",
+          0.8331
+        ],
+        [
+          "get_Vehicles_vehicleId_external_info",
+          0.8318
+        ],
+        [
+          "get_VehicleInputHelper_DistinctBrands",
+          0.831
+        ]
+      ],
+      "top1_score": 0.8363,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "put_CaseTypes_id_documents_documentId_SetAsDefault",
+      "query": "Zamoli vezano za to da se akt definira kao prioritetan za određeni tip zahtjeva.",
+      "top5": [
+        [
+          "put_DocumentTypes_id_documents_documentId_SetAsDefault",
+          0.8653
+        ],
+        [
+          "put_PeriodicActivityTypes_id_documents_documentId_SetAsDefault",
+          0.8828
+        ],
+        [
+          "put_PersonActivityTypes_id_documents_documentId_SetAsDefault",
+          0.8669
+        ],
+        [
+          "put_Persons_id_documents_documentId_SetAsDefault",
+          0.8597
+        ],
+        [
+          "put_PersonPeriodicActivities_id_documents_documentId_SetAsDefault",
+          0.8581
+        ]
+      ],
+      "top1_score": 0.8653,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "put_CaseTypes_id_documents_documentId_SetAsDefault",
+      "query": "Treba mi da se ovaj zapis proglasi kao najvažniji za određeni set pravila.",
+      "top5": [
+        [
+          "get_Master_id",
+          0.8176
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8316
+        ],
+        [
+          "get_Master",
+          0.8262
+        ],
+        [
+          "get_VehicleContracts_ProjectTo",
+          0.814
+        ],
+        [
+          "get_Trips_ProjectTo",
+          0.8136
+        ]
+      ],
+      "top1_score": 0.8176,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "put_Companies_id",
+      "query": "Mogu li dobiti pomoć u vezi s prepravkom informacija o mojoj organizaciji?",
+      "top5": [
+        [
+          "get_OrgUnits",
+          2.0
+        ],
+        [
+          "get_OrgUnits_tree_companyId",
+          1.0
+        ],
+        [
+          "get_OrgUnits_id",
+          1.0
+        ],
+        [
+          "post_OrgUnits_multipatch",
+          1.0
+        ],
+        [
+          "delete_OrgUnits_DeleteByCriteria",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "NONE"
+    },
+    {
+      "expected": "put_DocumentTypes_id_documents_documentId",
+      "query": "Možeš li mi pomoći da ažuriram detalje o toj potvrdi?",
+      "top5": [
+        [
+          "put_Cases_id_documents_documentId",
+          0.8197
+        ],
+        [
+          "post_SendEmail",
+          0.8223
+        ],
+        [
+          "post_AddCase_parse",
+          0.8153
+        ],
+        [
+          "put_PeriodicActivityTypes_id_documents_documentId",
+          0.8098
+        ],
+        [
+          "put_VehicleContracts_id_documents_documentId",
+          0.8096
+        ]
+      ],
+      "top1_score": 0.8197,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "NONE"
+    },
+    {
+      "expected": "put_DocumentTypes_id_documents_documentId",
+      "query": "Treba mi nova verzija obrasca koji sam ranije unio.",
+      "top5": [
+        [
+          "get_PersonData_personIdOrEmail",
+          2.0
+        ],
+        [
+          "get_Persons_id",
+          1.5
+        ],
+        [
+          "get_VehicleInputHelper_DistinctBrands",
+          0.8237
+        ],
+        [
+          "get_Master",
+          0.8193
+        ],
+        [
+          "get_Master_id_metadata",
+          0.8179
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "put_Expenses_id_documents_documentId_SetAsDefault",
+      "query": "Tražim način da jedan zapis označim kao bitan za taj korisnički profil.",
+      "top5": [
+        [
+          "put_Persons_id_documents_documentId_SetAsDefault",
+          0.8145
+        ],
+        [
+          "post_AddCase_parse",
+          0.8336
+        ],
+        [
+          "post_AddCase",
+          0.8281
+        ],
+        [
+          "get_Master_id",
+          0.8276
+        ],
+        [
+          "get_MasterData",
+          0.8159
+        ]
+      ],
+      "top1_score": 0.8145,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "put_Expenses_id_documents_documentId_SetAsDefault",
+      "query": "Želim označiti određeni spis kao ključan za taj entitet.",
+      "top5": [
+        [
+          "put_Tags_id_documents_documentId_SetAsDefault",
+          0.8525
+        ],
+        [
+          "put_DocumentTypes_id_documents_documentId_SetAsDefault",
+          0.8503
+        ],
+        [
+          "put_PeriodicActivityTypes_id_documents_documentId_SetAsDefault",
+          0.8489
+        ],
+        [
+          "put_VehicleContracts_id_documents_documentId_SetAsDefault",
+          0.8462
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents",
+          0.8447
+        ]
+      ],
+      "top1_score": 0.8525,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "put_Metadata_id",
+      "query": "Trebam izvršiti promjenu kod zabilježenih podataka o ispravi.",
+      "top5": [
+        [
+          "put_PeriodicActivityTypes_id_documents_documentId",
+          0.8233
+        ],
+        [
+          "get_Master",
+          0.8268
+        ],
+        [
+          "get_VehiclesHistoricalEntries",
+          0.8258
+        ],
+        [
+          "get_VehiclesHistoricalEntries_ProjectTo",
+          0.8253
+        ],
+        [
+          "get_VehiclesHistoricalEntries_id_documents",
+          0.8246
+        ]
+      ],
+      "top1_score": 0.8233,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "put_Metadata_id",
+      "query": "Mogu li unijeti nove detalje za postojeći zapis u vezi s aktom?",
+      "top5": [
+        [
+          "put_Cases_id_documents_documentId",
+          0.8249
+        ],
+        [
+          "post_AddCase_parse",
+          0.8324
+        ],
+        [
+          "post_AddCase",
+          0.8241
+        ],
+        [
+          "post_Cases_id_documents",
+          0.8233
+        ],
+        [
+          "post_VehicleContracts",
+          0.8219
+        ]
+      ],
+      "top1_score": 0.8249,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "POST"
+    },
+    {
+      "expected": "put_Metadata_id",
+      "query": "Želim ažurirati stavku u registru vezanu uz moj plan termina.",
+      "top5": [
+        [
+          "put_PeriodicActivitiesSchedules_id",
+          0.8423
+        ],
+        [
+          "post_SyncExternalIdAndLicencePlate",
+          0.8402
+        ],
+        [
+          "patch_PeriodicActivitiesSchedules_id",
+          0.8367
+        ],
+        [
+          "post_PeriodicActivitiesSchedules",
+          0.8337
+        ],
+        [
+          "post_PeriodicActivitiesSchedules_multipatch",
+          0.8337
+        ]
+      ],
+      "top1_score": 0.8423,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "put_PersonOrgUnits_id_documents_documentId",
+      "query": "Želim izvršiti potpunu promjenu spisa sa specifičnim identifikatorom unutar grupacije.",
+      "top5": [
+        [
+          "get_Teams",
+          2.0
+        ],
+        [
+          "get_Teams_id",
+          1.0
+        ],
+        [
+          "post_Teams_multipatch",
+          1.0
+        ],
+        [
+          "delete_Teams_DeleteByCriteria",
+          1.0
+        ],
+        [
+          "get_Teams_id_documents",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "put_PersonPeriodicActivities_id",
+      "query": "Trebam ažurirati podatke o zadacima koji su vezani uz moju ekipu.",
+      "top5": [
+        [
+          "get_Teams",
+          2.0
+        ],
+        [
+          "get_Teams_id",
+          1.0
+        ],
+        [
+          "post_Teams_multipatch",
+          1.0
+        ],
+        [
+          "delete_Teams_DeleteByCriteria",
+          1.0
+        ],
+        [
+          "get_Teams_id_documents",
+          1.0
+        ]
+      ],
+      "top1_score": 2.0,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "put_PersonPeriodicActivities_id",
+      "query": "Trebam ažurirati raspored jednog člana tima.",
+      "top5": [
+        [
+          "put_TeamMembers_id",
+          0.8275
+        ],
+        [
+          "get_TeamMembers_ProjectTo",
+          0.8318
+        ],
+        [
+          "put_TeamMembers_id_documents_documentId",
+          0.8317
+        ],
+        [
+          "get_TeamMembers",
+          0.83
+        ],
+        [
+          "get_Teams_ProjectTo",
+          0.8286
+        ]
+      ],
+      "top1_score": 0.8275,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "put_Pools_id_documents_documentId",
+      "query": "Mogu li ažurirati informacije vezane uz ispravu u sustavu?",
+      "top5": [
+        [
+          "put_Persons_id_documents_documentId",
+          0.8584
+        ],
+        [
+          "put_Cases_id_documents_documentId",
+          0.8569
+        ],
+        [
+          "put_PeriodicActivityTypes_id_documents_documentId",
+          0.8567
+        ],
+        [
+          "put_Companies_id_documents_documentId",
+          0.8555
+        ],
+        [
+          "put_Vehicles_id_documents_documentId",
+          0.8531
+        ]
+      ],
+      "top1_score": 0.8584,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "put_Pools_id_documents_documentId",
+      "query": "Molim vas da izvršite zamjenu informacija za moj zapisnik.",
+      "top5": [
+        [
+          "put_Persons_id_documents_documentId",
+          0.8421
+        ],
+        [
+          "put_PeriodicActivityTypes_id_documents_documentId",
+          0.8396
+        ],
+        [
+          "get_PeriodicActivityTypes_id_documents_documentId_thumb",
+          0.8392
+        ],
+        [
+          "put_VehicleCalendar_id_documents_documentId",
+          0.8371
+        ],
+        [
+          "put_Cases_id_documents_documentId",
+          0.8364
+        ]
+      ],
+      "top1_score": 0.8421,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "put_Pools_id_documents_documentId",
+      "query": "Molim te da ažuriraš informacije o spisu koji imam.",
+      "top5": [
+        [
+          "patch_VehiclesHistoricalEntries_id",
+          0.8109
+        ],
+        [
+          "get_Master",
+          0.8305
+        ],
+        [
+          "get_AvailabilityProjection",
+          0.8244
+        ],
+        [
+          "get_Master_id_metadata",
+          0.8182
+        ],
+        [
+          "get_AvailabilityProjection_ProjectTo",
+          0.817
+        ]
+      ],
+      "top1_score": 0.8109,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "put_VehicleCalendar_id_documents_documentId",
+      "query": "Želim zamijeniti podatke o obrascu koji se tiče mog kombija u hodogramu.",
+      "top5": [
+        [
+          "put_VehiclesHistoricalEntries_id",
+          0.84
+        ],
+        [
+          "get_VehiclesHistoricalEntries_ProjectTo",
+          0.8522
+        ],
+        [
+          "get_VehiclesHistoricalEntries",
+          0.8512
+        ],
+        [
+          "get_VehiclesHistoricalEntries_GroupBy",
+          0.8487
+        ],
+        [
+          "get_VehiclesAssignmentsOverview_on_ProjectTo",
+          0.848
+        ]
+      ],
+      "top1_score": 0.84,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "GET"
+    },
+    {
+      "expected": "put_Vehicles_id",
+      "query": "Želim unijeti nove podatke za svoje motorno sredstvo.",
+      "top5": [
+        [
+          "post_Equipment",
+          0.8843
+        ],
+        [
+          "put_Equipment_id",
+          0.8797
+        ],
+        [
+          "patch_Equipment_id",
+          0.8752
+        ],
+        [
+          "post_Equipment_multipatch",
+          0.8743
+        ],
+        [
+          "get_Equipment_id_metadata",
+          0.8742
+        ]
+      ],
+      "top1_score": 0.8843,
+      "expected_rank": -1,
+      "query_type": "unknown",
+      "intent": "UNKNOWN"
+    }
+  ]
+}

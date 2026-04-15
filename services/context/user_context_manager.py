@@ -26,7 +26,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 
-from services.patterns import UUID_PATTERN
+from services.utils.pattern_registry import UUID_PATTERN
 
 logger = logging.getLogger(__name__)
 

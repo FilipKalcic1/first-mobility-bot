@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from config import get_settings
 from services.errors import ConversationError, ErrorCode, InfrastructureError
-from services.patterns import UUID_PATTERN
+from services.utils.pattern_registry import UUID_PATTERN
 from services.tracing import get_tracer, trace_span
 
 logger = logging.getLogger(__name__)
@@ -277,30 +277,26 @@ class ContextService:
         Validate user_id and warn if it looks like a UUID instead of phone number.
 
         Detects the UUID trap where person_id gets used
-        instead of phone number for context keys. Logs an error but
-        allows the operation to proceed (some cases may be intentional).
+        instead of phone number for context keys. This is a systemic bug —
+        we fail loudly rather than silently corrupt conversation state.
 
-        Args:
-            user_id: User identifier (should be phone number)
-
-        Returns:
-            True if user_id is usable (including UUIDs with warning),
-            False only if user_id is empty/None
+        Raises:
+            ConversationError: if user_id is empty or looks like a UUID.
         """
         if not user_id:
-            logger.warning("CONTEXT: Empty user_id provided")
-            return False
-
-        # Check if it's a UUID (this is the TRAP we want to catch!)
-        if UUID_PATTERN.match(user_id):
-            err = ConversationError(
+            raise ConversationError(
                 ErrorCode.PHONE_INVALID,
-                f"UUID TRAP: user_id appears to be UUID, not phone: {user_id[:20]}...",
+                "CONTEXT: Empty user_id provided",
+                metadata={"user_id": user_id},
+            )
+
+        if UUID_PATTERN.match(user_id):
+            raise ConversationError(
+                ErrorCode.PHONE_INVALID,
+                "UUID TRAP: user_id appears to be a UUID (person_id), not a phone number. "
+                "This indicates a wiring bug at the caller; refusing to key context by UUID.",
                 metadata={"user_id_prefix": user_id[:20]},
             )
-            logger.error(f"{err}")
-            # We allow it but log a warning - might be intentional in some cases
-            return True
 
         return True
 

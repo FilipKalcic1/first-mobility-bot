@@ -220,7 +220,7 @@ class ToolHandler:
             capability_registry.record_success(tool_name, parameters)
 
         evaluator = get_tool_evaluator()
-        evaluator.record_success(tool_name, params_used=parameters)
+        await evaluator.record_success(tool_name, params_used=parameters)
 
         return {
             "success": True,
@@ -246,7 +246,7 @@ class ToolHandler:
             capability_registry.record_failure(tool_name, error, parameters)
 
         evaluator = get_tool_evaluator()
-        evaluator.record_failure(
+        await evaluator.record_failure(
             tool_name, error,
             error_type=error_code,
             params_used=parameters

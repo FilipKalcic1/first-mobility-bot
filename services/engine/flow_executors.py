@@ -224,8 +224,8 @@ class FlowExecutors:
         ctx = UserContextManager(user_context)
         vehicle = ctx.vehicle
         vehicle_id = vehicle.id if vehicle else None
-        vehicle_name = vehicle.name or "vozilo" if vehicle else "vozilo"
-        plate = vehicle.plate or "" if vehicle else ""
+        vehicle_name = (vehicle.name or "vozilo") if vehicle else "vozilo"
+        plate = (vehicle.plate or "") if vehicle else ""
 
         # Build subject from text if not extracted
         subject = case_params.get("Subject")

@@ -25,12 +25,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
-from services.dynamic_threshold import (
-    ClassificationSignal,
-    DecisionEngine,
-    NO_SIGNAL,
-    get_engine as _get_engine,
-)
 from services.faiss_vector_store import SearchResult
 from services.search.config import (
     BOOST_BASE_LIST,
@@ -43,26 +37,27 @@ from services.search.config import (
     BOOST_GENERIC_CRUD_PENALTY,
     BOOST_HELPER_PENALTY,
     BOOST_LOOKUP_PENALTY,
+    BOOST_METHOD_MISMATCH,
     BOOST_POSSESSIVE_ID,
     BOOST_POSSESSIVE_LIST_PENALTY,
     BOOST_POSSESSIVE_PROFILE,
     BOOST_PRIMARY_ACTION,
     BOOST_PRIMARY_ENTITY,
-    BOOST_QUERY_TYPE_EXCLUDED,
-    BOOST_QUERY_TYPE_MATCH,
     BOOST_SECONDARY_ENTITY,
     COMPLEX_SUFFIXES,
     GENERIC_CRUD_KEYWORDS,
+    LOOKUP_INTENT_BOOST,
     MAX_TOTAL_BOOST,
     MIN_TOTAL_BOOST,
     PENALTY_PATTERNS,
     PRIMARY_ENTITIES,
     SECONDARY_ENTITIES,
+    SUFFIX_INTENT_BOOST,
 )
 from services.text_normalizer import normalize_diacritics
 
 if TYPE_CHECKING:
-    from services.query_type_classifier import QueryType, QueryTypeResult
+    from services.types.query_type import QueryType
 
 logger = logging.getLogger(__name__)
 
@@ -161,64 +156,52 @@ def get_tool_categories(tool_id: str, tool_categories: Dict[str, Any]) -> List[s
 # Main boost function
 # ---------------------------------------------------------------------------
 
+def compute_suffix_intent_boost(tool_lower: str, query_norm: str) -> float:
+    """Reward when tool suffix matches query's analytical intent.
+
+    Returns the largest applicable boost (prevents stacking of overlapping
+    suffixes). `tool_lower` and `query_norm` must already be diacritic-normalized.
+    """
+    best = 0.0
+    # Suffix-based (endswith)
+    for suffix, (stems, boost) in SUFFIX_INTENT_BOOST.items():
+        if tool_lower.endswith(suffix) and any(s in query_norm for s in stems):
+            if boost > best:
+                best = boost
+    # Lookup prefix
+    stems, lboost = LOOKUP_INTENT_BOOST
+    if tool_lower.startswith("get_lookup_") and any(s in query_norm for s in stems):
+        if lboost > best:
+            best = lboost
+    return best
+
+
 def apply_boosts(
     query: str,
     results: List[SearchResult],
-    query_type_result: "QueryTypeResult",
     ctx: BoostContext,
     *,
     detected_entity: Optional[str] = None,
     effective_query_type: Optional["QueryType"] = None,
     is_possessive: bool = False,
-    qt_signal: ClassificationSignal = NO_SIGNAL,
     family_match_tool: Optional[str] = None,
+    detected_method: Optional[str] = None,
 ) -> List[SearchResult]:
-    """Apply additive boosts to FAISS results (v4.0).
-
-    Additive scoring keeps FAISS signal dominant while nudging ranking.
-
-    Args:
-        query: User query (Croatian, unnormalized).
-        results: FAISS search results (mutated in-place).
-        query_type_result: ML query type classification result.
-        ctx: BoostContext with documentation/categories/primary_action_tools.
-        detected_entity: Pre-detected entity (or None for auto-detection).
-        effective_query_type: Override query type (after short-query correction).
-        is_possessive: Whether "moj/moja/moje" detected in query.
-        qt_signal: ClassificationSignal for query type confidence.
-        family_match_tool: Tool Family Index direct match (or None).
-
-    Returns:
-        Same results list (mutated), with scores adjusted.
-    """
+    """Apply additive boosts to FAISS results. Mutates and returns `results`."""
     from services.entity_detector import detect_entity
-    from services.query_type_classifier import QueryType
+    from services.types.query_type import QueryType
 
     query_lower = normalize_diacritics(query.lower())
 
-    # Get matched categories
     matched_categories = match_categories(query_lower, ctx.tool_categories)
 
-    # Get preferred/excluded suffixes
-    preferred_suffixes = query_type_result.preferred_suffixes
-    excluded_suffixes = query_type_result.excluded_suffixes
-
-    # Auto-detect entity if not provided
     if detected_entity is None:
         detected_entity = detect_entity(query)
 
     if effective_query_type is None:
-        effective_query_type = query_type_result.query_type
+        effective_query_type = QueryType.UNKNOWN
 
-    # Adjust suffixes for short query override
-    if effective_query_type == QueryType.LIST and query_type_result.query_type == QueryType.SINGLE_ENTITY:
-        preferred_suffixes = []
-        excluded_suffixes = ['_id']
-
-    # Pre-compute query words for documentation matching
     query_words = [w for w in query_lower.split() if len(w) > 3]
-
-    engine = _get_engine()
 
     for result in results:
         boosts: List[tuple] = []
@@ -243,12 +226,38 @@ def apply_boosts(
             tool_parts = result.tool_id.split("_")
             if len(tool_parts) >= 2:
                 tool_entity = tool_parts[1].lower()
-                if tool_entity == detected_entity or detected_entity in tool_entity:
+                # For `get_Lookup_<Entity>` tools, parts[1] is literally "Lookup" —
+                # fall through to parts[2] so the real entity matches.
+                if tool_entity == "lookup" and len(tool_parts) >= 3:
+                    tool_entity = tool_parts[2].lower()
+                # Trailing-'s' strip handles plural/singular: "vehicles" → "vehicle"
+                # matches "vehiclecalendar"; "expenses" → "expense" matches "expensegroups".
+                entity_stem = detected_entity.rstrip('s') if len(detected_entity) > 3 else detected_entity
+                entity_matches = (
+                    tool_entity == detected_entity
+                    or detected_entity in tool_entity
+                    or tool_entity in detected_entity
+                    or tool_entity.startswith(entity_stem)
+                )
+                if entity_matches:
                     total_boost += BOOST_ENTITY_MATCH
                     boosts.append(("entity_match", BOOST_ENTITY_MATCH, 0))
                 else:
                     total_boost += BOOST_ENTITY_MISMATCH
                     boosts.append(("entity_mismatch", BOOST_ENTITY_MISMATCH, 0))
+
+        # SUFFIX INTENT BOOST — reward correct suffix semantics
+        suffix_boost = compute_suffix_intent_boost(tool_lower, query_lower)
+        if suffix_boost > 0:
+            total_boost += suffix_boost
+            boosts.append(("suffix_intent", suffix_boost, 0))
+
+        # VERB ↔ HTTP METHOD MISMATCH PENALTY
+        if detected_method:
+            tool_method = (result.method or "").lower()
+            if tool_method and tool_method != detected_method:
+                total_boost += BOOST_METHOD_MISMATCH
+                boosts.append(("method_mismatch", BOOST_METHOD_MISMATCH, 0))
 
         # GENERIC CRUD PENALTY
         if tool_lower in GENERIC_CRUD_KEYWORDS:
@@ -274,24 +283,6 @@ def apply_boosts(
             if any(word in doc_text for word in query_words):
                 total_boost += BOOST_DOC
                 boosts.append(("doc", BOOST_DOC, 0))
-
-        # QUERY TYPE BOOST — only when confident
-        if not engine.decide(qt_signal, DecisionEngine.QUERY_TYPE).is_defer and preferred_suffixes:
-            is_preferred = any(
-                tool_lower.endswith(suffix.lower())
-                for suffix in preferred_suffixes
-            )
-            if is_preferred:
-                total_boost += BOOST_QUERY_TYPE_MATCH
-                boosts.append(("query_type", BOOST_QUERY_TYPE_MATCH, 0))
-
-            is_excluded = any(
-                tool_lower.endswith(suffix.lower())
-                for suffix in excluded_suffixes
-            )
-            if is_excluded:
-                total_boost += BOOST_QUERY_TYPE_EXCLUDED
-                boosts.append(("excluded", BOOST_QUERY_TYPE_EXCLUDED, 0))
 
         # STRUCTURAL BOOST by QueryType
         if effective_query_type == QueryType.LIST:
@@ -338,7 +329,7 @@ def apply_boosts(
                 total_boost += BOOST_POSSESSIVE_LIST_PENALTY
                 boosts.append(("possessive_list_penalty", BOOST_POSSESSIVE_LIST_PENALTY, 0))
 
-        # APPLY CAPPED ADDITIVE BOOST
+        # Cap additive boost so FAISS signal stays dominant.
         total_boost = max(MIN_TOTAL_BOOST, min(MAX_TOTAL_BOOST, total_boost))
         result.score = base_score + total_boost
 

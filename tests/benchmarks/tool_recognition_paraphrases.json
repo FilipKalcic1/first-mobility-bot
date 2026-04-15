@@ -1,0 +1,4808 @@
+{
+  "seed": 42,
+  "sample_size": 100,
+  "paraphrases_per_tool": 3,
+  "generated_at": "2026-04-09T16:18:05.616565Z",
+  "must_include_indices": [
+    134,
+    314,
+    453
+  ],
+  "tools": [
+    {
+      "tool_id": "delete_Cases_id",
+      "index": 6,
+      "purpose": "Brisanje stavke na temelju primarnog ključa (id)",
+      "synonyms_hr": [
+        "prijava",
+        "kvar",
+        "problem",
+        "šteta",
+        "ticket",
+        "obriši slučaj",
+        "ukloni slučaj",
+        "makni slučaj",
+        "po ID-u slučajeva",
+        "specifični slučajeva"
+      ],
+      "example_queries_hr": [
+        "Obriši slučaj s id-jem 123",
+        "Ukloni slučaj s id-jem 456"
+      ],
+      "forbidden_words": [
+        "incident",
+        "kvar",
+        "makni",
+        "obrisi",
+        "prijav",
+        "prijava",
+        "problem",
+        "slucaj",
+        "slucajeva",
+        "specificni",
+        "steta",
+        "ticket",
+        "ukloni"
+      ],
+      "paraphrases": [
+        "Želim izbrisati određenu stavku na temelju njenog identifikatora.",
+        "Trebam se riješiti jednog od starih predmeta s njegovim ID-jem.",
+        "Možeš li obrisati stavku koja je zastarjela koristeći njen jedinstveni ključ?"
+      ]
+    },
+    {
+      "tool_id": "delete_EquipmentCalendar_id_documents_documentId",
+      "index": 25,
+      "purpose": "Ovaj endpoint omogućuje brisanje određenog dokumenta vezanog uz stavku opreme.",
+      "synonyms_hr": [
+        "raspored opreme",
+        "obriši kalendar opreme",
+        "ukloni kalendar opreme",
+        "makni kalendar opreme",
+        "dokumenti kalendara opreme",
+        "datoteke kalendara opreme",
+        "želim obrisati kalendar opreme",
+        "obriši raspored opreme",
+        "ukloni raspored opreme",
+        "makni raspored opreme"
+      ],
+      "example_queries_hr": [
+        "Kako mogu obrisati dokument kalendara opreme?",
+        "Želim ukloniti određeni dokument kalendara opreme iz opreme."
+      ],
+      "forbidden_words": [
+        "alat",
+        "datoteka",
+        "datoteke",
+        "dokumenti",
+        "inventar",
+        "kalendar",
+        "kalendar oprem",
+        "kalendara",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "odredeni",
+        "prilog",
+        "raspored",
+        "raspored oprem",
+        "ukloni",
+        "ukloniti",
+        "uredaj"
+      ],
+      "paraphrases": [
+        "Kako mogu trajno izbrisati stavku vezanu uz opremu?",
+        "Želim se riješiti jednog dokumenta vezanog uz opremu.",
+        "Želim se riješiti specifičnog dokumenta koji se odnosi na opremu."
+      ]
+    },
+    {
+      "tool_id": "delete_EquipmentTypes_DeleteByCriteria",
+      "index": 27,
+      "purpose": "Brisanje tipova opreme.",
+      "synonyms_hr": [
+        "vrsta opreme",
+        "obriši tip opreme",
+        "ukloni tip opreme",
+        "makni tip opreme",
+        "prema kriterijima tipova opreme",
+        "bulk brisanje tipova opreme",
+        "želim obrisati tip opreme",
+        "obriši vrsta opreme",
+        "ukloni vrsta opreme",
+        "makni vrsta opreme"
+      ],
+      "example_queries_hr": [
+        "Izbriši sve tipove opreme koji imaju naziv 'stari'.",
+        "Briši tipove opreme koji pripadaju određenom zakupcu."
+      ],
+      "forbidden_words": [
+        "alat",
+        "brisanje",
+        "brisi",
+        "bulk",
+        "inventar",
+        "izbrisi",
+        "kategorija oprem",
+        "kriterijima",
+        "makni",
+        "naziv",
+        "obrisati",
+        "obrisi",
+        "odredenom",
+        "oprem",
+        "opreme",
+        "prema",
+        "pripadaju",
+        "stari",
+        "tip oprem",
+        "tipov oprem",
+        "tipova",
+        "tipove",
+        "tipovi oprem",
+        "ukloni",
+        "uredaj",
+        "vrsta",
+        "vrsta oprem",
+        "zakupcu"
+      ],
+      "paraphrases": [
+        "Zanima me kako da se oslobodim raznih skupina instrumenta koji ispunjavaju zadanost.",
+        "Trebam izbrisati razne vrste instrumenta koji ispunjavaju zadane uvjete.",
+        "Molim te da mi pomogneš s uklanjanjem raznih prosječnih sredstava koja zadovoljavaju specifične smjernice."
+      ]
+    },
+    {
+      "tool_id": "delete_Equipment_DeleteByCriteria",
+      "index": 30,
+      "purpose": "Brisanje više opreme na temelju kriterija filtriranja.",
+      "synonyms_hr": [
+        "dodatak",
+        "uređaj",
+        "accessory",
+        "obriši oprema",
+        "ukloni oprema",
+        "makni oprema",
+        "prema kriterijima opreme",
+        "bulk brisanje opreme",
+        "želim obrisati oprema",
+        "obriši dodatak"
+      ],
+      "example_queries_hr": [
+        "Obriši opremu koja nije korištena više od godinu dana.",
+        "Ukloni opremu s statusom 'neaktivan'."
+      ],
+      "forbidden_words": [
+        "accessory",
+        "alat",
+        "brisanje",
+        "bulk",
+        "dana",
+        "dodatak",
+        "godinu",
+        "inventar",
+        "koristena",
+        "kriterijima",
+        "makni",
+        "neaktivan",
+        "nije",
+        "obrisati",
+        "obrisi",
+        "oprem",
+        "oprema",
+        "opreme",
+        "opremu",
+        "prema",
+        "statusom",
+        "ukloni",
+        "uredaj"
+      ],
+      "paraphrases": [
+        "Trebam eliminirati razne sprave koje ne zadovoljavaju specifične kriterije.",
+        "Trebam eliminirati razne aparate koji ispunjavaju specifične zahtjeve.",
+        "Treba mi pomoć da eliminiram višak tehničkih sredstava koja ne ispunjavaju postavljene kriterije."
+      ]
+    },
+    {
+      "tool_id": "delete_Equipment_id_documents_documentId",
+      "index": 32,
+      "purpose": "Ovaj endpoint omogućuje brisanje određenog dokumenta povezanog s opremom.",
+      "synonyms_hr": [
+        "dodatak",
+        "uređaj",
+        "accessory",
+        "obriši oprema",
+        "ukloni oprema",
+        "makni oprema",
+        "dokumenti opreme",
+        "datoteke opreme",
+        "želim obrisati oprema",
+        "obriši dodatak"
+      ],
+      "example_queries_hr": [
+        "Obriši dokument opreme s ID-jem 'doc123' za opremu s ID-jem 1.",
+        "Ukloni dokument opreme s ID-jem 'doc456' za opremu s ID-jem 2."
+      ],
+      "forbidden_words": [
+        "accessory",
+        "alat",
+        "datoteka",
+        "datoteke",
+        "doc123",
+        "doc456",
+        "dodatak",
+        "dokument",
+        "dokumenti",
+        "inventar",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "oprem",
+        "oprema",
+        "opreme",
+        "opremu",
+        "prilog",
+        "ukloni",
+        "uredaj"
+      ],
+      "paraphrases": [
+        "Želim trajno izbrisati ispravu koja se odnosi na moje motorno sredstvo.",
+        "Zanima me kako da obrišem zapis koji pripada mojoj mehaničkoj jedinici.",
+        "Želim trajno izbrisati spis vezan uz određeno motorno sredstvo."
+      ]
+    },
+    {
+      "tool_id": "delete_Expenses_id_documents_documentId",
+      "index": 44,
+      "purpose": "Ovaj endpoint omogućuje brisanje određenog dokumenta povezanog s troškom.",
+      "synonyms_hr": [
+        "rashod",
+        "izdatak",
+        "cijena",
+        "obriši trošak",
+        "ukloni trošak",
+        "makni trošak",
+        "dokumenti troškova",
+        "datoteke troškova",
+        "želim obrisati trošak",
+        "obriši rashod"
+      ],
+      "example_queries_hr": [
+        "Kako mogu obrisati dokument troška s id-om 456 za trošak s id-om 123?",
+        "Želim ukloniti zastarjeli dokument troška."
+      ],
+      "forbidden_words": [
+        "cijena",
+        "datoteka",
+        "datoteke",
+        "dokument",
+        "dokumenti",
+        "izdatak",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "prilog",
+        "racun",
+        "rashod",
+        "trosak",
+        "trosk",
+        "troska",
+        "troskova",
+        "ukloni",
+        "ukloniti",
+        "zastarjeli"
+      ],
+      "paraphrases": [
+        "Želim da se izbaci spis koji se odnosi na određene izdatke.",
+        "Želim da se riješim isprave koja više nije potrebna.",
+        "Trebam se osloboditi obrazca koji više nije točan."
+      ]
+    },
+    {
+      "tool_id": "delete_LatestEquipmentCalendar_DeleteByCriteria",
+      "index": 46,
+      "purpose": "Ovaj endpoint služi za brisanje više stavki na temelju kriterija filtriranja.",
+      "synonyms_hr": [
+        "posljednja oprema",
+        "obriši zadnji kalendar opreme",
+        "ukloni zadnji kalendar opreme",
+        "makni zadnji kalendar opreme",
+        "prema kriterijima zadnjeg kalendara",
+        "bulk brisanje zadnjeg kalendara",
+        "želim obrisati zadnji kalendar opreme",
+        "obriši posljednja oprema",
+        "ukloni posljednja oprema",
+        "makni posljednja oprema"
+      ],
+      "example_queries_hr": [
+        "Izbriši sve najnoviji kalendar opremee koje imaju određeni status.",
+        "Izbriši najnoviji kalendar opremee prema datumu."
+      ],
+      "forbidden_words": [
+        "alat",
+        "brisanje",
+        "bulk",
+        "datumu",
+        "inventar",
+        "izbrisi",
+        "kalendar",
+        "kalendar oprem",
+        "kalendara",
+        "kriterijima",
+        "makni",
+        "najnoviji",
+        "obrisati",
+        "obrisi",
+        "odredeni",
+        "oprem",
+        "oprema",
+        "opreme",
+        "opremee",
+        "posljednja",
+        "prema",
+        "raspored oprem",
+        "status",
+        "ukloni",
+        "uredaj",
+        "zadnjeg",
+        "zadnji"
+      ],
+      "paraphrases": [
+        "Molim te da obrišeš najnovije unose iz plana termina koji zadovoljavaju postavljene uvjete.",
+        "Trebam da se izbrišu elementi iz agende koji ispunjavaju specifične kriterije.",
+        "Zamoli asistenta da se uklone unos koji su se posljednje pojavili u hodogramu na temelju odabranih kriterija."
+      ]
+    },
+    {
+      "tool_id": "delete_OrgUnits",
+      "index": 71,
+      "purpose": "Ovaj endpoint omogućuje brisanje više organizacijskih jedinica odjednom.",
+      "synonyms_hr": [
+        "odjel",
+        "sektor",
+        "obriši organizacijska jedinica",
+        "ukloni organizacijska jedinica",
+        "makni organizacijska jedinica",
+        "želim obrisati organizacijska jedinica",
+        "obriši odjel",
+        "ukloni odjel",
+        "makni odjel"
+      ],
+      "example_queries_hr": [
+        "Kako obrisati više organizacijskih jedinica odjednom?",
+        "Mogu li očistiti strukturu organizacije?"
+      ],
+      "forbidden_words": [
+        "jedinic",
+        "jedinica",
+        "makni",
+        "metapodac",
+        "obrisati",
+        "obrisi",
+        "ocistiti",
+        "odjednom",
+        "odjel",
+        "organizacij",
+        "organizacije",
+        "organizacijska",
+        "organizacijskih",
+        "polja",
+        "sektor",
+        "shema",
+        "struktur",
+        "strukturu",
+        "ukloni"
+      ],
+      "paraphrases": [
+        "Želim izbrisati više upravnih cjelina u isto vrijeme.",
+        "Možeš li mi pomoći da se riješim više administrativnih segmenata?",
+        "Želim izbrisati više radnih skupina iz sustava."
+      ]
+    },
+    {
+      "tool_id": "delete_PeriodicActivitiesSchedules",
+      "index": 80,
+      "purpose": "Briše više stavki iz rasporeda aktivnosti.",
+      "synonyms_hr": [
+        "plan aktivnosti",
+        "obriši raspored aktivnosti",
+        "ukloni raspored aktivnosti",
+        "makni raspored aktivnosti",
+        "želim obrisati raspored aktivnosti",
+        "obriši plan aktivnosti",
+        "ukloni plan aktivnosti",
+        "makni plan aktivnosti"
+      ],
+      "example_queries_hr": [
+        "Obriši sve raspored periodičnih aktivnostii koje su iste kao u prethodnom pozivu."
+      ],
+      "forbidden_words": [
+        "aktivnosti",
+        "aktivnostii",
+        "iste",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "periodicn",
+        "periodicnih",
+        "plan",
+        "pozivu",
+        "prethodnom",
+        "raspored",
+        "redovn aktiv",
+        "servis",
+        "ukloni"
+      ],
+      "paraphrases": [
+        "Trebam izbrisati više unosa iz agende.",
+        "Molim te da makneš grupu stavki iz programa.",
+        "Želim da se više točaka izbriše iz hodograma."
+      ]
+    },
+    {
+      "tool_id": "delete_PeriodicActivitiesSchedules_DeleteByCriteria",
+      "index": 81,
+      "purpose": "Brisanje više rasporeda aktivnosti na temelju kriterija filtriranja.",
+      "synonyms_hr": [
+        "plan aktivnosti",
+        "obriši raspored aktivnosti",
+        "ukloni raspored aktivnosti",
+        "makni raspored aktivnosti",
+        "prema kriterijima rasporeda aktivnosti",
+        "bulk brisanje rasporeda aktivnosti",
+        "želim obrisati raspored aktivnosti",
+        "obriši plan aktivnosti",
+        "ukloni plan aktivnosti",
+        "makni plan aktivnosti"
+      ],
+      "example_queries_hr": [
+        "Izbriši sve raspored periodičnih aktivnostie koje zadovoljavaju kriterije.",
+        "Izbriši raspored periodičnih aktivnostie prema određenim uvjetima."
+      ],
+      "forbidden_words": [
+        "aktivnosti",
+        "aktivnostie",
+        "brisanje",
+        "bulk",
+        "izbrisi",
+        "kriterije",
+        "kriterijima",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "odredenim",
+        "periodicn",
+        "periodicnih",
+        "plan",
+        "prema",
+        "raspored",
+        "rasporeda",
+        "redovn aktiv",
+        "servis",
+        "ukloni",
+        "uvjetima",
+        "zadovoljavaju"
+      ],
+      "paraphrases": [
+        "Želim izbrisati grupu termina temeljenom na specifičnim parametrima filtriranja.",
+        "Kako da se oslobodim svih termina koji su u skladu s definiranim mjerilima?",
+        "Tražim da se eliminiraju svi unosi iz hodograma koji odgovaraju filtrima."
+      ]
+    },
+    {
+      "tool_id": "delete_PeriodicActivityTypes_id",
+      "index": 89,
+      "purpose": "Briše vrstu aktivnosti prema ID-u.",
+      "synonyms_hr": [
+        "vrsta aktivnosti",
+        "obriši tip periodične aktivnosti",
+        "ukloni tip periodične aktivnosti",
+        "makni tip periodične aktivnosti",
+        "po ID-u tipova",
+        "specifični tipova",
+        "želim obrisati tip periodične aktivnosti",
+        "obriši vrsta aktivnosti",
+        "ukloni vrsta aktivnosti",
+        "makni vrsta aktivnosti"
+      ],
+      "example_queries_hr": [
+        "Briši tip periodične aktivnosti s ID-om 1.",
+        "Ukloni tip periodične aktivnosti 'Održavanje'."
+      ],
+      "forbidden_words": [
+        "aktivnosti",
+        "brisi",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "odrzavanje",
+        "periodicn",
+        "periodicne",
+        "redovn aktiv",
+        "servis",
+        "specificni",
+        "tipova",
+        "ukloni",
+        "vrsta"
+      ],
+      "paraphrases": [
+        "Želim da se izbriše određena kategorija rasporeda po ID-u.",
+        "Trebam izbrisati određenu klasifikaciju termina koja više nije potrebna.",
+        "Možeš li mi pomoći da se oslobodim jedne vrste rasporeda na temelju ID-a?"
+      ]
+    },
+    {
+      "tool_id": "delete_PersonActivityTypes_id_documents_documentId",
+      "index": 94,
+      "purpose": "Briše određeni dokument povezan s tipom aktivnosti osobe.",
+      "synonyms_hr": [
+        "vrste aktivnosti",
+        "obriši tipovi aktivnosti osobe",
+        "ukloni tipovi aktivnosti osobe",
+        "makni tipovi aktivnosti osobe",
+        "dokumenti tipova aktivnosti",
+        "datoteke tipova aktivnosti",
+        "želim obrisati tipovi aktivnosti osobe",
+        "obriši vrste aktivnosti",
+        "ukloni vrste aktivnosti",
+        "makni vrste aktivnosti"
+      ],
+      "example_queries_hr": [
+        "Obriši dokument tipa aktivnosti osobe s ID-om 'doc123' za tip aktivnosti s ID-om 1."
+      ],
+      "forbidden_words": [
+        "aktivnosti",
+        "aktivnosti osobe",
+        "aktivnosti zaposlenika",
+        "datoteka",
+        "datoteke",
+        "djelatnik",
+        "doc123",
+        "dokument",
+        "dokumenti",
+        "korisnik",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "osob",
+        "osobe",
+        "prilog",
+        "radnik",
+        "tipa",
+        "tipova",
+        "tipovi",
+        "ukloni",
+        "voditelj",
+        "vrste",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Molim vas da obrišete akt koji se odnosi na tu vrstu zaduženja.",
+        "Tražim da se makne akt koji je povezan s određenim kategorijama.",
+        "Ljubazno molim da se izbriše zapisnik koji se odnosi na određene poslove."
+      ]
+    },
+    {
+      "tool_id": "delete_PersonOrgUnits",
+      "index": 95,
+      "purpose": "Brisanje više org. jedinica na temelju kriterija filtriranja.",
+      "synonyms_hr": [
+        "odjel korisnika",
+        "obriši org. jedinica osobe",
+        "ukloni org. jedinica osobe",
+        "makni org. jedinica osobe",
+        "želim obrisati org. jedinica osobe",
+        "obriši odjel korisnika",
+        "ukloni odjel korisnika",
+        "makni odjel korisnika"
+      ],
+      "example_queries_hr": [
+        "Kako obrisati više organizacijska jedinica osobea iz organizacije?"
+      ],
+      "forbidden_words": [
+        "djelatnik",
+        "jedinic",
+        "jedinica",
+        "korisnik",
+        "korisnika",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "odjel",
+        "odjeli zaposlenika",
+        "org jedinice osobe",
+        "organizacij",
+        "organizacije",
+        "organizacijska",
+        "osob",
+        "osobe",
+        "osobea",
+        "radnik",
+        "sektor",
+        "ukloni",
+        "voditelj",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Želim da se maknu više odabranih skupina prema filtriranim podacima.",
+        "Treba mi gašenje nekoliko poslovnih entiteta koji ispunjavaju uvjete.",
+        "Ljubazno te molim da eliminiraš više institucija prema odabranim pravilima."
+      ]
+    },
+    {
+      "tool_id": "delete_PersonPeriodicActivities",
+      "index": 99,
+      "purpose": "Briše više stavki odjednom",
+      "synonyms_hr": [
+        "redovne aktivnosti",
+        "obriši periodične aktivnosti osobe",
+        "ukloni periodične aktivnosti osobe",
+        "makni periodične aktivnosti osobe",
+        "želim obrisati periodične aktivnosti osobe",
+        "obriši redovne aktivnosti",
+        "ukloni redovne aktivnosti",
+        "makni redovne aktivnosti"
+      ],
+      "example_queries_hr": [
+        "Briši sve aktivnost osobei za korisnika 123",
+        "Ukloni aktivnost osobei za datum 2023-10-01"
+      ],
+      "forbidden_words": [
+        "2023",
+        "aktivnost",
+        "aktivnosti",
+        "aktivnosti osobe",
+        "aktivnosti zaposlenika",
+        "brisi",
+        "datum",
+        "djelatnik",
+        "korisnik",
+        "korisnika",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "osob",
+        "osobe",
+        "osobei",
+        "periodicn",
+        "periodicne",
+        "radnik",
+        "redovn aktiv",
+        "redovne",
+        "servis",
+        "ukloni",
+        "voditelj",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Želim izbrisati više redovnih obveza odjednom",
+        "Želim ukloniti više redovitih obaveza",
+        "Tražim način za uklanjanje više stavki u jednom potezu."
+      ]
+    },
+    {
+      "tool_id": "delete_PersonTypes",
+      "index": 103,
+      "purpose": "Ovaj endpoint briše više vrsta osoba odjednom.",
+      "synonyms_hr": [
+        "vrsta korisnika",
+        "obriši tip osobe",
+        "ukloni tip osobe",
+        "makni tip osobe",
+        "želim obrisati tip osobe",
+        "obriši vrsta korisnika",
+        "ukloni vrsta korisnika",
+        "makni vrsta korisnika"
+      ],
+      "example_queries_hr": [
+        "Briši sve vrste osoba koje su označene za brisanje"
+      ],
+      "forbidden_words": [
+        "brisanje",
+        "brisi",
+        "djelatnik",
+        "korisnik",
+        "korisnika",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "osob",
+        "osoba",
+        "osobe",
+        "oznacene",
+        "radnik",
+        "ukloni",
+        "voditelj",
+        "vrsta",
+        "vrste",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Molim te da izbrišeš sve navedene tipove članova iz baze podataka.",
+        "Trebam da se odjednom eliminiraju razne skupine pojedinaca.",
+        "Želim eliminirati više kategorija pojedinaca odjednom."
+      ]
+    },
+    {
+      "tool_id": "delete_PersonTypes_DeleteByCriteria",
+      "index": 104,
+      "purpose": "Ovaj endpoint briše više vrsta osoba prema kriterijima.",
+      "synonyms_hr": [
+        "vrsta korisnika",
+        "obriši tip osobe",
+        "ukloni tip osobe",
+        "makni tip osobe",
+        "prema kriterijima tipova osobe",
+        "bulk brisanje tipova osobe",
+        "želim obrisati tip osobe",
+        "obriši vrsta korisnika",
+        "ukloni vrsta korisnika",
+        "makni vrsta korisnika"
+      ],
+      "example_queries_hr": [
+        "Briši sve vrste osoba koje zadovoljavaju kriterije"
+      ],
+      "forbidden_words": [
+        "brisanje",
+        "brisi",
+        "bulk",
+        "djelatnik",
+        "korisnik",
+        "korisnika",
+        "kriterije",
+        "kriterijima",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "osob",
+        "osoba",
+        "osobe",
+        "prema",
+        "radnik",
+        "tipova",
+        "ukloni",
+        "voditelj",
+        "vrsta",
+        "vrste",
+        "zadovoljavaju",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Trebam trajno izbaciti različite klase subjekata koja ne ispunjavaju definicije.",
+        "Želim se osloboditi više kategorija pojedinaca temeljenih na specifičnim uvjetima.",
+        "Molim te da izbrišeš određene grupe ljudi koji ne ispunjavaju zadane zahtjeve."
+      ]
+    },
+    {
+      "tool_id": "delete_Pools_id_documents_documentId",
+      "index": 114,
+      "purpose": "Ovaj endpoint omogućuje brisanje specifičnog dokumenta za određeni entitet.",
+      "synonyms_hr": [
+        "pool",
+        "grupa vozila",
+        "obriši bazen vozila",
+        "ukloni bazen vozila",
+        "makni bazen vozila",
+        "dokumenti bazena vozila",
+        "datoteke bazena vozila",
+        "želim obrisati bazen vozila",
+        "obriši pool",
+        "ukloni pool"
+      ],
+      "example_queries_hr": [
+        "Izbriši dokument pool-a s ID-om 456 za entitet s ID-om 123."
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "bazen",
+        "bazen vozil",
+        "bazena",
+        "datoteka",
+        "datoteke",
+        "dokument",
+        "dokumenti",
+        "ekip",
+        "entitet",
+        "flot",
+        "grupa",
+        "izbrisi",
+        "kola",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "pool",
+        "prilog",
+        "ukloni",
+        "vozil",
+        "vozila"
+      ],
+      "paraphrases": [
+        "Prosim te da izbrišeš jedan zapis iz ove grupe.",
+        "Mogu li izbrisati određeni spis koji se odnosi na grupu?",
+        "Kako mogu maknuti akt koji pripada toj kolekciji?"
+      ]
+    },
+    {
+      "tool_id": "delete_Teams",
+      "index": 127,
+      "purpose": "Ovaj endpoint omogućuje brisanje više timova odjednom.",
+      "synonyms_hr": [
+        "ekipa",
+        "grupa",
+        "obriši tim",
+        "ukloni tim",
+        "makni tim",
+        "želim obrisati tim",
+        "obriši ekipa",
+        "ukloni ekipa",
+        "makni ekipa"
+      ],
+      "example_queries_hr": [
+        "Kako mogu obrisati više timova?",
+        "Koje timove mogu obrisati?"
+      ],
+      "forbidden_words": [
+        "ekip",
+        "ekipa",
+        "grupa",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "timova",
+        "timove",
+        "ukloni"
+      ],
+      "paraphrases": [
+        "Želim da se više kolektiva istovremeno izbriše iz sustava.",
+        "Možeš li izbrisati više suradničkih sastava?",
+        "Želim da se istovremeno maknu svi organizacijski sklopovi koje ne koristim."
+      ]
+    },
+    {
+      "tool_id": "delete_TenantPermissions_id_documents_documentId",
+      "index": 134,
+      "purpose": "Ovaj endpoint briše specifični dokument.",
+      "synonyms_hr": [
+        "prava pristupa",
+        "obriši dozvole tenanta",
+        "ukloni dozvole tenanta",
+        "makni dozvole tenanta",
+        "dokumenti dozvola tenanta",
+        "datoteke dozvola tenanta",
+        "želim obrisati dozvole tenanta",
+        "obriši prava pristupa",
+        "ukloni prava pristupa",
+        "makni prava pristupa"
+      ],
+      "example_queries_hr": [
+        "Obriši dokument dozvole najma s ID-om 789",
+        "Ukloni dokument dozvole najma 456"
+      ],
+      "forbidden_words": [
+        "datoteka",
+        "datoteke",
+        "dozvol",
+        "dozvola",
+        "dozvole",
+        "dozvole tenanta",
+        "korisnicke dozvole",
+        "makni",
+        "najma",
+        "najmoprimc",
+        "obrisati",
+        "obrisi",
+        "permisij",
+        "prava",
+        "prilog",
+        "pristupa",
+        "rola",
+        "tenanta",
+        "ukloni",
+        "ulog"
+      ],
+      "paraphrases": [
+        "Izbriši dokument vezan uz pristup s identifikatorom 789",
+        "Makni dokument s ID-om 456",
+        "Makni nepotreban dokument iz sustava"
+      ]
+    },
+    {
+      "tool_id": "delete_TripTypes_id_documents_documentId",
+      "index": 142,
+      "purpose": "Izbrisati dokument iz sustava.",
+      "synonyms_hr": [
+        "vrsta vožnje",
+        "obriši tip putovanja",
+        "ukloni tip putovanja",
+        "makni tip putovanja",
+        "dokumenti tipova putovanja",
+        "datoteke tipova putovanja",
+        "želim obrisati tip putovanja",
+        "obriši vrsta vožnje",
+        "ukloni vrsta vožnje",
+        "makni vrsta vožnje"
+      ],
+      "example_queries_hr": [
+        "Kako izbrisati dokument tipa putovanja s id 123 za tip putovanja 456?",
+        "Što se događa ako pokušam izbrisati nepostojeći dokument tipa putovanja?"
+      ],
+      "forbidden_words": [
+        "datoteka",
+        "datoteke",
+        "dogada",
+        "dokument",
+        "dokumenti",
+        "izbrisati",
+        "makni",
+        "nepostojeci",
+        "obrisati",
+        "obrisi",
+        "pokusam",
+        "prilog",
+        "putni",
+        "putovanj",
+        "putovanja",
+        "tipa",
+        "tipova",
+        "trip",
+        "ukloni",
+        "voznj",
+        "voznje",
+        "vrsta"
+      ],
+      "paraphrases": [
+        "Molim te, izbjegni prisustvo tog akta u registru.",
+        "Trebam da se taj zapisnik obriše iz arhive.",
+        "Trebam da se iz sustava makne potvrda vezana uz put."
+      ]
+    },
+    {
+      "tool_id": "delete_Vehicles",
+      "index": 159,
+      "purpose": "Ovaj endpoint omogućuje brisanje više vozila odjednom.",
+      "synonyms_hr": [
+        "auto",
+        "automobil",
+        "kola",
+        "obriši vozilo",
+        "ukloni vozilo",
+        "makni vozilo",
+        "želim obrisati vozilo",
+        "obriši auto",
+        "ukloni auto",
+        "makni auto"
+      ],
+      "example_queries_hr": [
+        "Kako mogu izbrisati više vozila?",
+        "Koje su posljedice brisanja vozila?"
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "brisanja",
+        "flot",
+        "izbrisati",
+        "kola",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "posljedice",
+        "ukloni",
+        "vozil",
+        "vozila",
+        "vozilo"
+      ],
+      "paraphrases": [
+        "Želim se riješiti nekoliko motornih sredstava iz sustava.",
+        "Molim te da makneš nekoliko kombija iz evidencije.",
+        "Želim se riješiti više motornih sredstava odjednom."
+      ]
+    },
+    {
+      "tool_id": "delete_VehiclesHistoricalEntries_id_documents_documentId",
+      "index": 163,
+      "purpose": "Ovaj endpoint omogućuje brisanje specifičnog dokumenta povezanog s povijesnim zapisom vozila.",
+      "synonyms_hr": [
+        "povijest vozila",
+        "stari zapisi",
+        "obriši povijesni unosi",
+        "ukloni povijesni unosi",
+        "makni povijesni unosi",
+        "dokumenti povijesnih unosa",
+        "datoteke povijesnih unosa",
+        "želim obrisati povijesni unosi",
+        "obriši povijest vozila",
+        "ukloni povijest vozila"
+      ],
+      "example_queries_hr": [
+        "Izbriši dokument vehicleshistoricalentries s ID-om 456 za povijesni zapis vozila s ID-om 123.",
+        "Obriši dokument vehicleshistoricalentries s ID-om 789."
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "datoteka",
+        "datoteke",
+        "dokument",
+        "dokumenti",
+        "flot",
+        "izbrisi",
+        "kola",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "povijesni",
+        "povijesnih",
+        "povijest",
+        "prilog",
+        "stari",
+        "ukloni",
+        "unosa",
+        "unosi",
+        "vehicleshistoricalentries",
+        "vozil",
+        "vozila",
+        "zapis",
+        "zapisi"
+      ],
+      "paraphrases": [
+        "Želim da izbrišeš spis koji je povezan s mojim motornim sredstvom.",
+        "Trebam izbrisati akt koji je vezan uz povijesnu evidenciju mog limuzine.",
+        "Želim da se poništi obrazac vezan uz povijesne unose mojih limuzina."
+      ]
+    },
+    {
+      "tool_id": "delete_Vehicles_id_documents_documentId",
+      "index": 166,
+      "purpose": "Ovaj endpoint omogućuje brisanje određenog dokumenta vezanog uz vozilo.",
+      "synonyms_hr": [
+        "auto",
+        "automobil",
+        "kola",
+        "obriši vozilo",
+        "ukloni vozilo",
+        "makni vozilo",
+        "dokumenti vozila",
+        "datoteke vozila",
+        "želim obrisati vozilo",
+        "obriši auto"
+      ],
+      "example_queries_hr": [
+        "Obriši dokument vozila s ID-om 789 za vozilo s ID-om 123.",
+        "Ukloni dokument vozila s ID-om 456 za vozilo 789."
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "datoteka",
+        "datoteke",
+        "dokument",
+        "dokumenti",
+        "flot",
+        "kola",
+        "makni",
+        "obrisati",
+        "obrisi",
+        "prilog",
+        "ukloni",
+        "vozil",
+        "vozila",
+        "vozilo"
+      ],
+      "paraphrases": [
+        "Molim te da izbrišeš potvrdu vezanu uz moje motorno sredstvo.",
+        "Molim za brisanje zapisnika koji je povezan s mojim kombijem.",
+        "Želim da se izbaci spis koji se odnosi na to prijevozno sredstvo."
+      ]
+    },
+    {
+      "tool_id": "get_Companies_Agg",
+      "index": 196,
+      "purpose": "Izračunava agregatne funkcije (count, sum, avg, min, max) nad skupom kompanija — vraća broj, zbroj, prosjek, minimum ili maksimum po filtriranim poslovnim subjektima.",
+      "synonyms_hr": [
+        "firma",
+        "poduzeće",
+        "kompanija",
+        "dohvati tvrtka",
+        "prikaži tvrtka",
+        "pokaži tvrtka",
+        "agregacija tvrtki",
+        "ukupno tvrtki",
+        "koji su tvrtka",
+        "koliko tvrtki"
+      ],
+      "example_queries_hr": [
+        "Agregiraj podatke o kompanijama.",
+        "Koliko ima registriranih kompanija?"
+      ],
+      "forbidden_words": [
+        "agregacija",
+        "agregiraj",
+        "dohvati",
+        "firm",
+        "firma",
+        "koliko",
+        "prikazi",
+        "registriranih",
+        "tvrtk",
+        "tvrtka",
+        "tvrtki",
+        "ukupno"
+      ],
+      "paraphrases": [
+        "Koliki je broj poslovnih subjekata?",
+        "Zbroj vrijednosti među kompanijama?",
+        "Statistika o kompanijama — broj i prosjek?"
+      ]
+    },
+    {
+      "tool_id": "get_Companies_id_metadata",
+      "index": 203,
+      "purpose": "Vraća metapodatke entiteta s određenim primarnim ključem.",
+      "synonyms_hr": [
+        "firma",
+        "poduzeće",
+        "kompanija",
+        "dohvati tvrtka",
+        "prikaži tvrtka",
+        "pokaži tvrtka",
+        "metapodaci tvrtki",
+        "informacije o strukturi tvrtki",
+        "koji su tvrtka",
+        "koliko tvrtki"
+      ],
+      "example_queries_hr": [
+        "Daj mi metapodatke za kompaniju s ID-om 456.",
+        "Prikaži informacije o metapodacima za kompaniju 789."
+      ],
+      "forbidden_words": [
+        "dohvati",
+        "firm",
+        "firma",
+        "informacije",
+        "koliko",
+        "kompanij",
+        "kompanija",
+        "kompaniju",
+        "metapodac",
+        "metapodaci",
+        "metapodacima",
+        "metapodatke",
+        "poduzec",
+        "poduzece",
+        "pokazi",
+        "polja",
+        "prikazi",
+        "shema",
+        "struktur",
+        "strukturi",
+        "tvrtk",
+        "tvrtka",
+        "tvrtki"
+      ],
+      "paraphrases": [
+        "Kako mogu pristupiti podacima o karakteristikama entiteta koristeći njegov jedinstveni ključ?",
+        "Trebam izvršiti pregled metapodataka za entitet sa specifičnim identifikacijskim brojem.",
+        "Možeš li mi pružiti uvid u atribute entiteta prema zadanom ID-u?"
+      ]
+    },
+    {
+      "tool_id": "get_DashboardItems_id",
+      "index": 214,
+      "purpose": "Vraća pojedinačni stavku na temelju vrijednosti primarnog ključa",
+      "synonyms_hr": [
+        "widget",
+        "nadzorna ploča",
+        "po ID-u stavki dashboarda",
+        "specifični stavki dashboarda",
+        "detalji widget",
+        "jedan widget"
+      ],
+      "example_queries_hr": [
+        "Dohvati stavka nadzorne ploče nadzorne ploče s ID-om 1",
+        "Dohvati stavka nadzorne ploče nadzorne ploče s ID-om 5"
+      ],
+      "forbidden_words": [
+        "dashboarda",
+        "detalji",
+        "dohvati",
+        "nadzorna",
+        "nadzorne",
+        "ploca",
+        "ploce",
+        "specificni",
+        "stavka",
+        "stavki",
+        "widget"
+      ],
+      "paraphrases": [
+        "Želim pregledati određenu komponentu na upravljačkom sučelju.",
+        "Možeš li mi dati informacije o specifičnom elementu u radnom prikazu?",
+        "Trebam pristupiti jednom resursu unutar prikaza podataka."
+      ]
+    },
+    {
+      "tool_id": "get_DocumentTypes_id",
+      "index": 220,
+      "purpose": "Vraća jedan dokument tip na temelju primarnog ključa.",
+      "synonyms_hr": [
+        "vrsta dokumenta",
+        "po ID-u tipova dokumenata",
+        "specifični tipova dokumenata",
+        "detalji vrsta dokumenta",
+        "jedan vrsta dokumenta"
+      ],
+      "example_queries_hr": [
+        "Daj mi tip dokumenta s ID-om 1.",
+        "Koji su detalji za tip dokumenta s ID-om 2?",
+        "Dohvati tip dokumenta po ID-u.",
+        "Prikaži informacije o tipu dokumenta s ID-om 1.",
+        "Koji je naziv tipa dokumenta s ID-om 2?"
+      ],
+      "forbidden_words": [
+        "datoteka",
+        "detalji",
+        "dohvati",
+        "dokumenata",
+        "dokument",
+        "dokumenta",
+        "informacije",
+        "kategorija dokument",
+        "naziv",
+        "prikazi",
+        "prilog",
+        "specificni",
+        "tip dokument",
+        "tipa",
+        "tipov dokument",
+        "tipova",
+        "tipovi dokument",
+        "tipu",
+        "vrsta",
+        "vrsta dokument"
+      ],
+      "paraphrases": [
+        "Molim te da prikažeš ispravu prema zadnjem ID-u koji imam.",
+        "Želim pregledati akt koji odgovara određenom ključu.",
+        "Možeš li mi pokazati spis koji se odnosi na taj broj?"
+      ]
+    },
+    {
+      "tool_id": "get_DocumentTypes_id_documents_documentId_thumb",
+      "index": 223,
+      "purpose": "Vraća sličicu specifičnog dokumenta unutar određenog tipa.",
+      "synonyms_hr": [
+        "vrsta dokumenta",
+        "dohvati tip dokumenta",
+        "prikaži tip dokumenta",
+        "pokaži tip dokumenta",
+        "sličica tipova dokumenata",
+        "thumbnail tipova dokumenata",
+        "koji su tip dokumenta",
+        "koliko tipova dokumenata"
+      ],
+      "example_queries_hr": [
+        "Daj mi sličicu dokumenta s ID-om 1 unutar tipa dokumenta 2.",
+        "Koja je sličica za dokument tipa dokumenta tipa dokumenta 3 u tipu 1?"
+      ],
+      "forbidden_words": [
+        "datoteka",
+        "dohvati",
+        "dokumenata",
+        "dokument",
+        "dokumenta",
+        "kategorija dokument",
+        "koliko",
+        "pokazi",
+        "prikazi",
+        "prilog",
+        "slicica",
+        "slicicu",
+        "thumbnail",
+        "tip dokument",
+        "tipa",
+        "tipov dokument",
+        "tipova",
+        "tipovi dokument",
+        "tipu",
+        "unutar",
+        "vrsta",
+        "vrsta dokument"
+      ],
+      "paraphrases": [
+        "Želim vidjeti vizualizaciju akta koji pripada određenim kategorijama.",
+        "Zanima me kako izgleda miniatura jednog spisa iz različitih grupa.",
+        "Trebam pregledati minijaturu jednog obrasca iz odabrane kategorije."
+      ]
+    },
+    {
+      "tool_id": "get_Equipment",
+      "index": 225,
+      "purpose": "Dohvaćanje svih opreme s podrškom za straničenje i sortiranje.",
+      "synonyms_hr": [
+        "dodatak",
+        "uređaj",
+        "accessory",
+        "dohvati oprema",
+        "prikaži oprema",
+        "pokaži oprema",
+        "koji su oprema",
+        "koliko opreme",
+        "lista dodatak",
+        "popis dodatak"
+      ],
+      "example_queries_hr": [
+        "Pokaži oprema",
+        "Prikaži sve oprema"
+      ],
+      "forbidden_words": [
+        "accessory",
+        "alat",
+        "dodatak",
+        "dohvati",
+        "inventar",
+        "koliko",
+        "lista",
+        "oprem",
+        "oprema",
+        "opreme",
+        "pokazi",
+        "popis",
+        "prikazi",
+        "uredaj"
+      ],
+      "paraphrases": [
+        "Zanima me pregled svih strojeva uz opciju filtriranja i podjele na stranice.",
+        "Trebam informacije o svim aparaturama, uz mogućnost sortiranja i paginacije.",
+        "Možeš li mi prikazati sve instrumente s opcijama za razvrstavanje i stranice?"
+      ]
+    },
+    {
+      "tool_id": "get_EquipmentCalendarOnPersonVehicle_on_Agg",
+      "index": 228,
+      "purpose": "Dohvaća agregirane vrijednosti na temelju filtera.",
+      "synonyms_hr": [
+        "oprema po vozilu i osobi",
+        "dohvati oprema osoba-vozilo",
+        "prikaži oprema osoba-vozilo",
+        "pokaži oprema osoba-vozilo",
+        "agregacija opreme",
+        "ukupno opreme",
+        "koji su oprema osoba-vozilo",
+        "koliko opreme"
+      ],
+      "example_queries_hr": [
+        "Daj mi prosječnu cijenu opreme za osobu s ID-om 123.",
+        "Prikaži mi maksimalnu vrijednost opreme za vozilo s oznakom ABC-123."
+      ],
+      "forbidden_words": [
+        "agregacija",
+        "alat",
+        "auti",
+        "auto",
+        "automobil",
+        "cijenu",
+        "djelatnik",
+        "dohvati",
+        "flot",
+        "inventar",
+        "kalendar oprem",
+        "kola",
+        "koliko",
+        "korisnik",
+        "maksimalnu",
+        "oprem",
+        "oprema",
+        "opreme",
+        "osob",
+        "osoba",
+        "osobi",
+        "osobu",
+        "oznakom",
+        "pokazi",
+        "prikazi",
+        "prosjecnu",
+        "radnik",
+        "raspored oprem",
+        "ukupno",
+        "uredaj",
+        "voditelj",
+        "vozil",
+        "vozilo",
+        "vozilu",
+        "vrijednost",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Trebam prikaz sažetka za motorna sredstva u rasporedu.",
+        "Možeš li mi prikazati agregirane informacije o prijevoznim sredstvima i planu termina?",
+        "Molim te da mi daš pregled prosječnih podataka o planiranju i limuzinama."
+      ]
+    },
+    {
+      "tool_id": "get_EquipmentCalendarOn_on_GroupBy",
+      "index": 233,
+      "purpose": "Dohvaća grupirane stavke na temelju filtera za određeni datum.",
+      "synonyms_hr": [
+        "oprema na dan",
+        "dohvati kalendar opreme za datum",
+        "prikaži kalendar opreme za datum",
+        "pokaži kalendar opreme za datum",
+        "grupirano kalendara opreme",
+        "po grupama kalendara opreme",
+        "koji su kalendar opreme za datum",
+        "koliko kalendara opreme"
+      ],
+      "example_queries_hr": [
+        "Grupiraj stavke prema polju y za datum 2023-01-01."
+      ],
+      "forbidden_words": [
+        "2023",
+        "alat",
+        "datum",
+        "dohvati",
+        "ekip",
+        "grupa",
+        "grupama",
+        "grupiraj",
+        "grupirano",
+        "inventar",
+        "kalendar",
+        "kalendar oprem",
+        "kalendara",
+        "koliko",
+        "oprem",
+        "oprema",
+        "opreme",
+        "pokazi",
+        "polju",
+        "prema",
+        "prikazi",
+        "raspored oprem",
+        "stavke",
+        "uredaj"
+      ],
+      "paraphrases": [
+        "Kako mogu dobiti informacije o stavkama organiziranim po hodogramu za specifičan dan?",
+        "Želim vidjeti raspored povezanih stavki za taj dan koristeći dostupne kriterije.",
+        "Kako mogu dobiti uvid u klasificirane informacije za taj rezervacijski plan?"
+      ]
+    },
+    {
+      "tool_id": "get_EquipmentCalendar_id",
+      "index": 238,
+      "purpose": "Dohvaća pojedinačni kalendar opreme po primarnom ključu.",
+      "synonyms_hr": [
+        "raspored opreme",
+        "po ID-u kalendara opreme",
+        "specifični kalendara opreme",
+        "detalji raspored opreme",
+        "jedan raspored opreme"
+      ],
+      "example_queries_hr": [
+        "Kako mogu dobiti informacije o određenoj opremi?",
+        "Želim provjeriti status opreme s ID-om 123."
+      ],
+      "forbidden_words": [
+        "alat",
+        "detalji",
+        "dobiti",
+        "informacije",
+        "inventar",
+        "kalendar oprem",
+        "kalendara",
+        "odredenoj",
+        "oprem",
+        "opreme",
+        "opremi",
+        "provjeriti",
+        "raspored",
+        "raspored oprem",
+        "specificni",
+        "status",
+        "uredaj"
+      ],
+      "paraphrases": [
+        "Zanima me plan termina za to motorno sredstvo.",
+        "Možeš li mi prikazati hodogram vezan za ovu ispravnu stavku?",
+        "Treba mi pregled rezervacijskog plana za ovo vozilo."
+      ]
+    },
+    {
+      "tool_id": "get_EquipmentTypes_id_documents_documentId_thumb",
+      "index": 250,
+      "purpose": "Vraća sličicu određenog dokumenta vezanog uz tip opreme.",
+      "synonyms_hr": [
+        "vrsta opreme",
+        "dohvati tip opreme",
+        "prikaži tip opreme",
+        "pokaži tip opreme",
+        "sličica tipova opreme",
+        "thumbnail tipova opreme",
+        "koji su tip opreme",
+        "koliko tipova opreme"
+      ],
+      "example_queries_hr": [
+        "Daj mi sličicu dokumenta tipa opreme tipa opreme dokumenta tipa opreme s ID-om 7 za tip opreme s ID-om 5.",
+        "Kako dobiti sličicu dokumenta tipa opreme tipa opreme dokumenta tipa opreme s ID-om 10?"
+      ],
+      "forbidden_words": [
+        "alat",
+        "datoteka",
+        "dobiti",
+        "dohvati",
+        "dokument",
+        "dokumenta",
+        "inventar",
+        "kategorija oprem",
+        "koliko",
+        "oprem",
+        "opreme",
+        "pokazi",
+        "prikazi",
+        "prilog",
+        "slicica",
+        "slicicu",
+        "thumbnail",
+        "tip oprem",
+        "tipa",
+        "tipov oprem",
+        "tipova",
+        "tipovi oprem",
+        "uredaj",
+        "vrsta",
+        "vrsta oprem"
+      ],
+      "paraphrases": [
+        "Možeš li mi poslati sliku isprave koja se odnosi na određeni tip motornih sredstava?",
+        "Molim te, daj mi vizualni prikaz akta povezanog s određenim prijevoznim sredstvom.",
+        "Trebam da mi prikažeš sliku akta koja je povezana s određenim modelom."
+      ]
+    },
+    {
+      "tool_id": "get_ExpenseTypes",
+      "index": 270,
+      "purpose": "Dohvaća sve tipove troškova na temelju parametara učitavanja.",
+      "synonyms_hr": [
+        "vrsta troška",
+        "kategorija rashoda",
+        "dohvati tip troška",
+        "prikaži tip troška",
+        "pokaži tip troška",
+        "koji su tip troška",
+        "koliko tipova troška",
+        "lista vrsta troška",
+        "popis vrsta troška",
+        "sve vrsta troška"
+      ],
+      "example_queries_hr": [
+        "Kako dobiti sve tipove troškova?",
+        "Mogu li filtrirati tipove troškova prema kategoriji?"
+      ],
+      "forbidden_words": [
+        "cijena",
+        "dobiti",
+        "dohvati",
+        "filtrirati",
+        "izdatak",
+        "kategorija",
+        "kategorija trosk",
+        "kategoriji",
+        "koliko",
+        "lista",
+        "pokazi",
+        "popis",
+        "prema",
+        "prikazi",
+        "racun",
+        "rashod",
+        "rashoda",
+        "tip trosk",
+        "tipov trosk",
+        "tipova",
+        "tipove",
+        "tipovi trosk",
+        "trosak",
+        "trosk",
+        "troska",
+        "troskova",
+        "vrsta",
+        "vrsta trosk"
+      ],
+      "paraphrases": [
+        "Možeš li mi pokazati sve kategorije financijskih obveza?",
+        "Mogu li vidjeti sve vrste trošenja na temelju određenih parametara?",
+        "Možete li mi pokazati sve kategorije trošenja koje postoje u sustavu?"
+      ]
+    },
+    {
+      "tool_id": "get_ExpenseTypes_ProjectTo",
+      "index": 273,
+      "purpose": "Dohvaća stavke na temelju parametara učitavanja i projicira rezultat na popis kolona.",
+      "synonyms_hr": [
+        "vrsta troška",
+        "kategorija rashoda",
+        "dohvati tip troška",
+        "prikaži tip troška",
+        "pokaži tip troška",
+        "projekcija tipova troška",
+        "odabrana polja tipova troška",
+        "koji su tip troška",
+        "koliko tipova troška"
+      ],
+      "example_queries_hr": [
+        "Daj mi tip troškae tipa troška s kolonama id, name.",
+        "Prikaži tip troškae tipa troška s filtriranjem i sortiranjem."
+      ],
+      "forbidden_words": [
+        "cijena",
+        "dohvati",
+        "filtriranjem",
+        "kategorija",
+        "kategorija trosk",
+        "koliko",
+        "metapodac",
+        "odabrana",
+        "pokazi",
+        "polja",
+        "prikazi",
+        "projekcija",
+        "racun",
+        "rashod",
+        "rashoda",
+        "shema",
+        "sortiranjem",
+        "struktur",
+        "tip trosk",
+        "tipa",
+        "tipov trosk",
+        "tipova",
+        "tipovi trosk",
+        "trosak",
+        "trosk",
+        "troska",
+        "troskae",
+        "vrsta",
+        "vrsta trosk"
+      ],
+      "paraphrases": [
+        "Daj mi stavke koje se odnose na troškove s kolonama id i name.",
+        "Prikaži vrste rashoda s filtriranjem i sortiranjem.",
+        "Pokaži vrste rashoda s odabranim informacijama."
+      ]
+    },
+    {
+      "tool_id": "get_Expenses_Agg",
+      "index": 281,
+      "purpose": "Dohvaća agregirane vrijednosti na temelju funkcije.",
+      "synonyms_hr": [
+        "rashod",
+        "izdatak",
+        "cijena",
+        "dohvati trošak",
+        "prikaži trošak",
+        "pokaži trošak",
+        "agregacija troškova",
+        "ukupno troškova",
+        "koji su trošak",
+        "koliko troškova"
+      ],
+      "example_queries_hr": [
+        "Kako dobiti ukupne troškove za prošli mjesec?",
+        "Mogu li izračunati prosječne troškove za određenu kategoriju?"
+      ],
+      "forbidden_words": [
+        "agregacija",
+        "cijena",
+        "dobiti",
+        "dohvati",
+        "izdatak",
+        "izracunati",
+        "kategoriju",
+        "koliko",
+        "mjesec",
+        "odredenu",
+        "pokazi",
+        "prikazi",
+        "prosjecne",
+        "prosli",
+        "racun",
+        "rashod",
+        "trosak",
+        "trosk",
+        "troska",
+        "troskova",
+        "troskove",
+        "ukupne",
+        "ukupno"
+      ],
+      "paraphrases": [
+        "Zanima me pregled minimalnih i maksimalnih stavki u vezi s iznosima.",
+        "Možeš li mi dati uvid u sve agregirane informacije vezane uz financijske stavke?",
+        "Želim pregledati agregirane podatke o iznosima koji uključuju najniže i najviše vrijednosti."
+      ]
+    },
+    {
+      "tool_id": "get_Expenses_ProjectTo",
+      "index": 284,
+      "purpose": "Dohvaća stavke na temelju parametara učitavanja.",
+      "synonyms_hr": [
+        "rashod",
+        "izdatak",
+        "cijena",
+        "dohvati trošak",
+        "prikaži trošak",
+        "pokaži trošak",
+        "projekcija troškova",
+        "odabrana polja troškova",
+        "koji su trošak",
+        "koliko troškova"
+      ],
+      "example_queries_hr": [
+        "Kako dobiti sve troškove s određenim filtrima?",
+        "Mogu li sortirati troškove prema datumu?"
+      ],
+      "forbidden_words": [
+        "cijena",
+        "datumu",
+        "dobiti",
+        "dohvati",
+        "filtrima",
+        "izdatak",
+        "koliko",
+        "metapodac",
+        "odabrana",
+        "odredenim",
+        "pokazi",
+        "polja",
+        "prema",
+        "prikazi",
+        "projekcija",
+        "racun",
+        "rashod",
+        "shema",
+        "sortirati",
+        "struktur",
+        "trosak",
+        "trosk",
+        "troska",
+        "troskova",
+        "troskove"
+      ],
+      "paraphrases": [
+        "Možeš li mi dostaviti informacije o iznosima za taj specifični plan?",
+        "Trebam pregledati stavke koje se odnose na moj trenutni zadatak.",
+        "Molim te da mi prikažeš sve relevantne stavke za moju aktivnost."
+      ]
+    },
+    {
+      "tool_id": "get_LatestMileageReports",
+      "index": 296,
+      "purpose": "Ovaj endpoint omogućava dohvaćanje svih stavki na temelju parametara učitavanja.",
+      "synonyms_hr": [
+        "posljednja kilometraža",
+        "dohvati zadnji izvještaj km",
+        "prikaži zadnji izvještaj km",
+        "pokaži zadnji izvještaj km",
+        "koji su zadnji izvještaj km",
+        "koliko zadnjeg izvještaja km",
+        "lista posljednja kilometraža",
+        "popis posljednja kilometraža",
+        "sve posljednja kilometraža"
+      ],
+      "example_queries_hr": [
+        "Daj mi sve izvještaj o kilometražie.",
+        "Dohvati izvještaj o kilometražie s paginacijom."
+      ],
+      "forbidden_words": [
+        "dohvati",
+        "izvjest km",
+        "izvjestaj",
+        "izvjestaja",
+        "kilometraz",
+        "kilometraza",
+        "kilometrazie",
+        "km izvjest",
+        "koliko",
+        "lista",
+        "paginacijom",
+        "pokazi",
+        "popis",
+        "posljednja",
+        "prijedeni put",
+        "prikazi",
+        "zadnjeg",
+        "zadnji"
+      ],
+      "paraphrases": [
+        "Mogu li dobiti pregled svih najnovijih podataka o potrošnji vozila?",
+        "Trebam informacije o svim nedavnim statistikama potrošnje za moj motorni promet.",
+        "Kako mogu pregledati sve nedavne analize vožnje za svoje prijevozno sredstvo?"
+      ]
+    },
+    {
+      "tool_id": "get_LatestMileageReports_id",
+      "index": 300,
+      "purpose": "Dohvaća pojedinačni zadnji izvještaj km po primarnom ključu.",
+      "synonyms_hr": [
+        "posljednja kilometraža",
+        "po ID-u zadnjeg izvještaja km",
+        "specifični zadnjeg izvještaja km",
+        "detalji posljednja kilometraža",
+        "jedan posljednja kilometraža"
+      ],
+      "example_queries_hr": [
+        "Daj mi izvještaj o kilometraži s ID-om 1.",
+        "Koje su informacije za izvještaj o kilometraži 5?"
+      ],
+      "forbidden_words": [
+        "detalji",
+        "informacije",
+        "izvjest km",
+        "izvjestaj",
+        "izvjestaja",
+        "kilometraz",
+        "kilometraza",
+        "kilometrazi",
+        "km izvjest",
+        "posljednja",
+        "prijedeni put",
+        "specificni",
+        "zadnjeg"
+      ],
+      "paraphrases": [
+        "Molim te da mi prikažeš najnoviji prikaz o pređenoj udaljenosti prema zadanom ID-u.",
+        "Želim dobiti posljednji pregled podataka o mjerenju udaljenosti za određeni ključ.",
+        "Trebam najnoviji zapis o pređenoj udaljenosti za specificirani ključ."
+      ]
+    },
+    {
+      "tool_id": "get_LatestVehicleCalendar",
+      "index": 314,
+      "purpose": "Ovaj endpoint omogućuje dohvaćanje svih stavki temeljenih na parametrima učitavanja.",
+      "synonyms_hr": [
+        "posljednja rezervacija",
+        "dohvati zadnji kalendar vozila",
+        "prikaži zadnji kalendar vozila",
+        "pokaži zadnji kalendar vozila",
+        "koji su zadnji kalendar vozila",
+        "koliko zadnjeg kalendara",
+        "lista posljednja rezervacija",
+        "popis posljednja rezervacija",
+        "sve posljednja rezervacija"
+      ],
+      "example_queries_hr": [
+        "Daj mi sve vozila.",
+        "Prikaži vozila od 10. do 20. reda."
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "booking",
+        "dohvati",
+        "flot",
+        "kalendar",
+        "kalendar vozil",
+        "kalendara",
+        "kola",
+        "koliko",
+        "lista",
+        "pokazi",
+        "popis",
+        "posljednja",
+        "prikazi",
+        "reda",
+        "rezervacij",
+        "rezervacija",
+        "vozil",
+        "vozila",
+        "zadnjeg",
+        "zadnji"
+      ],
+      "paraphrases": [
+        "Molim te da mi prikažeš sve dostupne informacije o najnovijim prijevoznim sredstvima prema rasporedu.",
+        "Želim dobiti pregled svih aktuelnih motornih sredstava s planom termina.",
+        "Možeš li mi pokazati sve nove limuzine prema planu događanja?"
+      ]
+    },
+    {
+      "tool_id": "get_Lookup_EntityTypes",
+      "index": 344,
+      "purpose": "Ovaj endpoint omogućuje dohvaćanje tipova entiteta.",
+      "synonyms_hr": [
+        "šifrarnik",
+        "referentni podaci",
+        "dohvati lookup",
+        "prikaži lookup",
+        "pokaži lookup",
+        "koji su lookup",
+        "koliko lookupa"
+      ],
+      "example_queries_hr": [
+        "Dohvati sve tipove entiteta."
+      ],
+      "forbidden_words": [
+        "dohvati",
+        "koliko",
+        "podaci",
+        "pokazi",
+        "prikazi",
+        "referentni",
+        "sifrarnik",
+        "tipove"
+      ],
+      "paraphrases": [
+        "Izlistaj sve vrste entiteta.",
+        "Izlistaj sve vrste entiteta.",
+        "Koji su svi entiteti koji su dostupni?"
+      ]
+    },
+    {
+      "tool_id": "get_Lookup_EquipmentTypeId",
+      "index": 348,
+      "purpose": "Ovaj endpoint vraća tipove opreme.",
+      "synonyms_hr": [
+        "šifrarnik",
+        "referentni podaci",
+        "dohvati lookup",
+        "prikaži lookup",
+        "pokaži lookup",
+        "koji su lookup",
+        "koliko lookupa"
+      ],
+      "example_queries_hr": [
+        "Koji su tipovi opreme?",
+        "Prikaži sve tipove opreme"
+      ],
+      "forbidden_words": [
+        "alat",
+        "dohvati",
+        "inventar",
+        "kategorija oprem",
+        "koliko",
+        "lookup",
+        "lookupa",
+        "oprem",
+        "opreme",
+        "podaci",
+        "pokazi",
+        "prikazi",
+        "referentni",
+        "sifrarnik",
+        "tip oprem",
+        "tipov oprem",
+        "tipove",
+        "tipovi",
+        "tipovi oprem",
+        "uredaj",
+        "vrsta oprem"
+      ],
+      "paraphrases": [
+        "Možeš li mi reći koje su vrste tehnike trenutno navedene?",
+        "Tražim popis raznih modela naprava koje imate.",
+        "Zanima me koje su kategorije aparata trenutno u ponudi."
+      ]
+    },
+    {
+      "tool_id": "get_Lookup_ExpenseStatuses",
+      "index": 352,
+      "purpose": "Ovaj endpoint vraća status troškova.",
+      "synonyms_hr": [
+        "šifrarnik",
+        "referentni podaci",
+        "dohvati lookup",
+        "prikaži lookup",
+        "pokaži lookup",
+        "koji su lookup",
+        "koliko lookupa"
+      ],
+      "example_queries_hr": [
+        "Koji su statusi troškova?",
+        "Prikaži sve statusa troškova"
+      ],
+      "forbidden_words": [
+        "cijena",
+        "dohvati",
+        "izdatak",
+        "koliko",
+        "lookup",
+        "lookupa",
+        "podaci",
+        "pokazi",
+        "prikazi",
+        "racun",
+        "rashod",
+        "referentni",
+        "sifrarnik",
+        "statusa",
+        "statusi",
+        "trosak",
+        "trosk",
+        "troska",
+        "troskova"
+      ],
+      "paraphrases": [
+        "Zanima me pregled svih trenutnih stanja financijskih obaveza.",
+        "Molim te, daj mi uvid u sve oznake potrošnje koje su trenutno aktivne.",
+        "Želim provjeriti koje su sve oznake dostupne za financijske stavke."
+      ]
+    },
+    {
+      "tool_id": "get_Lookup_PersonActivityCategories",
+      "index": 363,
+      "purpose": "Ovaj endpoint vraća sve kategorije aktivnosti osoba.",
+      "synonyms_hr": [
+        "šifrarnik",
+        "referentni podaci",
+        "dohvati lookup",
+        "prikaži lookup",
+        "pokaži lookup",
+        "koji su lookup",
+        "koliko lookupa"
+      ],
+      "example_queries_hr": [
+        "Daj mi sve kategorije aktivnosti osoba.",
+        "Koje su dostupne kategorije aktivnosti?"
+      ],
+      "forbidden_words": [
+        "djelatnik",
+        "dohvati",
+        "dostupne",
+        "koliko",
+        "korisnik",
+        "podaci",
+        "pokazi",
+        "prikazi",
+        "radnik",
+        "referentni",
+        "sifrarnik",
+        "voditelj",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Koje su sve kategorije aktivnosti za osobe?",
+        "Molim vas, navedite sve vrste aktivnosti koje osobe mogu imati.",
+        "Što sve obuhvaćaju kategorije aktivnosti osoba?"
+      ]
+    },
+    {
+      "tool_id": "get_Lookup_PoolId",
+      "index": 367,
+      "purpose": "Šifrarnik (lookup tablica) parova ID/naziv bazena vozila (vehicle pool) — lagana lista za dropdown menije i odabir, bez ostalih detalja bazena.",
+      "synonyms_hr": [
+        "šifrarnik",
+        "referentni podaci",
+        "dohvati lookup",
+        "prikaži lookup",
+        "pokaži lookup",
+        "koji su lookup",
+        "koliko lookupa"
+      ],
+      "example_queries_hr": [
+        "Daj mi listu bazena.",
+        "Koji su bazeni dostupni?"
+      ],
+      "forbidden_words": [
+        "bazeni",
+        "dohvati",
+        "dostupni",
+        "koliko",
+        "listu",
+        "podaci",
+        "pokazi",
+        "prikazi",
+        "referentni"
+      ],
+      "paraphrases": [
+        "Treba mi izbor bazena vozila za odabir.",
+        "Želim šifrarnik ID-a i naziva voznih parkova.",
+        "Potrebna mi je dropdown opcija za vehicle poolove."
+      ]
+    },
+    {
+      "tool_id": "get_Lookup_SearchTypes",
+      "index": 370,
+      "purpose": "Ovaj endpoint vraća tipove pretraživanja.",
+      "synonyms_hr": [
+        "šifrarnik",
+        "referentni podaci",
+        "dohvati lookup",
+        "prikaži lookup",
+        "pokaži lookup",
+        "koji su lookup",
+        "koliko lookupa"
+      ],
+      "example_queries_hr": [
+        "Koji su tipovi pretraživanja?",
+        "Prikaži sve tipove pretraživanja"
+      ],
+      "forbidden_words": [
+        "dohvati",
+        "koliko",
+        "lookup",
+        "lookupa",
+        "podaci",
+        "pokazi",
+        "pretrazivanja",
+        "prikazi",
+        "referentni",
+        "sifrarnik",
+        "tipove",
+        "tipovi"
+      ],
+      "paraphrases": [
+        "Želim provjeriti specifične kategorije upita.",
+        "Možeš li mi reći koje su opcije za pretragu?",
+        "Zanima me koji su dostupni oblikovi istraživanja."
+      ]
+    },
+    {
+      "tool_id": "get_Lookup_TimeZones",
+      "index": 373,
+      "purpose": "Ovaj endpoint vraća sve vremenske zone.",
+      "synonyms_hr": [
+        "šifrarnik",
+        "referentni podaci",
+        "dohvati lookup",
+        "prikaži lookup",
+        "pokaži lookup",
+        "koji su lookup",
+        "koliko lookupa"
+      ],
+      "example_queries_hr": [
+        "Koje su dostupne vremenske zone?",
+        "Prikaži sve vremenske zone"
+      ],
+      "forbidden_words": [
+        "dohvati",
+        "dostupne",
+        "koliko",
+        "lookup",
+        "lookupa",
+        "podaci",
+        "pokazi",
+        "prikazi",
+        "referentni",
+        "sifrarnik",
+        "vremenske",
+        "zone"
+      ],
+      "paraphrases": [
+        "Mogu li dobiti pregled svih vremenskih odrednica?",
+        "Trebam popis svih vremenskih odrednica u sustavu.",
+        "Možeš li mi pokazati sve varijacije satnih područja?"
+      ]
+    },
+    {
+      "tool_id": "get_Master",
+      "index": 379,
+      "purpose": "Ovaj endpoint vraća sve stavke na temelju parametara učitavanja.",
+      "synonyms_hr": [
+        "master",
+        "osnovni",
+        "dohvati matični podaci",
+        "prikaži matični podaci",
+        "pokaži matični podaci",
+        "koji su matični podaci",
+        "koliko matičnih podataka",
+        "lista master",
+        "popis master",
+        "sve master"
+      ],
+      "example_queries_hr": [
+        "Daj mi sve zapise."
+      ],
+      "forbidden_words": [
+        "dohvati",
+        "koliko",
+        "lista",
+        "master",
+        "maticni",
+        "maticnih",
+        "osnovni",
+        "podaci",
+        "podataka",
+        "pokazi",
+        "popis",
+        "prikazi",
+        "zapise"
+      ],
+      "paraphrases": [
+        "Mogu li dobiti sve relevantne stavke vezane uz glavne informacije?",
+        "Želim pregledati sve elemente koji se odnose na ključne aspekte.",
+        "Zanima me uvid u sve relevantne informacije vezane uz centralne aspekte."
+      ]
+    },
+    {
+      "tool_id": "get_Metadata_Agg",
+      "index": 387,
+      "purpose": "Ovaj endpoint vraća agregirane vrijednosti na temelju filtara.",
+      "synonyms_hr": [
+        "meta",
+        "informacije o strukturi",
+        "dohvati metapodaci",
+        "prikaži metapodaci",
+        "pokaži metapodaci",
+        "agregacija metapodataka",
+        "ukupno metapodataka",
+        "koji su metapodaci",
+        "koliko metapodataka"
+      ],
+      "example_queries_hr": [
+        "Agregiraj metapodatke entiteta.",
+        "Statistika metapodataka po tipu.",
+        "Agregacija metapodataka - suma, prosjek.",
+        "Statistika metapodataka."
+      ],
+      "forbidden_words": [
+        "agregacija",
+        "agregiraj",
+        "dohvati",
+        "entiteta",
+        "informacije",
+        "koliko",
+        "metapodac",
+        "metapodaci",
+        "metapodataka",
+        "metapodatke",
+        "pokazi",
+        "polja",
+        "prikazi",
+        "prosjek",
+        "shema",
+        "statistika",
+        "struktur",
+        "strukturi",
+        "suma",
+        "tipu",
+        "ukupno"
+      ],
+      "paraphrases": [
+        "Izračunaj minimalne i maksimalne vrijednosti za odabrane podatke.",
+        "Analiziraj podatke prema postavljenim filtrima.",
+        "Prikaži ukupne vrijednosti prema filtrima."
+      ]
+    },
+    {
+      "tool_id": "get_Metadata_ProjectTo",
+      "index": 389,
+      "purpose": "Vraća samo odabrane kolone/polja entitetskih metapodataka — projekcija specifičnih atributa umjesto cijele strukture metapodataka.",
+      "synonyms_hr": [
+        "meta",
+        "informacije o strukturi",
+        "dohvati metapodaci",
+        "prikaži metapodaci",
+        "pokaži metapodaci",
+        "projekcija metapodataka",
+        "odabrana polja metapodataka",
+        "koji su metapodaci",
+        "koliko metapodataka"
+      ],
+      "example_queries_hr": [
+        "Kako dobiti podatke s filtriranjem i sortiranjem?",
+        "Mogu li dobiti određene kolone iz baze?",
+        "Dohvati samo određena polja metapodataka.",
+        "Projekcija metapodataka - samo odabrane kolone."
+      ],
+      "forbidden_words": [
+        "baze",
+        "dobiti",
+        "dohvati",
+        "filtriranjem",
+        "informacije",
+        "koliko",
+        "metapodac",
+        "metapodaci",
+        "odabrana",
+        "odredena",
+        "odredene",
+        "podatke",
+        "pokazi",
+        "prikazi",
+        "shema",
+        "sortiranjem",
+        "strukturi"
+      ],
+      "paraphrases": [
+        "Izaberi specifična polja iz metapodataka",
+        "Projekcija određenih atributa metapodataka",
+        "Prikaz samo odabranih kolona iz metapodataka"
+      ]
+    },
+    {
+      "tool_id": "get_Partners_ProjectTo",
+      "index": 429,
+      "purpose": "Ovaj endpoint dohvaća sve stavke na temelju parametara učitavanja.",
+      "synonyms_hr": [
+        "dobavljač",
+        "suradnik",
+        "dohvati partner",
+        "prikaži partner",
+        "pokaži partner",
+        "projekcija partnera",
+        "odabrana polja partnera",
+        "koji su partner",
+        "koliko partnera"
+      ],
+      "example_queries_hr": [
+        "Daj mi sve partnere koji imaju naziv 'ABC'",
+        "Prikazati partnere sa sortiranjem po imenu"
+      ],
+      "forbidden_words": [
+        "djelatnik",
+        "dobavljac",
+        "dohvati",
+        "imenu",
+        "klijent",
+        "koliko",
+        "korisnik",
+        "metapodac",
+        "naziv",
+        "odabrana",
+        "osob",
+        "partner",
+        "partnera",
+        "partnere",
+        "pokazi",
+        "polja",
+        "prikazati",
+        "prikazi",
+        "projekcija",
+        "radnik",
+        "shema",
+        "sortiranjem",
+        "struktur",
+        "suradnik",
+        "voditelj",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Zanima me lista svih suradničkih odnosa i povezanih projekata.",
+        "Mogu li dobiti sve informacije o suradničkim projektima na temelju postavljenih kriterija?",
+        "Želim pregledati sve aspekte naših zajedničkih projekata sa svim relevantnim podacima."
+      ]
+    },
+    {
+      "tool_id": "get_Partners_id_documents_documentId",
+      "index": 432,
+      "purpose": "Ovaj endpoint dohvaća specifične informacije o dokumentu određenog partnera.",
+      "synonyms_hr": [
+        "dobavljač",
+        "suradnik",
+        "dohvati partner",
+        "prikaži partner",
+        "pokaži partner",
+        "dokumenti partnera",
+        "datoteke partnera",
+        "koji su partner",
+        "koliko partnera"
+      ],
+      "example_queries_hr": [
+        "Daj mi informacije o dokumentu s ID-om 789 za partnera 123",
+        "Koje su informacije dostupne za dokument partnera 456?"
+      ],
+      "forbidden_words": [
+        "datoteka",
+        "datoteke",
+        "djelatnik",
+        "dobavljac",
+        "dohvati",
+        "dokument",
+        "dokumenti",
+        "dokumentu",
+        "dostupne",
+        "informacije",
+        "klijent",
+        "koliko",
+        "korisnik",
+        "osob",
+        "partner",
+        "partnera",
+        "pokazi",
+        "prikazi",
+        "prilog",
+        "radnik",
+        "suradnik",
+        "voditelj",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Možeš li mi reći detalje o aktima vezanim uz jednog od naših kooperanata?",
+        "Molim te da mi prikažeš sadržaj potvrde tog poslovnog subjekta.",
+        "Zanima me pregled zapisa koji se odnosi na određenu suradnju."
+      ]
+    },
+    {
+      "tool_id": "get_PeriodicActivityTypes",
+      "index": 453,
+      "purpose": "Dohvaća sve vrste aktivnosti prema parametrima za učitavanje.",
+      "synonyms_hr": [
+        "vrsta aktivnosti",
+        "dohvati tip periodične aktivnosti",
+        "prikaži tip periodične aktivnosti",
+        "pokaži tip periodične aktivnosti",
+        "koji su tip periodične aktivnosti",
+        "koliko tipova",
+        "lista vrsta aktivnosti",
+        "popis vrsta aktivnosti",
+        "sve vrsta aktivnosti"
+      ],
+      "example_queries_hr": [
+        "Daj mi sve vrste tip periodične aktivnostii.",
+        "Prikaži tip periodične aktivnostii sortirane po nazivu.",
+        "Dohvati sve tipove periodičnih aktivnosti.",
+        "Lista tipova periodičnih aktivnosti."
+      ],
+      "forbidden_words": [
+        "aktivnosti",
+        "aktivnostii",
+        "dohvati",
+        "koliko",
+        "lista",
+        "nazivu",
+        "periodicn",
+        "periodicne",
+        "periodicnih",
+        "pokazi",
+        "popis",
+        "prikazi",
+        "redovn aktiv",
+        "servis",
+        "sortirane",
+        "tipova",
+        "tipove",
+        "vrsta",
+        "vrste"
+      ],
+      "paraphrases": [
+        "Želim vidjeti sve oblike planiranja prema postavljenim kriterijima.",
+        "Molim te da prikažeš sve varijante organiziranih događaja u mojem rasporedu.",
+        "Tražim informacije o svim mogućim tipovima redovitih planova."
+      ]
+    },
+    {
+      "tool_id": "get_PeriodicActivityTypes_id_documents_documentId",
+      "index": 459,
+      "purpose": "Dohvaćanje tipova.",
+      "synonyms_hr": [
+        "vrsta aktivnosti",
+        "dohvati tip periodične aktivnosti",
+        "prikaži tip periodične aktivnosti",
+        "pokaži tip periodične aktivnosti",
+        "dokumenti tipova",
+        "datoteke tipova",
+        "koji su tip periodične aktivnosti",
+        "koliko tipova"
+      ],
+      "example_queries_hr": [
+        "Dohvati dokument tipa periodične aktivnosti s ID-om 'doc123' za aktivnost s ID-om 123."
+      ],
+      "forbidden_words": [
+        "aktivnost",
+        "aktivnosti",
+        "datoteka",
+        "datoteke",
+        "doc123",
+        "dohvati",
+        "dokument",
+        "dokumenti",
+        "koliko",
+        "periodicn",
+        "periodicne",
+        "pokazi",
+        "prikazi",
+        "prilog",
+        "redovn aktiv",
+        "servis",
+        "tipa",
+        "tipova",
+        "vrsta"
+      ],
+      "paraphrases": [
+        "Želim dobiti pregled svih aktova vezanih uz redovne stavke.",
+        "Kako mogu pogledati detalje o različitim spisima?",
+        "Trebam informacije o raznim oblicima dokumenata koji se koriste."
+      ]
+    },
+    {
+      "tool_id": "get_PersonActivityTypes_GroupBy",
+      "index": 464,
+      "purpose": "Dohvaća grupirane podatke na temelju definiranih kriterija.",
+      "synonyms_hr": [
+        "vrste aktivnosti",
+        "dohvati tipovi aktivnosti osobe",
+        "prikaži tipovi aktivnosti osobe",
+        "pokaži tipovi aktivnosti osobe",
+        "grupirano tipova aktivnosti",
+        "po grupama tipova aktivnosti",
+        "koji su tipovi aktivnosti osobe",
+        "koliko tipova aktivnosti"
+      ],
+      "example_queries_hr": [
+        "Grupiraj podatke prema 'department' i izračunaj sumu 'salary'."
+      ],
+      "forbidden_words": [
+        "aktivnosti",
+        "aktivnosti osobe",
+        "aktivnosti zaposlenika",
+        "cijena",
+        "department",
+        "djelatnik",
+        "dohvati",
+        "ekip",
+        "grupa",
+        "grupama",
+        "grupiraj",
+        "grupirano",
+        "izdatak",
+        "izracunaj",
+        "koliko",
+        "korisnik",
+        "osob",
+        "osobe",
+        "pokazi",
+        "prema",
+        "prikazi",
+        "racun",
+        "radnik",
+        "rashod",
+        "salary",
+        "sumu",
+        "tipova",
+        "tipovi",
+        "trosak",
+        "trosk",
+        "troska",
+        "voditelj",
+        "vrste",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Prikaz podataka organiziranih po definiranom kriteriju.",
+        "Analiza podataka u strukturiranim skupinama.",
+        "Pokaži podatke podijeljene po specifičnim kategorijama."
+      ]
+    },
+    {
+      "tool_id": "get_PersonActivityTypes_id_metadata",
+      "index": 470,
+      "purpose": "Dohvaća metapodatke za određeni tip aktivnosti osobe.",
+      "synonyms_hr": [
+        "vrste aktivnosti",
+        "dohvati tipovi aktivnosti osobe",
+        "prikaži tipovi aktivnosti osobe",
+        "pokaži tipovi aktivnosti osobe",
+        "metapodaci tipova aktivnosti",
+        "informacije o strukturi tipova aktivnosti",
+        "koji su tipovi aktivnosti osobe",
+        "koliko tipova aktivnosti"
+      ],
+      "example_queries_hr": [
+        "Daj mi metapodatke za tip aktivnosti s ID-om 1."
+      ],
+      "forbidden_words": [
+        "aktivnosti",
+        "aktivnosti osobe",
+        "aktivnosti zaposlenika",
+        "djelatnik",
+        "dohvati",
+        "informacije",
+        "koliko",
+        "korisnik",
+        "metapodac",
+        "metapodaci",
+        "metapodatke",
+        "osob",
+        "osobe",
+        "pokazi",
+        "polja",
+        "prikazi",
+        "radnik",
+        "shema",
+        "struktur",
+        "strukturi",
+        "tipova",
+        "tipovi",
+        "voditelj",
+        "vrste",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Želim saznati specifikacije vezane uz određeni oblik ponašanja.",
+        "Zanima me koji su dodatni podaci dostupni za specifičnu aktivnost.",
+        "Želim dobiti pregled metapodataka za specifičnu vrstu akcije koju obavlja netko."
+      ]
+    },
+    {
+      "tool_id": "get_Roles",
+      "index": 517,
+      "purpose": "Ovaj endpoint dohvaća sve uloge na temelju parametara za učitavanje.",
+      "synonyms_hr": [
+        "rola",
+        "pozicija",
+        "dohvati uloga",
+        "prikaži uloga",
+        "pokaži uloga",
+        "koji su uloga",
+        "koliko uloga",
+        "lista rola",
+        "popis rola",
+        "sve rola"
+      ],
+      "example_queries_hr": [
+        "Daj mi sve uloge.",
+        "Prikaži uloge sortirane po nazivu."
+      ],
+      "forbidden_words": [
+        "dohvati",
+        "dozvol",
+        "koliko",
+        "lista",
+        "permisij",
+        "pokazi",
+        "popis",
+        "pozicija",
+        "prikazi",
+        "rola",
+        "sortirane",
+        "uloga"
+      ],
+      "paraphrases": [
+        "Daj mi sve funkcije.",
+        "Prikaži sve uloge poredane po nazivu.",
+        "Želim vidjeti sve uloge s mogućnošću filtriranja."
+      ]
+    },
+    {
+      "tool_id": "get_TeamMembers_GroupBy",
+      "index": 549,
+      "purpose": "Dohvaća grupirane podatke članova tima.",
+      "synonyms_hr": [
+        "članovi ekipe",
+        "dohvati član tima",
+        "prikaži član tima",
+        "pokaži član tima",
+        "grupirano članova tima",
+        "po grupama članova tima",
+        "koji su član tima",
+        "koliko članova tima"
+      ],
+      "example_queries_hr": [
+        "Grupiraj članove tima prema odjelu."
+      ],
+      "forbidden_words": [
+        "clan",
+        "clanova",
+        "clanove",
+        "clanovi",
+        "clanovi tima",
+        "dohvati",
+        "ekip",
+        "ekipe",
+        "grupa",
+        "grupama",
+        "grupiraj",
+        "grupirano",
+        "jedinic",
+        "koliko",
+        "odjel",
+        "odjelu",
+        "organizacij",
+        "pokazi",
+        "prema",
+        "prikazi",
+        "sektor",
+        "tima",
+        "zaposlenici u timu"
+      ],
+      "paraphrases": [
+        "Možeš li mi pokazati popis svih suradnika u mojoj grupi?",
+        "Želim dobiti pregled svih sudionika u mom radnom kolektivu.",
+        "Želim pregledati informacije o osobama unutar radne skupine."
+      ]
+    },
+    {
+      "tool_id": "get_Teams_GroupBy",
+      "index": 558,
+      "purpose": "Dohvaća grupirane podatke na temelju zadanih parametara.",
+      "synonyms_hr": [
+        "ekipa",
+        "grupa",
+        "dohvati tim",
+        "prikaži tim",
+        "pokaži tim",
+        "grupirano timova",
+        "po grupama timova",
+        "koji su tim",
+        "koliko timova"
+      ],
+      "example_queries_hr": [
+        "Grupiraj podatke prema 'kategoriji' i izračunaj zbroj."
+      ],
+      "forbidden_words": [
+        "cijena",
+        "dohvati",
+        "ekip",
+        "ekipa",
+        "grupa",
+        "grupama",
+        "grupiraj",
+        "grupirano",
+        "izdatak",
+        "izracunaj",
+        "kategoriji",
+        "koliko",
+        "podatke",
+        "pokazi",
+        "prema",
+        "prikazi",
+        "racun",
+        "rashod",
+        "timova",
+        "trosak",
+        "trosk",
+        "troska",
+        "zbroj"
+      ],
+      "paraphrases": [
+        "Mogu li dobiti pregled svih timskih sastanaka koje imamo?",
+        "Zanima me kako su organizirane grupe u našim projektima.",
+        "Trebam informacije o svim kolektivima u našem sustavu."
+      ]
+    },
+    {
+      "tool_id": "get_TenantPermissions",
+      "index": 565,
+      "purpose": "Ovaj endpoint služi za dohvaćanje svih stavki na temelju parametara za učitavanje.",
+      "synonyms_hr": [
+        "prava pristupa",
+        "dohvati dozvole tenanta",
+        "prikaži dozvole tenanta",
+        "pokaži dozvole tenanta",
+        "koji su dozvole tenanta",
+        "koliko dozvola tenanta",
+        "lista prava pristupa",
+        "popis prava pristupa",
+        "sve prava pristupa"
+      ],
+      "example_queries_hr": [
+        "Dohvati sve dozvole za najam.",
+        "Prikaži dozvole za korisnika s ID-om 123.",
+        "Filtriraj dozvole prema ulozi 'Admin'."
+      ],
+      "forbidden_words": [
+        "admin",
+        "djelatnik",
+        "dohvati",
+        "dozvol",
+        "dozvola",
+        "dozvole",
+        "dozvole tenanta",
+        "filtriraj",
+        "koliko",
+        "korisnicke dozvole",
+        "korisnik",
+        "korisnika",
+        "lista",
+        "najam",
+        "najmoprimc",
+        "osob",
+        "permisij",
+        "pokazi",
+        "popis",
+        "prava",
+        "prema",
+        "prikazi",
+        "pristupa",
+        "radnik",
+        "rola",
+        "tenant",
+        "tenanta",
+        "ulog",
+        "ulozi",
+        "voditelj",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Želim vidjeti sve ovlasti koje su dodijeljene korisnicima sustava.",
+        "Trebam pregledati sve autorizacije za članove platforme.",
+        "Možeš li mi pružiti pregled svih privilegija koje su dostupne unutar sustava?"
+      ]
+    },
+    {
+      "tool_id": "get_Tenants",
+      "index": 574,
+      "purpose": "Ovaj endpoint se koristi za dohvaćanje svih najma.",
+      "synonyms_hr": [
+        "zakupac",
+        "organizacija",
+        "dohvati tenant",
+        "prikaži tenant",
+        "pokaži tenant",
+        "koji su tenant",
+        "koliko tenanata",
+        "lista zakupac",
+        "popis zakupac",
+        "sve zakupac"
+      ],
+      "example_queries_hr": [
+        "Kako mogu dobiti sve najmove?",
+        "Kako mogu filtrirati najmove?"
+      ],
+      "forbidden_words": [
+        "dobiti",
+        "dohvati",
+        "filtrirati",
+        "jedinic",
+        "koliko",
+        "lista",
+        "najmoprimc",
+        "najmove",
+        "odjel",
+        "organizacij",
+        "organizacija",
+        "pokazi",
+        "popis",
+        "prikazi",
+        "sektor",
+        "tenanata",
+        "tenant",
+        "zakupac"
+      ],
+      "paraphrases": [
+        "Želim provjeriti sve korisnike sustava koji su trenutno aktivni.",
+        "Možeš li mi prikazati sve iznajmljivače koje imamo?",
+        "Tražim informacije o svim korisnicima koji su izvršili najam."
+      ]
+    },
+    {
+      "tool_id": "get_TripTypes_id_documents_documentId_thumb",
+      "index": 591,
+      "purpose": "Dohvatiti sličicu dokumenta.",
+      "synonyms_hr": [
+        "vrsta vožnje",
+        "dohvati tip putovanja",
+        "prikaži tip putovanja",
+        "pokaži tip putovanja",
+        "sličica tipova putovanja",
+        "thumbnail tipova putovanja",
+        "koji su tip putovanja",
+        "koliko tipova putovanja"
+      ],
+      "example_queries_hr": [
+        "Kako dobiti sličicu dokumenta tipa putovanja tipa putovanja dokumenta tipa putovanja s id 123 za tip putovanja 456?",
+        "Što se događa ako pokušam dobiti sličicu dokumenta tipa putovanja tipa putovanja nepostojećeg dokumenta tipa putovanja?"
+      ],
+      "forbidden_words": [
+        "datoteka",
+        "dobiti",
+        "dogada",
+        "koliko",
+        "nepostojeceg",
+        "pokazi",
+        "pokusam",
+        "prikazi",
+        "prilog",
+        "putni",
+        "putovanj",
+        "putovanja",
+        "slicica",
+        "tipa",
+        "tipova",
+        "voznj",
+        "voznje",
+        "vrsta"
+      ],
+      "paraphrases": [
+        "Kako mogu prikazati thumbnail dokumenta vezanog uz određeni tip putovanja s id 123 za putovanje 456?",
+        "Što se događa ako pokušam pristupiti vizualnom sadržaju dokumenta putovanja koji ne postoji?",
+        "Kako mogu dobiti vizualni prikaz dokumenta za određenu vrstu vožnje s poznatim identitetima?"
+      ]
+    },
+    {
+      "tool_id": "get_VehicleBoard_id",
+      "index": 603,
+      "purpose": "Dohvatiti podatke o vozilu i njegovim aktivnostima.",
+      "synonyms_hr": [
+        "defleet",
+        "deregistracija",
+        "stanje vozila",
+        "dohvati board vozila",
+        "prikaži board vozila",
+        "pokaži board vozila",
+        "po ID-u boarda vozila",
+        "specifični boarda vozila",
+        "koji su board vozila",
+        "koliko boarda vozila"
+      ],
+      "example_queries_hr": [
+        "Kako dobiti podatke za vozilo s id 789?",
+        "Što se događa ako pokušam dobiti podatke za nepostojeće vozilo?"
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "board",
+        "boarda",
+        "defleet",
+        "deregistracija",
+        "dobiti",
+        "dogada",
+        "dohvati",
+        "flot",
+        "kola",
+        "koliko",
+        "nepostojece",
+        "podatke",
+        "pokazi",
+        "pokusam",
+        "prikazi",
+        "specificni",
+        "stanje",
+        "vozil",
+        "vozila",
+        "vozilo"
+      ],
+      "paraphrases": [
+        "Kako mogu provjeriti informacije o mom motornom sredstvu?",
+        "Zanima me pregled aktivnosti mog kombija u sustavu.",
+        "Želim pregledati aktivnosti mog prijevoznog sredstva."
+      ]
+    },
+    {
+      "tool_id": "get_VehicleCalendar",
+      "index": 604,
+      "purpose": "Dohvaćanje svih kalendara vozila s podrškom za straničenje i sortiranje.",
+      "synonyms_hr": [
+        "rezervacija",
+        "raspored vozila",
+        "booking",
+        "dohvati kalendar vozila",
+        "prikaži kalendar vozila",
+        "pokaži kalendar vozila",
+        "koji su kalendar vozila",
+        "koliko kalendara vozila",
+        "lista rezervacija",
+        "popis rezervacija"
+      ],
+      "example_queries_hr": [
+        "Pokaži kalendar vozila",
+        "Prikaži sve kalendar vozila"
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "booking",
+        "dohvati",
+        "flot",
+        "kalendar",
+        "kalendar vozil",
+        "kalendara",
+        "kola",
+        "koliko",
+        "lista",
+        "pokazi",
+        "popis",
+        "prikazi",
+        "raspored",
+        "rezervacij",
+        "rezervacija",
+        "vozil",
+        "vozila"
+      ],
+      "paraphrases": [
+        "Zanima me pregled planova termina za motorna sredstva s opcijom stranice za lakše pregledavanje.",
+        "Trebam informacije o planovima termina za limuzine i mogućnost da ih poredam ili razdvojim po stranicama.",
+        "Možeš li mi pomoći da dobijem sve hodograme za kombije uz opciju sortiranja rezultata?"
+      ]
+    },
+    {
+      "tool_id": "get_VehicleCalendar_id_metadata",
+      "index": 616,
+      "purpose": "Dohvaća metapodatke za određeni vozni kalendar.",
+      "synonyms_hr": [
+        "rezervacija",
+        "raspored vozila",
+        "booking",
+        "dohvati kalendar vozila",
+        "prikaži kalendar vozila",
+        "pokaži kalendar vozila",
+        "metapodaci kalendara vozila",
+        "informacije o strukturi kalendara vozila",
+        "koji su kalendar vozila",
+        "koliko kalendara vozila"
+      ],
+      "example_queries_hr": [
+        "Kako mogu dobiti metapodatke za vozni kalendar?",
+        "Koje informacije su dostupne u metapodacima?"
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "booking",
+        "dobiti",
+        "dohvati",
+        "dostupne",
+        "flot",
+        "informacije",
+        "kalendar",
+        "kalendar vozil",
+        "kalendara",
+        "kola",
+        "koliko",
+        "metapodac",
+        "metapodaci",
+        "metapodacima",
+        "metapodatke",
+        "pokazi",
+        "polja",
+        "prikazi",
+        "raspored",
+        "rezervacij",
+        "rezervacija",
+        "shema",
+        "struktur",
+        "strukturi",
+        "vozil",
+        "vozila",
+        "vozni"
+      ],
+      "paraphrases": [
+        "Zanima me pregled informacija o mom prijevoznom sredstvu i planu termina."
+      ]
+    },
+    {
+      "tool_id": "get_VehicleContracts_Agg",
+      "index": 618,
+      "purpose": "Dohvaća agregiranu vrijednost za ugovora za vozilo.",
+      "synonyms_hr": [
+        "leasing",
+        "najam",
+        "dohvati ugovor za vozilo",
+        "prikaži ugovor za vozilo",
+        "pokaži ugovor za vozilo",
+        "agregacija ugovora za vozilo",
+        "ukupno ugovora za vozilo",
+        "koji su ugovor za vozilo",
+        "koliko ugovora za vozilo"
+      ],
+      "example_queries_hr": [
+        "Koju prosječnu vrijednost imam za polje X?",
+        "Koliko je maksimalna vrijednost za polje Y?"
+      ],
+      "forbidden_words": [
+        "agregacija",
+        "auti",
+        "auto",
+        "automobil",
+        "dohvati",
+        "flot",
+        "koju",
+        "kola",
+        "koliko",
+        "leasing",
+        "lizing",
+        "maksimalna",
+        "najam",
+        "najam vozil",
+        "pokazi",
+        "polje",
+        "prikazi",
+        "prosjecnu",
+        "ugovor",
+        "ugovor vozil",
+        "ugovora",
+        "ukupno",
+        "vozil",
+        "vozilo",
+        "vrijednost"
+      ],
+      "paraphrases": [
+        "Mogu li dobiti sažetak o financijskim uvjetima za moje prijevozno sredstvo?",
+        "Zanima me ukupna analiza troškova za moj motorni sredstvo.",
+        "Želim vidjeti detalje o financijskim obvezama vezanim uz moju limuzinu."
+      ]
+    },
+    {
+      "tool_id": "get_VehicleTypes_ProjectTo",
+      "index": 633,
+      "purpose": "Dohvaćanje svih tipova vozila s podrškom za straničenje i sortiranje.",
+      "synonyms_hr": [
+        "vrsta auta",
+        "kategorija vozila",
+        "dohvati tip vozila",
+        "prikaži tip vozila",
+        "pokaži tip vozila",
+        "projekcija tipova vozila",
+        "odabrana polja tipova vozila",
+        "koji su tip vozila",
+        "koliko tipova vozila"
+      ],
+      "example_queries_hr": [
+        "Prikaži ID i naziv svih tipova vozila."
+      ],
+      "forbidden_words": [
+        "auta",
+        "auti",
+        "auto",
+        "automobil",
+        "dohvati",
+        "flot",
+        "kategorija",
+        "kategorija vozil",
+        "kola",
+        "koliko",
+        "metapodac",
+        "naziv",
+        "odabrana",
+        "pokazi",
+        "polja",
+        "prikazi",
+        "projekcija",
+        "shema",
+        "struktur",
+        "tip vozil",
+        "tipov vozil",
+        "tipova",
+        "tipovi vozil",
+        "vozil",
+        "vozila",
+        "vrsta",
+        "vrsta vozil"
+      ],
+      "paraphrases": [
+        "Mogu li dobiti sve vrste motornih sredstava s mogućnošću filtriranja i sortiranjem?",
+        "Želim pregledati sve dostupne kategorije prijevoznih sredstava uz opciju paginacije i sortiranja.",
+        "Mogu li dobiti sve vrste prijevoznih sredstava uz mogućnost sortiranja i paginacije?"
+      ]
+    },
+    {
+      "tool_id": "get_VehiclesAssignmentsOverview_on_ProjectTo",
+      "index": 643,
+      "purpose": "Dobivanje svih stavki na temelju parametara učitavanja (stranice, sortiranje i filtriranje) ali projektiranje rezultata na popis kolona (tj. podskup mogućih podataka)",
+      "synonyms_hr": [
+        "tko vozi što",
+        "dohvati pregled dodjela",
+        "prikaži pregled dodjela",
+        "pokaži pregled dodjela",
+        "projekcija pregleda dodjela",
+        "odabrana polja pregleda dodjela",
+        "koji su pregled dodjela",
+        "koliko pregleda dodjela"
+      ],
+      "example_queries_hr": [
+        "GET /VehiclesAssignmentsOverview/123/ProjectTo?columns=id,name",
+        "GET /VehiclesAssignmentsOverview/456/ProjectTo?columns=code as C&Sort=name&SortOrder=1"
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "code",
+        "columns",
+        "dodjela",
+        "dodjele vozila",
+        "dohvati",
+        "flot",
+        "jedinic",
+        "kola",
+        "koliko",
+        "metapodac",
+        "name",
+        "odabrana",
+        "odjel",
+        "organizacij",
+        "pokazi",
+        "polja",
+        "pregled",
+        "pregleda",
+        "prikazi",
+        "projectto",
+        "projekcija",
+        "sektor",
+        "shema",
+        "sort",
+        "sortorder",
+        "struktur",
+        "tko vozi",
+        "vehiclesassignmentsoverview",
+        "vozi",
+        "vozil"
+      ],
+      "paraphrases": [
+        "Možeš li mi dati popis svih dodijeljenih prijevoznih sredstava za određeni projekt?",
+        "Trebam informacije o svim limuzinama koje su dodijeljene za moj projekt.",
+        "Želio bih vidjeti sve podatke o kombijima koji su raspoređeni unutar određenog projekta."
+      ]
+    },
+    {
+      "tool_id": "get_VehiclesHistoricalEntries_id_documents_documentId",
+      "index": 650,
+      "purpose": "Ovaj endpoint vraća specifičan dokument povezan s određenim povijesnim zapisom vozila.",
+      "synonyms_hr": [
+        "povijest vozila",
+        "stari zapisi",
+        "dohvati povijesni unosi",
+        "prikaži povijesni unosi",
+        "pokaži povijesni unosi",
+        "dokumenti povijesnih unosa",
+        "datoteke povijesnih unosa",
+        "koji su povijesni unosi",
+        "koliko povijesnih unosa"
+      ],
+      "example_queries_hr": [
+        "Daj mi dokument vehicleshistoricalentries s ID-om 456 za povijesni zapis vozila s ID-om 123.",
+        "Koje informacije imam o dokumentu s ID-om 789?"
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "datoteka",
+        "datoteke",
+        "dohvati",
+        "dokument",
+        "dokumenti",
+        "dokumentu",
+        "flot",
+        "informacije",
+        "kola",
+        "koliko",
+        "pokazi",
+        "povijesni",
+        "povijesnih",
+        "povijest",
+        "prikazi",
+        "prilog",
+        "stari",
+        "unosa",
+        "unosi",
+        "vehicleshistoricalentries",
+        "vozil",
+        "vozila",
+        "zapis",
+        "zapisi"
+      ],
+      "paraphrases": [
+        "Možeš li mi pomoći da dobijem detalje o spisu koji se odnosi na moj motor?"
+      ]
+    },
+    {
+      "tool_id": "get_VehiclesMonthlyExpenses_Agg",
+      "index": 654,
+      "purpose": "Dohvaća agregiranu vrijednost za mjesečnih troškova.",
+      "synonyms_hr": [
+        "troškovi po mjesecu",
+        "dohvati mjesečni troškovi vozila",
+        "prikaži mjesečni troškovi vozila",
+        "pokaži mjesečni troškovi vozila",
+        "agregacija mjesečnih troškova",
+        "ukupno mjesečnih troškova",
+        "koji su mjesečni troškovi vozila",
+        "koliko mjesečnih troškova"
+      ],
+      "example_queries_hr": [
+        "Koji je prosjek mjesečnih troškova?",
+        "Daj mi maksimalne troškove za vozila u ovoj godini."
+      ],
+      "forbidden_words": [
+        "agregacija",
+        "auti",
+        "auto",
+        "automobil",
+        "cijena",
+        "dohvati",
+        "flot",
+        "godini",
+        "izdatak",
+        "kola",
+        "koliko",
+        "maksimalne",
+        "mjesecni",
+        "mjesecnih",
+        "mjesecu",
+        "ovoj",
+        "pokazi",
+        "prikazi",
+        "prosjek",
+        "racun",
+        "rashod",
+        "trosak",
+        "trosk",
+        "troska",
+        "troskova",
+        "troskove",
+        "troskovi",
+        "ukupno",
+        "vozil",
+        "vozila"
+      ],
+      "paraphrases": [
+        "Molim te da mi prikažeš ukupne izdatke za sve limuzine za tekući raspored.",
+        "Možeš li mi prikazati ukupne izdatke za motorna sredstva u svakom planu termina?",
+        "Želim znati ukupne izdatke povezanih s motornim sredstvima tijekom posljednjeg razdoblja."
+      ]
+    },
+    {
+      "tool_id": "get_Vehicles_id_documents_documentId_thumb",
+      "index": 665,
+      "purpose": "Dohvaćanje sličice dokumenta za vozila.",
+      "synonyms_hr": [
+        "auto",
+        "automobil",
+        "kola",
+        "dohvati vozilo",
+        "prikaži vozilo",
+        "pokaži vozilo",
+        "sličica vozila",
+        "thumbnail vozila",
+        "koji su vozilo",
+        "koliko vozila"
+      ],
+      "example_queries_hr": [
+        "Daj mi sličicu dokumenta vozila vozila dokumenta vozila s ID-om 789 za vozilo s ID-om 123.",
+        "Prikaži sličicu dokumenta vozila vozila dokumenta vozila s ID-om 456 za vozilo 789."
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "datoteka",
+        "dohvati",
+        "dokument",
+        "dokumenta",
+        "flot",
+        "kola",
+        "koliko",
+        "pokazi",
+        "prikazi",
+        "prilog",
+        "slicica",
+        "slicicu",
+        "thumbnail",
+        "vozil",
+        "vozila",
+        "vozilo"
+      ],
+      "paraphrases": [
+        "Treba mi brzi pregled potvrde vezane uz motorno sredstvo.",
+        "Tražim pregled obrazaca koji se odnose na moje kombi.",
+        "Mogu li dobiti pregled sličice isprave za prijevozno sredstvo?"
+      ]
+    },
+    {
+      "tool_id": "patch_ExpenseGroups_id",
+      "index": 677,
+      "purpose": "Djelomično ažurira stavku grupe troškova.",
+      "synonyms_hr": [
+        "kategorija troškova",
+        "djelomično ažuriraj grupa troškova",
+        "promijeni polje grupa troškova",
+        "update polje grupa troškova",
+        "po ID-u grupa troškova",
+        "specifični grupa troškova",
+        "djelomično ažuriraj kategorija troškova",
+        "parcijalno promijeni kategorija troškova"
+      ],
+      "example_queries_hr": [
+        "Djelomično ažuriraj grupu troškova s ID-om 1.",
+        "Promijeni samo naziv grupe troškova s ID-om 2."
+      ],
+      "forbidden_words": [
+        "cijena",
+        "ekip",
+        "grupa",
+        "grupa trosk",
+        "grupu",
+        "izdatak",
+        "kategorija",
+        "kategorija trosk",
+        "naziv",
+        "parcijalno",
+        "polje",
+        "promijeni",
+        "racun",
+        "rashod",
+        "skupine trosk",
+        "specificni",
+        "tip trosk",
+        "tipov trosk",
+        "tipovi trosk",
+        "trosak",
+        "troska",
+        "update",
+        "vrsta trosk"
+      ],
+      "paraphrases": [
+        "Ažuriraj određene informacije o grupi troškova s identifikatorom 1.",
+        "Izvrši djelomičnu izmjenu podataka grupe troškova s identifikatorom 2.",
+        "Izvrši izmjenu samo nekih atributa grupe troškova s ID-om 3."
+      ]
+    },
+    {
+      "tool_id": "patch_PeriodicActivityTypes_id",
+      "index": 686,
+      "purpose": "Djelomično ažurira postojeću vrstu aktivnosti.",
+      "synonyms_hr": [
+        "vrsta aktivnosti",
+        "djelomično ažuriraj tip periodične aktivnosti",
+        "promijeni polje tip periodične aktivnosti",
+        "update polje tip periodične aktivnosti",
+        "po ID-u tipova",
+        "specifični tipova",
+        "djelomično ažuriraj vrsta aktivnosti",
+        "parcijalno promijeni vrsta aktivnosti"
+      ],
+      "example_queries_hr": [
+        "Djelomično ažuriraj tip periodične aktivnosti s ID-om 1.",
+        "Promijeni samo naziv tip periodične aktivnostii."
+      ],
+      "forbidden_words": [
+        "aktivnosti",
+        "aktivnostii",
+        "azuriraj",
+        "djelomicno",
+        "naziv",
+        "parcijalno",
+        "periodicn",
+        "periodicne",
+        "polje",
+        "promijeni",
+        "redovn aktiv",
+        "servis",
+        "specificni",
+        "tipova",
+        "update",
+        "vrsta"
+      ],
+      "paraphrases": [
+        "Želim ažurirati neke aspekte planova vezanih uz redovite događaje.",
+        "Trebam revidirati detalje o raznim tipovima događaja u svom planu termina.",
+        "Trebam prilagoditi neke aspekte jedne od klasa redovnih obaveza."
+      ]
+    },
+    {
+      "tool_id": "patch_Pools_id",
+      "index": 692,
+      "purpose": "Ovaj endpoint omogućuje parcijalno ažuriranje postojećeg bazena.",
+      "synonyms_hr": [
+        "pool",
+        "grupa vozila",
+        "djelomično ažuriraj bazen vozila",
+        "promijeni polje bazen vozila",
+        "update polje bazen vozila",
+        "po ID-u bazena vozila",
+        "specifični bazena vozila",
+        "djelomično ažuriraj pool",
+        "parcijalno promijeni pool"
+      ],
+      "example_queries_hr": [
+        "Ažuriraj ime bazena s ID-om 1."
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "azuriraj",
+        "bazen vozil",
+        "djelomicno",
+        "ekip",
+        "flot",
+        "grupa",
+        "kola",
+        "polje",
+        "promijeni",
+        "specificni",
+        "update",
+        "vozil",
+        "vozila"
+      ],
+      "paraphrases": [
+        "Promijeni naziv bazena s ID-om 1.",
+        "Izvrši parcijalno ažuriranje podataka za bazen s određenim ID-om.",
+        "Ažuriraj naziv bazena s identifikatorom 1."
+      ]
+    },
+    {
+      "tool_id": "post_Cases_id_documents",
+      "index": 714,
+      "purpose": "Dodaje dokumente za određeni predmet.",
+      "synonyms_hr": [
+        "prijava",
+        "kvar",
+        "problem",
+        "šteta",
+        "ticket",
+        "dodaj slučaj",
+        "kreiraj slučaj",
+        "napravi slučaj",
+        "dokumenti slučajeva",
+        "datoteke slučajeva"
+      ],
+      "example_queries_hr": [
+        "Dodaj dokument predmeta za predmet s ID-om 123.",
+        "Učitaj novi dokument predmeta za predmet 456."
+      ],
+      "forbidden_words": [
+        "datoteka",
+        "datoteke",
+        "dodaj",
+        "dokument",
+        "dokumenti",
+        "incident",
+        "kreiraj",
+        "kvar",
+        "napravi",
+        "novi",
+        "predmet",
+        "predmeta",
+        "prijav",
+        "prijava",
+        "prilog",
+        "problem",
+        "slucaj",
+        "slucajeva",
+        "steta",
+        "ticket",
+        "ucitaj"
+      ],
+      "paraphrases": [
+        "Zanima me kako mogu unijeti dodatne akte vezane uz moju situaciju.",
+        "Povezujem dodatne akte s aktivnim spisom.",
+        "Mogu li unijeti nove potvrde za taj pravni postupak?"
+      ]
+    },
+    {
+      "tool_id": "post_Companies_multipatch",
+      "index": 718,
+      "purpose": "Djelomično ažuriranje više tvrtki odjednom.",
+      "synonyms_hr": [
+        "firma",
+        "poduzeće",
+        "kompanija",
+        "dodaj tvrtka",
+        "kreiraj tvrtka",
+        "napravi tvrtka",
+        "grupno ažuriranje tvrtki",
+        "batch update tvrtki",
+        "želim dodati tvrtka",
+        "novi tvrtka"
+      ],
+      "example_queries_hr": [
+        "Djelomično ažuriraj kompanije s ID-ima 123 i 456.",
+        "Azuriraj VIŠE kompanija odjednom.",
+        "Bulk update kompanija s ID-evima 1, 2, 3.",
+        "Grupno azuriranje više kompanija."
+      ],
+      "forbidden_words": [
+        "azuriraj",
+        "azuriranje",
+        "batch",
+        "bulk",
+        "djelomicno",
+        "dodaj",
+        "dodati",
+        "evima",
+        "firm",
+        "firma",
+        "grupno",
+        "kompanij",
+        "kompanija",
+        "kompanije",
+        "kreiraj",
+        "napravi",
+        "novi",
+        "odjednom",
+        "poduzec",
+        "poduzece",
+        "tvrtk",
+        "tvrtka",
+        "tvrtki",
+        "update"
+      ],
+      "paraphrases": [
+        "Želim izvršiti promjene za više poslovnih subjekata u jednom zahtjevu.",
+        "Molim te da obaviš izmjene informacija za nekoliko trgovačkih društava u jednoj operaciji.",
+        "Trebam promijeniti podatke o više organizacija istovremeno."
+      ]
+    },
+    {
+      "tool_id": "post_CostCenters_multipatch",
+      "index": 721,
+      "purpose": "Ovaj endpoint omogućuje parcijalno ažuriranje više centara troškova odjednom.",
+      "synonyms_hr": [
+        "cost center",
+        "profitni centar",
+        "dodaj mjesto troška",
+        "kreiraj mjesto troška",
+        "napravi mjesto troška",
+        "grupno ažuriranje mjesta troška",
+        "batch update mjesta troška",
+        "želim dodati mjesto troška",
+        "novi mjesto troška",
+        "dodaj cost center"
+      ],
+      "example_queries_hr": [
+        "Parcijalno ažuriraj centre troškova s ID-ima [123, 456]"
+      ],
+      "forbidden_words": [
+        "azuriraj",
+        "batch",
+        "centar troska",
+        "center",
+        "centre",
+        "cijena",
+        "cost center",
+        "dodaj",
+        "dodati",
+        "grupno",
+        "izdatak",
+        "kreiraj",
+        "mjesta",
+        "mjesto",
+        "mjesto troska",
+        "napravi",
+        "novi",
+        "profitni",
+        "racun",
+        "rashod",
+        "trosak",
+        "troska",
+        "troskovn",
+        "update"
+      ],
+      "paraphrases": [
+        "Izvrši parcijalne promjene za više troškovnih centara odjednom.",
+        "Izvrši parcijalne promjene na više troškovnih jedinica istovremeno",
+        "Provedi izmjene za više odjela troškova u jednom koraku."
+      ]
+    },
+    {
+      "tool_id": "post_Equipment_id_documents",
+      "index": 733,
+      "purpose": "Ovaj endpoint omogućuje dodavanje dokumenata za određenu stavku opreme.",
+      "synonyms_hr": [
+        "dodatak",
+        "uređaj",
+        "accessory",
+        "dodaj oprema",
+        "kreiraj oprema",
+        "napravi oprema",
+        "dokumenti opreme",
+        "datoteke opreme",
+        "želim dodati oprema",
+        "novi oprema"
+      ],
+      "example_queries_hr": [
+        "Dodaj dokument opreme za opremu s ID-jem 1.",
+        "Poveži PDF s opremom s ID-jem 3."
+      ],
+      "forbidden_words": [
+        "accessory",
+        "alat",
+        "datoteka",
+        "datoteke",
+        "dodaj",
+        "dodatak",
+        "dodati",
+        "dokument",
+        "dokumenti",
+        "inventar",
+        "kreiraj",
+        "napravi",
+        "novi",
+        "oprem",
+        "oprema",
+        "opreme",
+        "opremom",
+        "opremu",
+        "povezi",
+        "prilog",
+        "uredaj"
+      ],
+      "paraphrases": [
+        "Želim priložiti isprave za određeno motorno sredstvo.",
+        "Možeš li mi pomoći da povežem spis s mojim prijevoznim sredstvom?",
+        "Kako mogu unijeti nove akte vezane za svoje dostavno vozilo?"
+      ]
+    },
+    {
+      "tool_id": "post_Metadata_multipatch",
+      "index": 747,
+      "purpose": "Djelomično ažuriranje više metapodataka odjednom.",
+      "synonyms_hr": [
+        "meta",
+        "informacije o strukturi",
+        "dodaj metapodaci",
+        "kreiraj metapodaci",
+        "napravi metapodaci",
+        "grupno ažuriranje metapodataka",
+        "batch update metapodataka",
+        "želim dodati metapodaci",
+        "novi metapodaci",
+        "dodaj meta"
+      ],
+      "example_queries_hr": [
+        "Djelomično ažuriraj metapodatke s ID-ovima 1, 2 i 3",
+        "Promijeni naziv kolone za metapodatke s ID-ovima 4 i 5"
+      ],
+      "forbidden_words": [
+        "azuriraj",
+        "batch",
+        "dodaj",
+        "dodati",
+        "grupno",
+        "informacije",
+        "kolone",
+        "kreiraj",
+        "metapodac",
+        "metapodaci",
+        "metapodatke",
+        "napravi",
+        "naziv",
+        "novi",
+        "ovima",
+        "polja",
+        "promijeni",
+        "shema",
+        "struktur",
+        "strukturi",
+        "update"
+      ],
+      "paraphrases": [
+        "Djelomično ažuriraj više metapodataka s ID-ovima 1, 2 i 3",
+        "Promijeni opis za skup informacija s ID-ovima 4 i 5",
+        "Izvrši promjene na više metapodataka koji su označeni određenim identifikatorima."
+      ]
+    },
+    {
+      "tool_id": "post_OrgUnits",
+      "index": 754,
+      "purpose": "Ovaj endpoint omogućuje kreiranje nove organizacijske jedinice.",
+      "synonyms_hr": [
+        "odjel",
+        "sektor",
+        "dodaj organizacijska jedinica",
+        "kreiraj organizacijska jedinica",
+        "napravi organizacijska jedinica",
+        "želim dodati organizacijska jedinica",
+        "novi organizacijska jedinica",
+        "dodaj odjel",
+        "kreiraj odjel",
+        "novi odjel"
+      ],
+      "example_queries_hr": [
+        "Kako dodati novu organizacijsku jedinicu?",
+        "Mogu li kreirati organizacijsku jedinicu za kompaniju?"
+      ],
+      "forbidden_words": [
+        "dodaj",
+        "dodati",
+        "firm",
+        "jedinic",
+        "jedinica",
+        "jedinicu",
+        "kompanij",
+        "kompaniju",
+        "kreiraj",
+        "kreirati",
+        "napravi",
+        "novi",
+        "novu",
+        "odjel",
+        "organizacij",
+        "organizacijska",
+        "organizacijsku",
+        "poduzec",
+        "sektor",
+        "tvrtk"
+      ],
+      "paraphrases": [
+        "Trebam stvoriti još jedan dio za proširenje mojih poslovnih operacija.",
+        "Potrebno mi je formirati dodatni segment unutar naše uprave.",
+        "Molim te, pomogni mi u stvaranju nove grane unutar moje poslovne strukture."
+      ]
+    },
+    {
+      "tool_id": "post_Partners_id_documents",
+      "index": 758,
+      "purpose": "Ovaj endpoint se koristi za dodavanje dokumenata partneru.",
+      "synonyms_hr": [
+        "dobavljač",
+        "suradnik",
+        "dodaj partner",
+        "kreiraj partner",
+        "napravi partner",
+        "dokumenti partnera",
+        "datoteke partnera",
+        "želim dodati partner",
+        "novi partner",
+        "dodaj dobavljač"
+      ],
+      "example_queries_hr": [
+        "Dodaj dokument partnera partneru s ID-om 123."
+      ],
+      "forbidden_words": [
+        "datoteka",
+        "datoteke",
+        "djelatnik",
+        "dobavljac",
+        "dodaj",
+        "dodati",
+        "dokument",
+        "dokumenti",
+        "klijent",
+        "korisnik",
+        "kreiraj",
+        "napravi",
+        "novi",
+        "osob",
+        "partner",
+        "partnera",
+        "partneru",
+        "prilog",
+        "radnik",
+        "suradnik",
+        "voditelj",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Želim priložiti zapisnike za mog odabranog kolegu.",
+        "Želim priložiti potvrde za kolegu iz suradnje.",
+        "Kako mogu priložiti zapisnike jednom od naših poslovnih kontakata?"
+      ]
+    },
+    {
+      "tool_id": "post_Partners_linktenant_partnerId",
+      "index": 759,
+      "purpose": "Povezivanje partnera s tenantom.",
+      "synonyms_hr": [
+        "dobavljač",
+        "suradnik",
+        "dodaj partner",
+        "kreiraj partner",
+        "napravi partner",
+        "želim dodati partner",
+        "novi partner",
+        "dodaj dobavljač",
+        "kreiraj dobavljač",
+        "novi dobavljač"
+      ],
+      "example_queries_hr": [
+        "Kako povezati partnera s ID-om 123?",
+        "Što trebam učiniti da povežem partnera?"
+      ],
+      "forbidden_words": [
+        "djelatnik",
+        "dobavljac",
+        "dodaj",
+        "dodati",
+        "klijent",
+        "korisnik",
+        "kreiraj",
+        "napravi",
+        "novi",
+        "osob",
+        "partner",
+        "partnera",
+        "povezati",
+        "povezem",
+        "radnik",
+        "suradnik",
+        "uciniti",
+        "voditelj",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Trebam li izvršiti operaciju spajanja kooperanta i stanara unutar sustava?",
+        "Trebam uspostaviti odnos između kolege i sustava.",
+        "Potreban mi je način za uspostavljanje odnosa između poslovnog subjekta i iznajmljivača."
+      ]
+    },
+    {
+      "tool_id": "post_PersonPeriodicActivities",
+      "index": 777,
+      "purpose": "Stvara novu stavku aktivnosti za osobu.",
+      "synonyms_hr": [
+        "redovne aktivnosti",
+        "dodaj periodične aktivnosti osobe",
+        "kreiraj periodične aktivnosti osobe",
+        "napravi periodične aktivnosti osobe",
+        "želim dodati periodične aktivnosti osobe",
+        "novi periodične aktivnosti osobe",
+        "dodaj redovne aktivnosti",
+        "kreiraj redovne aktivnosti",
+        "novi redovne aktivnosti"
+      ],
+      "example_queries_hr": [
+        "Kako dodati novu aktivnost osobe za osobu?",
+        "Koje informacije su potrebne za kreiranje periodične aktivnosti?"
+      ],
+      "forbidden_words": [
+        "aktivnost",
+        "aktivnosti",
+        "aktivnosti osobe",
+        "aktivnosti zaposlenika",
+        "djelatnik",
+        "dodaj",
+        "dodati",
+        "informacije",
+        "korisnik",
+        "kreiraj",
+        "kreiranje",
+        "napravi",
+        "novi",
+        "novu",
+        "osob",
+        "osobe",
+        "osobu",
+        "periodicn",
+        "periodicne",
+        "potrebne",
+        "radnik",
+        "redovn aktiv",
+        "redovne",
+        "servis",
+        "voditelj",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Molim te, zabilježi redovnu obavezu za člana.",
+        "Kako mogu unijeti još jednu stavku za angažman na listi?"
+      ]
+    },
+    {
+      "tool_id": "post_PersonTypes_id_documents",
+      "index": 781,
+      "purpose": "Ovaj endpoint omogućuje dodavanje dokumenata za određenu vrstu osobe.",
+      "synonyms_hr": [
+        "vrsta korisnika",
+        "dodaj tip osobe",
+        "kreiraj tip osobe",
+        "napravi tip osobe",
+        "dokumenti tipova osobe",
+        "datoteke tipova osobe",
+        "želim dodati tip osobe",
+        "novi tip osobe",
+        "dodaj vrsta korisnika",
+        "kreiraj vrsta korisnika"
+      ],
+      "example_queries_hr": [
+        "Dodaj dokument persontypes za osobu s ID-om 1.",
+        "Kako dodati novi dokument persontypes?"
+      ],
+      "forbidden_words": [
+        "datoteka",
+        "datoteke",
+        "djelatnik",
+        "dodaj",
+        "dodati",
+        "dokument",
+        "dokumenti",
+        "korisnik",
+        "korisnika",
+        "kreiraj",
+        "napravi",
+        "novi",
+        "osob",
+        "osobe",
+        "osobu",
+        "persontypes",
+        "prilog",
+        "radnik",
+        "tipova",
+        "voditelj",
+        "vrsta",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Kako mogu unijeti potvrdu za odabrani tip pojedinca?",
+        "Molim te, pomozi mi s unosom aktiva za definiranu grupu ljudi.",
+        "Želim unijeti obrazac za određenu kategoriju ljudi."
+      ]
+    },
+    {
+      "tool_id": "post_SchedulingModels_id_documents",
+      "index": 791,
+      "purpose": "Ovaj endpoint omogućuje dodavanje dokumenata za određeni model rasporeda.",
+      "synonyms_hr": [
+        "scheduling",
+        "plan rasporeda",
+        "dodaj model raspoređivanja",
+        "kreiraj model raspoređivanja",
+        "napravi model raspoređivanja",
+        "dokumenti modela raspoređivanja",
+        "datoteke modela raspoređivanja",
+        "želim dodati model raspoređivanja",
+        "novi model raspoređivanja",
+        "dodaj scheduling"
+      ],
+      "example_queries_hr": [
+        "Dodaj novi dokument modela raspoređivanja za model s ID-om 123.",
+        "Dodaj PDF dokument modela raspoređivanja za model s ID-om 456."
+      ],
+      "forbidden_words": [
+        "datoteka",
+        "datoteke",
+        "dodaj",
+        "dodati",
+        "dokument",
+        "dokumenti",
+        "kreiraj",
+        "napravi",
+        "novi",
+        "plan",
+        "prilog",
+        "raspored model",
+        "rasporedivanja"
+      ],
+      "paraphrases": [
+        "Unesi informaciju vezanu uz model rasporeda.",
+        "Priloži relevantne materijale za određeni model rasporeda.",
+        "Želim unijeti dokument vezan uz jedan od modela rasporeda."
+      ]
+    },
+    {
+      "tool_id": "post_VehicleCalendar_multipatch",
+      "index": 825,
+      "purpose": "Djelomično ažuriranje više stavki u kalendaru vozila",
+      "synonyms_hr": [
+        "rezervacija",
+        "raspored vozila",
+        "booking",
+        "dodaj kalendar vozila",
+        "kreiraj kalendar vozila",
+        "napravi kalendar vozila",
+        "grupno ažuriranje kalendara vozila",
+        "batch update kalendara vozila",
+        "želim dodati kalendar vozila",
+        "novi kalendar vozila"
+      ],
+      "example_queries_hr": [
+        "Ažuriraj vozila s ID-evima 1, 2, 3",
+        "Promijeni status vozila s ID-om 4"
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "azuriraj",
+        "azuriranje",
+        "batch",
+        "booking",
+        "dodaj",
+        "dodati",
+        "evima",
+        "flot",
+        "grupno",
+        "kalendar",
+        "kalendar vozil",
+        "kalendara",
+        "kola",
+        "kreiraj",
+        "napravi",
+        "novi",
+        "promijeni",
+        "raspored",
+        "rezervacij",
+        "rezervacija",
+        "status",
+        "update",
+        "vozil",
+        "vozila"
+      ],
+      "paraphrases": [
+        "Kako mogu provesti simultano modificiranje nekoliko elemenata u planu termina za limuzinu?",
+        "Možete li mi pomoći s izmjenom određenih dijelova više stavki u agendi za kombi?",
+        "Molim te da ažuriraš određene informacije u planu termina za motorno sredstvo."
+      ]
+    },
+    {
+      "tool_id": "post_VehicleContracts",
+      "index": 826,
+      "purpose": "Dodavanje novog ugovora (povijest akvizicije)",
+      "synonyms_hr": [
+        "leasing",
+        "najam",
+        "dodaj ugovor za vozilo",
+        "kreiraj ugovor za vozilo",
+        "napravi ugovor za vozilo",
+        "želim dodati ugovor za vozilo",
+        "novi ugovor za vozilo",
+        "dodaj leasing",
+        "kreiraj leasing",
+        "novi leasing"
+      ],
+      "example_queries_hr": [
+        "POST /VehicleContracts s podacima o novom ugovoru",
+        "Dodavanje ugovora za vozilo s ID-jem '12345'"
+      ],
+      "forbidden_words": [
+        "12345",
+        "auti",
+        "auto",
+        "automobil",
+        "dodaj",
+        "dodati",
+        "dodavanje",
+        "flot",
+        "kola",
+        "kreiraj",
+        "leasing",
+        "lizing",
+        "najam",
+        "najam vozil",
+        "napravi",
+        "novi",
+        "novom",
+        "podacima",
+        "post",
+        "ugovor",
+        "ugovor vozil",
+        "ugovora",
+        "ugovoru",
+        "vehiclecontracts",
+        "vozil",
+        "vozilo"
+      ],
+      "paraphrases": [
+        "Možete li mi pomoći u upisu povijesti akvizicije mog motornog sredstva?",
+        "Molim te, pomozi mi s unosom novog sporazuma za moj limuzinu.",
+        "Tražim način za unos novog sporazuma koji se odnosi na limuzinu."
+      ]
+    },
+    {
+      "tool_id": "post_VehicleContracts_multipatch",
+      "index": 828,
+      "purpose": "Djelomično ažuriranje više ugovora za vozilo odjednom.",
+      "synonyms_hr": [
+        "leasing",
+        "najam",
+        "dodaj ugovor za vozilo",
+        "kreiraj ugovor za vozilo",
+        "napravi ugovor za vozilo",
+        "grupno ažuriranje ugovora za vozilo",
+        "batch update ugovora za vozilo",
+        "želim dodati ugovor za vozilo",
+        "novi ugovor za vozilo",
+        "dodaj leasing"
+      ],
+      "example_queries_hr": [
+        "Kako mogu ažurirati više ugovora odjednom?",
+        "Želim promijeniti status ugovora s ID-ovima 123 i 456."
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "azuriranje",
+        "azurirati",
+        "batch",
+        "dodaj",
+        "dodati",
+        "flot",
+        "grupno",
+        "kola",
+        "kreiraj",
+        "leasing",
+        "lizing",
+        "najam",
+        "najam vozil",
+        "napravi",
+        "novi",
+        "odjednom",
+        "ovima",
+        "promijeniti",
+        "status",
+        "ugovor",
+        "ugovor vozil",
+        "ugovora",
+        "update",
+        "vozil",
+        "vozilo"
+      ],
+      "paraphrases": [
+        "Kako mogu istovremeno obraditi promjene za više dokumenata vezanih uz motorna sredstva?",
+        "Želim obaviti djelomične izmjene na nekoliko akti vezanih uz limuzine.",
+        "Zanima me kako mogu istovremeno izmijeniti više dokumenata za različita prijevozna sredstva."
+      ]
+    },
+    {
+      "tool_id": "put_CostCenters_id_documents_documentId_SetAsDefault",
+      "index": 849,
+      "purpose": "Postavljanje dokumenta kao zadanog za mjesta troška.",
+      "synonyms_hr": [
+        "cost center",
+        "profitni centar",
+        "ažuriraj mjesto troška",
+        "promijeni mjesto troška",
+        "izmijeni mjesto troška",
+        "postavi kao zadano mjesta troška",
+        "default mjesta troška",
+        "ažuriraj cost center",
+        "promijeni cost center",
+        "update cost center"
+      ],
+      "example_queries_hr": [
+        "Postavi dokument troškovnog centra s ID-om 123 za troškovni centar s ID-om 456 kao zadani."
+      ],
+      "forbidden_words": [
+        "azuriraj",
+        "centar",
+        "centar troska",
+        "center",
+        "centra",
+        "cijena",
+        "cost center",
+        "datoteka",
+        "default",
+        "izdatak",
+        "izmijeni",
+        "mjesto",
+        "mjesto troska",
+        "postavi",
+        "prilog",
+        "profitni",
+        "promijeni",
+        "racun",
+        "rashod",
+        "trosak",
+        "troskovn",
+        "troskovni",
+        "troskovnog",
+        "update"
+      ],
+      "paraphrases": [
+        "Označi dokument za troškovni entitet s ID-om 123 kao zadani za troškovni entitet s ID-om 456.",
+        "Označi dokument za rashode s ID-om 123 kao primarni za rashode s ID-om 456.",
+        "Odredi dokument s ID-om 123 kao prioritetan za troškovni entitet s ID-om 456."
+      ]
+    },
+    {
+      "tool_id": "put_EquipmentCalendar_id",
+      "index": 854,
+      "purpose": "Ažurira unos u kalendaru opreme",
+      "synonyms_hr": [
+        "raspored opreme",
+        "ažuriraj kalendar opreme",
+        "promijeni kalendar opreme",
+        "izmijeni kalendar opreme",
+        "po ID-u kalendara opreme",
+        "specifični kalendara opreme",
+        "ažuriraj raspored opreme",
+        "promijeni raspored opreme",
+        "update raspored opreme"
+      ],
+      "example_queries_hr": [
+        "Ažuriraj opremu s ID-om 1234",
+        "Promijeni vrijeme korištenja opreme"
+      ],
+      "forbidden_words": [
+        "1234",
+        "alat",
+        "azuriraj",
+        "inventar",
+        "izmijeni",
+        "kalendar",
+        "kalendar oprem",
+        "kalendara",
+        "koristenja",
+        "oprem",
+        "opreme",
+        "opremu",
+        "promijeni",
+        "raspored",
+        "raspored oprem",
+        "specificni",
+        "update",
+        "uredaj",
+        "vrijeme"
+      ],
+      "paraphrases": [
+        "Potreban mi je novi unos u rezervacijskom planu za moje motorno sredstvo.",
+        "Želim unijeti nove podatke za motorno sredstvo u hodogram."
+      ]
+    },
+    {
+      "tool_id": "put_ExpenseTypes_id_documents_documentId",
+      "index": 867,
+      "purpose": "Ovaj endpoint omogućuje ažuriranje informacija o dokumentu.",
+      "synonyms_hr": [
+        "vrsta troška",
+        "kategorija rashoda",
+        "ažuriraj tip troška",
+        "promijeni tip troška",
+        "izmijeni tip troška",
+        "dokumenti tipova troška",
+        "datoteke tipova troška",
+        "ažuriraj vrsta troška",
+        "promijeni vrsta troška",
+        "update vrsta troška"
+      ],
+      "example_queries_hr": [
+        "Ažuriraj dokument tipa troška s ID-om 1 za tip troška s ID-om 2.",
+        "Promijeni informacije o dokumentu s ID-om 3 za tip troška s ID-om 4."
+      ],
+      "forbidden_words": [
+        "azuriraj",
+        "cijena",
+        "datoteka",
+        "datoteke",
+        "dokumenti",
+        "informacije",
+        "izdatak",
+        "izmijeni",
+        "kategorija",
+        "kategorija trosk",
+        "prilog",
+        "promijeni",
+        "racun",
+        "rashod",
+        "rashoda",
+        "tip trosk",
+        "tipa",
+        "tipov trosk",
+        "tipova",
+        "tipovi trosk",
+        "trosak",
+        "trosk",
+        "troska",
+        "update",
+        "vrsta",
+        "vrsta trosk"
+      ],
+      "paraphrases": [
+        "Ažuriraj podatke o dokumentu vezanom uz troškove s ID-om 1 za novu vrstu troška s ID-om 2.",
+        "Izvrši izmjenu podataka za dokument koji se odnosi na specifičan tip troška.",
+        "Izmijeni informacije o zapisu koji se odnosi na određeni izdatak."
+      ]
+    },
+    {
+      "tool_id": "put_PeriodicActivityTypes_id",
+      "index": 890,
+      "purpose": "Ažurira postojeću vrstu aktivnosti.",
+      "synonyms_hr": [
+        "vrsta aktivnosti",
+        "ažuriraj tip periodične aktivnosti",
+        "promijeni tip periodične aktivnosti",
+        "izmijeni tip periodične aktivnosti",
+        "po ID-u tipova",
+        "specifični tipova",
+        "ažuriraj vrsta aktivnosti",
+        "promijeni vrsta aktivnosti",
+        "update vrsta aktivnosti"
+      ],
+      "example_queries_hr": [
+        "Ažuriraj tip periodične aktivnosti s ID-om 1.",
+        "Promijeni naziv tip periodične aktivnostii 'Servis' u 'Održavanje'."
+      ],
+      "forbidden_words": [
+        "aktivnosti",
+        "aktivnostii",
+        "azuriraj",
+        "izmijeni",
+        "naziv",
+        "odrzavanje",
+        "periodicn",
+        "periodicne",
+        "promijeni",
+        "redovn aktiv",
+        "servis",
+        "specificni",
+        "tipova",
+        "update",
+        "vrsta"
+      ],
+      "paraphrases": [
+        "Želim ažurirati podatke o redovnom rasporedu.",
+        "Tražim da se ažurira informacija o pravilnom planu zadatka.",
+        "Molim te da mi ažuriraš informacije o postojećem planu termina."
+      ]
+    },
+    {
+      "tool_id": "put_PersonOrgUnits_id_documents_documentId",
+      "index": 897,
+      "purpose": "Ažurira informacije o specifičnom dokumentu.",
+      "synonyms_hr": [
+        "odjel korisnika",
+        "ažuriraj org. jedinica osobe",
+        "promijeni org. jedinica osobe",
+        "izmijeni org. jedinica osobe",
+        "dokumenti org. jedinica",
+        "datoteke org. jedinica",
+        "ažuriraj odjel korisnika",
+        "promijeni odjel korisnika",
+        "update odjel korisnika"
+      ],
+      "example_queries_hr": [
+        "Ažuriraj dokument organizacijske jedinice osobe s ID-om 'doc123' u organizacijskoj jedinici 123."
+      ],
+      "forbidden_words": [
+        "datoteka",
+        "datoteke",
+        "djelatnik",
+        "doc123",
+        "dokumenti",
+        "izmijeni",
+        "jedinic",
+        "jedinica",
+        "jedinice",
+        "jedinici",
+        "korisnik",
+        "korisnika",
+        "prilog",
+        "promijeni",
+        "radnik",
+        "sektor",
+        "update",
+        "voditelj",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Ažuriraj informacije o dokumentu organizacijske jedinice s određenim identifikatorom.",
+        "Ažuriraj informacije o dokumentu koji pripada određenom odjelu.",
+        "Ažuriraj informacije o specifičnom zapisu u okviru organizacije."
+      ]
+    },
+    {
+      "tool_id": "put_PersonTypes_id_documents_documentId_SetAsDefault",
+      "index": 904,
+      "purpose": "Postavljanje dokumenta kao zadanog za tipova osobe.",
+      "synonyms_hr": [
+        "vrsta korisnika",
+        "ažuriraj tip osobe",
+        "promijeni tip osobe",
+        "izmijeni tip osobe",
+        "postavi kao zadano tipova osobe",
+        "default tipova osobe",
+        "ažuriraj vrsta korisnika",
+        "promijeni vrsta korisnika",
+        "update vrsta korisnika"
+      ],
+      "example_queries_hr": [
+        "Postavi dokument persontypes s ID-om 123 kao zadani za osobu s ID-om 1.",
+        "Kako postaviti dokument persontypes kao zadani?"
+      ],
+      "forbidden_words": [
+        "azuriraj",
+        "datoteka",
+        "default",
+        "djelatnik",
+        "dokument",
+        "izmijeni",
+        "korisnik",
+        "korisnika",
+        "osob",
+        "osobe",
+        "osobu",
+        "persontypes",
+        "postavi",
+        "postaviti",
+        "prilog",
+        "promijeni",
+        "radnik",
+        "tipova",
+        "update",
+        "voditelj",
+        "vrsta",
+        "zadani",
+        "zadano",
+        "zaposlenik"
+      ],
+      "paraphrases": [
+        "Molim te, odredi spis kao ključni za odabranu grupu.",
+        "Treba mi da definiram potvrdu kao primarnu za određeni razred.",
+        "Možeš li učiniti da obrazac postane osnovni za neku klasifikaciju?"
+      ]
+    },
+    {
+      "tool_id": "put_SchedulingModels_id_documents_documentId_SetAsDefault",
+      "index": 913,
+      "purpose": "Postavljanje dokumenta kao zadanog za modela raspoređivanja.",
+      "synonyms_hr": [
+        "scheduling",
+        "plan rasporeda",
+        "ažuriraj model raspoređivanja",
+        "promijeni model raspoređivanja",
+        "izmijeni model raspoređivanja",
+        "postavi kao zadano modela raspoređivanja",
+        "default modela raspoređivanja",
+        "ažuriraj scheduling",
+        "promijeni scheduling",
+        "update scheduling"
+      ],
+      "example_queries_hr": [
+        "Postavi dokument modela raspoređivanja s ID-om 'doc123' kao zadani za model s ID-om 123.",
+        "Postavi dokument modela raspoređivanja s ID-om 'doc456' kao zadani za model s ID-om 456."
+      ],
+      "forbidden_words": [
+        "azuriraj",
+        "datoteka",
+        "default",
+        "doc123",
+        "doc456",
+        "dokument",
+        "izmijeni",
+        "model",
+        "model raspored",
+        "modela",
+        "modeli raspored",
+        "plan",
+        "postavi",
+        "prilog",
+        "promijeni",
+        "raspored model",
+        "rasporeda",
+        "rasporedivanja",
+        "scheduling",
+        "update",
+        "zadani",
+        "zadano"
+      ],
+      "paraphrases": [
+        "Želim označiti određeni akt kao primarni za svoj raspored.",
+        "Trebam odabrati spis koji će biti glavni u mom rasporedu.",
+        "Želim definirati potvrdu kao osnovnu za moj hodogram."
+      ]
+    },
+    {
+      "tool_id": "put_Tags_id",
+      "index": 914,
+      "purpose": "Ovaj endpoint služi za ažuriranje stavke.",
+      "synonyms_hr": [
+        "tag",
+        "label",
+        "ažuriraj oznaka",
+        "promijeni oznaka",
+        "izmijeni oznaka",
+        "po ID-u oznaka",
+        "specifični oznaka",
+        "ažuriraj tag",
+        "promijeni tag",
+        "update tag"
+      ],
+      "example_queries_hr": [
+        "Ažuriraj tag s ID-om 1 na naziv 'Novi Tag'.",
+        "Promijeni naziv tagu s ID-om 2."
+      ],
+      "forbidden_words": [
+        "azuriraj",
+        "izmijeni",
+        "label",
+        "naziv",
+        "novi",
+        "oznaka",
+        "promijeni",
+        "specificni",
+        "tagu",
+        "update"
+      ],
+      "paraphrases": [
+        "Želim izvršiti potpunu promjenu trenutnog tagiranja.",
+        "Molim te da izvršiš potpunu promjenu za postojeću oznaku.",
+        "Želim da se ažurira moj postojeći tag u sustavu."
+      ]
+    },
+    {
+      "tool_id": "put_Tenants_id_documents_documentId_SetAsDefault",
+      "index": 928,
+      "purpose": "Ovaj endpoint služi za postavljanje dokumenta kao zadani za korisnika.",
+      "synonyms_hr": [
+        "zakupac",
+        "organizacija",
+        "ažuriraj tenant",
+        "promijeni tenant",
+        "izmijeni tenant",
+        "postavi kao zadano tenanata",
+        "default tenanata",
+        "ažuriraj zakupac",
+        "promijeni zakupac",
+        "update zakupac"
+      ],
+      "example_queries_hr": [
+        "Kako postaviti dokument najma kao zadani?",
+        "Što učiniti ako postavljanje nije uspjelo?"
+      ],
+      "forbidden_words": [
+        "azuriraj",
+        "datoteka",
+        "default",
+        "dokument",
+        "izmijeni",
+        "jedinic",
+        "najma",
+        "najmoprimc",
+        "nije",
+        "odjel",
+        "organizacij",
+        "organizacija",
+        "postavi",
+        "postaviti",
+        "postavljanje",
+        "prilog",
+        "promijeni",
+        "sektor",
+        "tenanata",
+        "tenant",
+        "uciniti",
+        "update",
+        "uspjelo",
+        "zadani",
+        "zadano",
+        "zakupac"
+      ],
+      "paraphrases": [
+        "Mogu li označiti ovu ispravu kao osnovnu za korisnika?",
+        "Želim da ovaj spis postane glavni za iznajmljivača.",
+        "Kako da odredim ovu potvrdu kao prioritetnu za korisnika sustava?"
+      ]
+    },
+    {
+      "tool_id": "put_Trips_id_documents_documentId",
+      "index": 933,
+      "purpose": "Ažurira informacije o dokumentu za putovanja.",
+      "synonyms_hr": [
+        "vožnja",
+        "trip",
+        "ruta",
+        "ažuriraj putovanje",
+        "promijeni putovanje",
+        "izmijeni putovanje",
+        "dokumenti putovanja",
+        "datoteke putovanja",
+        "ažuriraj vožnja",
+        "promijeni vožnja"
+      ],
+      "example_queries_hr": [
+        "Kako ažurirati dokument putovanja s ID-jem 123?",
+        "Što trebam učiniti da promijenim informacije o dokumentu?"
+      ],
+      "forbidden_words": [
+        "azuriraj",
+        "azurirati",
+        "datoteka",
+        "datoteke",
+        "dokument",
+        "dokumenti",
+        "dokumentu",
+        "informacije",
+        "izmijeni",
+        "prilog",
+        "promijeni",
+        "promijenim",
+        "putni",
+        "putovanj",
+        "putovanja",
+        "putovanje",
+        "ruta",
+        "trip",
+        "uciniti",
+        "voznj",
+        "voznja"
+      ],
+      "paraphrases": [
+        "Možeš li prilagoditi zapisnik vezan za moju turističku destinaciju?",
+        "Molim te da izvršiš potpuni ažuriranje podataka vezanih uz ispravu za moj put.",
+        "Zamoli te da mi ažuriraš spis koji se odnosi na moje putne planove."
+      ]
+    },
+    {
+      "tool_id": "put_VehicleCalendar_id_documents_documentId",
+      "index": 936,
+      "purpose": "Ažurira informacije o specifičnom dokumentu.",
+      "synonyms_hr": [
+        "rezervacija",
+        "raspored vozila",
+        "booking",
+        "ažuriraj kalendar vozila",
+        "promijeni kalendar vozila",
+        "izmijeni kalendar vozila",
+        "dokumenti kalendara vozila",
+        "datoteke kalendara vozila",
+        "ažuriraj rezervacija",
+        "promijeni rezervacija"
+      ],
+      "example_queries_hr": [
+        "Kako mogu ažurirati dokument kalendara vozila?",
+        "Koje informacije trebam za ažuriranje dokumenta kalendara vozila?"
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "azuriraj",
+        "azuriranje",
+        "azurirati",
+        "booking",
+        "datoteka",
+        "datoteke",
+        "dokument",
+        "dokumenta",
+        "dokumenti",
+        "flot",
+        "informacije",
+        "izmijeni",
+        "kalendar",
+        "kalendar vozil",
+        "kalendara",
+        "kola",
+        "prilog",
+        "promijeni",
+        "raspored",
+        "rezervacij",
+        "rezervacija",
+        "vozil",
+        "vozila"
+      ],
+      "paraphrases": [
+        "Molim te da ažuriraš podatke o ispravi vezanoj uz moje motorno sredstvo.",
+        "Želim izvršiti potpunu izmjenu podataka u planu termina za moju limuzinu."
+      ]
+    },
+    {
+      "tool_id": "put_VehicleContracts_id_documents_documentId_SetAsDefault",
+      "index": 940,
+      "purpose": "Postaviti dokument kao zadani za entitet.",
+      "synonyms_hr": [
+        "leasing",
+        "najam",
+        "ažuriraj ugovor za vozilo",
+        "promijeni ugovor za vozilo",
+        "izmijeni ugovor za vozilo",
+        "postavi kao zadano ugovora za vozilo",
+        "default ugovora za vozilo",
+        "ažuriraj leasing",
+        "promijeni leasing",
+        "update leasing"
+      ],
+      "example_queries_hr": [
+        "Kako postaviti dokument ugovora vozila s ID-jem 123 kao zadani za ugovor vozila 456?",
+        "Mogu li promijeniti zadani dokument ugovora vozila za ugovor vozila 789?"
+      ],
+      "forbidden_words": [
+        "auti",
+        "auto",
+        "automobil",
+        "azuriraj",
+        "datoteka",
+        "default",
+        "dokument",
+        "flot",
+        "izmijeni",
+        "kola",
+        "leasing",
+        "lizing",
+        "najam",
+        "najam vozil",
+        "postavi",
+        "postaviti",
+        "prilog",
+        "promijeni",
+        "promijeniti",
+        "ugovor",
+        "ugovor vozil",
+        "ugovora",
+        "update",
+        "vozil",
+        "vozila",
+        "vozilo",
+        "zadani",
+        "zadano"
+      ],
+      "paraphrases": [
+        "Želim označiti ispravu kao primarnu za moje motorno sredstvo.",
+        "Molim te, učini da mi potvrda bude ključna za to limuzinu.",
+        "Želim da moj obrazac bude prioritetan za ovo prijevozno sredstvo."
+      ]
+    }
+  ]
+}

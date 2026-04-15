@@ -1,23 +1,12 @@
-"""
-Tool Executor - Production-Ready Execution Engine
+"""Dumb HTTP client for tool execution.
 
-GATE 1: INVISIBLE INJECTION (Merge) - Auto-inject context params
-GATE 2: TYPE VALIDATION & CASTING - Strict type checking
-GATE 3: CIRCUIT BREAKER - Prevent cascading failures
-GATE 4: PARAM MERGING - get_merged_params from Registry (copy semantics)
-
-Features:
-- Domain-agnostic execution (NO tool-specific if/else)
-- Parameter resolution from multiple sources
-- Circuit breaker protection
-- Detailed error feedback for AI
-- Fail-fast on missing tools
-
-PHASE 3: This is a DUMB HTTP CLIENT.
-- NO business logic here
-- NO if tool_name == "..."
-- All defaults come from ToolRegistry._HIDDEN_DEFAULTS
-- All params merged via registry.get_merged_params()
+No tool-specific branching lives here; business logic, defaults, and
+param merging all come from ToolRegistry. Responsibilities:
+- parameter resolution from multiple sources
+- invisible injection (person_id, hidden defaults)
+- type validation + casting
+- circuit breaker protection
+- structured error feedback
 """
 
 import logging
@@ -33,14 +22,14 @@ from services.tool_contracts import (
 from services.parameter_manager import ParameterManager, ParameterValidationError
 from services.circuit_breaker import CircuitBreaker, CircuitOpenError
 from services.error_parser import ErrorParser
-from services.patterns import should_skip_person_id_injection
+from services.utils.pattern_registry import should_skip_person_id_injection
 from services.context import UserContextManager
 from services.filter_builder import FilterBuilder
 from services.api_capabilities import get_capability_registry, ParameterSupport
 from services.errors import BotError, ErrorCode
 
 if TYPE_CHECKING:
-    from services.tool_registry import ToolRegistry
+    from services.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -74,9 +63,9 @@ class ToolExecutor:
         self.gateway = gateway
         self.circuit_breaker = circuit_breaker or CircuitBreaker()
         self.param_manager = ParameterManager()
-        self.registry = registry  # CJELINA 2: Used for inject_defaults
+        self.registry = registry
 
-        logger.info("ToolExecutor initialized (v3.0 - PHASE 3 DUMB CLIENT)")
+        logger.info("ToolExecutor initialized")
 
     async def execute(
         self,
@@ -95,12 +84,11 @@ class ToolExecutor:
         Returns:
             ToolExecutionResult
         """
-        start_time = time.time()
+        start_time = time.perf_counter()
         operation_id = tool.operation_id
 
         logger.info(f"Executing: {operation_id}")
 
-        # PHASE 3: Fail-fast if tool not in registry
         if self.registry and not self.registry.get_tool(operation_id):
             raise ValueError(
                 f"Tool '{operation_id}' not found in registry. "
@@ -119,18 +107,11 @@ class ToolExecutor:
                 for warning in warnings:
                     logger.warning(f"{warning}")
 
-            # PATH params like personIdOrEmail need to be in resolved_params for path substitution
-            # Use UserContextManager for validated access
             ctx_manager = UserContextManager(execution_context.user_context)
-            person_id_already_injected = False
             person_id = ctx_manager.person_id  # Returns None if missing or invalid UUID
-            if person_id:
-                for param_name, param_def in tool.parameters.items():
-                    if param_def.location == "path" and param_def.context_key == "person_id":
-                        if param_name not in resolved_params or not resolved_params.get(param_name):
-                            resolved_params[param_name] = person_id
-                            person_id_already_injected = True
-                            logger.info(f"PATH INJECT: {param_name}={person_id[:8]}... for {operation_id}")
+            person_id_already_injected = self._inject_person_id_path_params(
+                tool, resolved_params, person_id, operation_id
+            )
 
             # Prepare request components
             path, query_params, body = self.param_manager.prepare_request(
@@ -147,65 +128,16 @@ class ToolExecutor:
                     query_params["Filter"] = filter_string
                     logger.info(f"Built filter string: {filter_string}")
 
-            # This bypasses parameter_manager validation which was filtering out
-            # personId because it's not in Swagger definition for most GET tools.
-            # The injection happens HERE, not in message_engine, so it goes
-            # directly to the API call without being filtered.
-            if tool.method == "GET" and not person_id_already_injected:
-                # Reuse ctx_manager from above (validated access)
-                person_id = ctx_manager.person_id
-                if person_id:
-                    # Use APICapabilityRegistry to check if tool supports PersonId
-                    capability_registry = get_capability_registry()
+            if tool.method == "GET" and not person_id_already_injected and person_id:
+                query_params = self._inject_person_id_query_params(
+                    tool, query_params, person_id
+                )
 
-                    should_inject = True
+            # Hidden defaults (EntryType, AssigneeType, …) are body-only —
+            # injecting them into a GET query string would break request shape.
+            if self.registry and body and tool.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+                body = self.registry.get_merged_params(operation_id, body)
 
-                    if capability_registry:
-                        cap = capability_registry.get_capability(tool.operation_id)
-                        if cap and cap.supports_person_id == ParameterSupport.NOT_SUPPORTED:
-                            # We learned this endpoint doesn't support PersonId
-                            should_inject = False
-                            logger.debug(
-                                f"⏭️ Skipping personId injection for {tool.operation_id} "
-                                f"(learned: NOT_SUPPORTED)"
-                            )
-                    else:
-                        # Fallback: centralized skip patterns from patterns.py
-                        should_inject = not should_skip_person_id_injection(tool.operation_id)
-
-                    if should_inject:
-                        # Initialize query_params if None
-                        if query_params is None:
-                            query_params = {}
-
-                        # Check if not already present (using schema-based classification)
-                        has_person_id = False
-                        for param_name, param_def in tool.parameters.items():
-                            if param_def.context_key == "person_id" and param_name in query_params:
-                                has_person_id = True
-                                break
-
-                        if not has_person_id:
-                            # Find the correct parameter name using schema-based classification
-                            for param_name, param_def in tool.parameters.items():
-                                if param_def.context_key == "person_id":
-                                    query_params[param_name] = person_id
-                                    logger.info(
-                                        f"🎯 DIRECT INJECT: {param_name}={person_id[:8]}... "
-                                        f"for {tool.operation_id}"
-                                    )
-                                    break
-
-            # GATE 4: PHASE 3 - Merge hidden defaults from Registry (copy semantics)
-            # All business logic (EntryType, AssigneeType, etc.) is defined in
-            # ToolRegistry._HIDDEN_DEFAULTS, not here. Executor is "dumb".
-            if self.registry:
-                # Merge hidden defaults into body only (POST/PUT/PATCH/DELETE)
-                # Defaults like EntryType=0 are body params — don't inject into GET query strings
-                if body and tool.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
-                    body = self.registry.get_merged_params(operation_id, body)
-
-            # Build full URL using STRICT Master Prompt v3.1 formula
             full_url = self._build_url(tool, resolved_path=path)
 
             # VALIDATE: HTTP Method and URL construction
@@ -238,7 +170,7 @@ class ToolExecutor:
             )
 
             # Process response
-            execution_time = int((time.time() - start_time) * 1000)
+            execution_time = int((time.perf_counter() - start_time) * 1000)
 
             if not response.success:
                 # GATE 5: Error parsing
@@ -299,7 +231,7 @@ class ToolExecutor:
                 error_message=str(e),
                 ai_feedback=ai_feedback,
                 missing_params=e.missing_params,  # Pass missing_params for auto-chaining
-                execution_time_ms=int((time.time() - start_time) * 1000)
+                execution_time_ms=int((time.perf_counter() - start_time) * 1000)
             )
 
         except CircuitOpenError as e:
@@ -311,7 +243,7 @@ class ToolExecutor:
                 error_code=ErrorCode.CIRCUIT_OPEN,
                 error_message=str(e),
                 ai_feedback=str(e),  # Already in Croatian
-                execution_time_ms=int((time.time() - start_time) * 1000)
+                execution_time_ms=int((time.perf_counter() - start_time) * 1000)
             )
 
         except Exception as e:
@@ -329,7 +261,7 @@ class ToolExecutor:
                 error_code=ErrorCode.TOOL_EXECUTION_FAILED,
                 error_message=str(e),
                 ai_feedback=ai_feedback,
-                execution_time_ms=int((time.time() - start_time) * 1000)
+                execution_time_ms=int((time.perf_counter() - start_time) * 1000)
             )
 
     async def _make_http_call(
@@ -351,6 +283,67 @@ class ToolExecutor:
             tenant_id=tenant_id
         )
 
+    def _inject_person_id_path_params(
+        self,
+        tool: "UnifiedToolDefinition",
+        resolved_params: Dict[str, Any],
+        person_id: Optional[str],
+        operation_id: str,
+    ) -> bool:
+        """Inject person_id into path params that expect it. Returns True if injected."""
+        if not person_id:
+            return False
+        injected = False
+        for param_name, param_def in tool.parameters.items():
+            if param_def.location != "path" or param_def.context_key != "person_id":
+                continue
+            if resolved_params.get(param_name):
+                continue
+            resolved_params[param_name] = person_id
+            injected = True
+            logger.info(f"PATH INJECT: {param_name}={person_id[:8]}... for {operation_id}")
+        return injected
+
+    def _inject_person_id_query_params(
+        self,
+        tool: "UnifiedToolDefinition",
+        query_params: Optional[Dict[str, Any]],
+        person_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Inject person_id into GET query params when capability registry allows it.
+
+        Bypasses parameter_manager validation which filters out personId for tools
+        where it isn't in the Swagger definition. Returns possibly-new query_params.
+        """
+        capability_registry = get_capability_registry()
+        if capability_registry:
+            cap = capability_registry.get_capability(tool.operation_id)
+            if cap and cap.supports_person_id == ParameterSupport.NOT_SUPPORTED:
+                logger.debug(
+                    f"Skipping personId injection for {tool.operation_id} "
+                    f"(learned: NOT_SUPPORTED)"
+                )
+                return query_params
+        elif should_skip_person_id_injection(tool.operation_id):
+            return query_params
+
+        if query_params is None:
+            query_params = {}
+
+        person_id_param = next(
+            (name for name, p in tool.parameters.items() if p.context_key == "person_id"),
+            None,
+        )
+        if person_id_param is None or person_id_param in query_params:
+            return query_params
+
+        query_params[person_id_param] = person_id
+        logger.info(
+            f"DIRECT INJECT: {person_id_param}={person_id[:8]}... "
+            f"for {tool.operation_id}"
+        )
+        return query_params
+
     def _validate_http_request(
         self,
         method: str,
@@ -362,7 +355,7 @@ class ToolExecutor:
         """
         Validate HTTP request before execution.
 
-        防护措施:
+        Checks:
         - Ensure method is valid (GET/POST/PUT/PATCH/DELETE)
         - Validate URL construction (no missing slashes)
         - Warn about common mistakes (body on GET, no body on POST)

@@ -30,7 +30,6 @@ from services.ai_orchestrator import AIOrchestrator
 from services.response_formatter import ResponseFormatter
 from services.dependency_resolver import DependencyResolver
 from services.error_learning import ErrorLearningService
-from services.model_drift_detector import get_drift_detector
 from services.cost_tracker import CostTracker
 from services.response_extractor import get_response_extractor
 from services.query_router import get_query_router, RouteResult
@@ -114,12 +113,8 @@ class MessageEngine:
         self.dependency_resolver = DependencyResolver(registry)
         self.error_learning = ErrorLearningService(redis_client=self.redis)
 
-        # Model drift detection
-        self.drift_detector = get_drift_detector(
-            redis_client=self.redis,
-            db_session=self.db
-        )
-        self.error_learning.set_drift_detector(self.drift_detector)
+        # Model drift detection removed in Phase D ML cull.
+        self.drift_detector = None
 
         # Cost tracking
         self.cost_tracker: Optional[CostTracker] = None
@@ -135,7 +130,7 @@ class MessageEngine:
                 )
                 logger.warning(f"{err}")
 
-        self.ai = AIOrchestrator()
+        self.ai = AIOrchestrator(cost_tracker=self.cost_tracker)
         self.formatter = ResponseFormatter()
         # Response extraction for API results
         self.response_extractor = get_response_extractor()
@@ -191,7 +186,8 @@ class MessageEngine:
         sender: str,
         text: str,
         message_id: Optional[str] = None,
-        db_session=None
+        db_session=None,
+        tenant_id: str = "",
     ) -> str:
         """
         Process incoming message.
@@ -201,6 +197,10 @@ class MessageEngine:
             text: Message text
             message_id: Optional message ID
             db_session: Database session for this request (concurrency-safe)
+            tenant_id: Tenant ID resolved at the edge from sender phone
+                       (Option C, V6.2 strict isolation). Overrides any env
+                       default in user_context — empty string means caller had
+                       no resolution and we must NOT fabricate one.
 
         Returns:
             Response text
@@ -209,7 +209,7 @@ class MessageEngine:
             "engine.sender_suffix": sender[-4:] if sender else "",
             "engine.query_preview": (text or "")[:80],
         }) as span:
-            result = await self._process_inner(sender, text, message_id, db_session)
+            result = await self._process_inner(sender, text, message_id, db_session, tenant_id)
             span.set_attribute("engine.response_length", len(result))
             return result
 
@@ -218,7 +218,8 @@ class MessageEngine:
         sender: str,
         text: str,
         message_id: Optional[str] = None,
-        db_session=None
+        db_session=None,
+        tenant_id: str = "",
     ) -> str:
         """Inner implementation of process(), wrapped by OTel span."""
 
@@ -233,6 +234,11 @@ class MessageEngine:
             # 1. Identify user (delegated to UserHandler)
             # Always returns a context (guest context if not in MobilityOne)
             user_context = await self._user_handler.identify_user(sender, db_session=db_session)
+            # Edge-resolved tenant (Option C) MUST win over any env default
+            # baked into identify_user. Without this override the V6.2 strict
+            # tenant precedence at api_gateway sees an env-leaked value.
+            if tenant_id and isinstance(user_context, dict):
+                user_context["tenant_id"] = tenant_id
             if not user_context:
                 err = ConversationError(
                     ErrorCode.CONTEXT_MISSING,
@@ -498,7 +504,7 @@ class MessageEngine:
         if not self._unified_router_initialized:
             async with self._unified_router_lock:
                 if not self._unified_router_initialized:
-                    self.unified_router = await get_unified_router()
+                    self.unified_router = await get_unified_router(cost_tracker=self.cost_tracker)
                     if self.registry and self.registry.is_ready:
                         self.unified_router.set_registry(self.registry)
                     self._unified_router_initialized = True
@@ -565,7 +571,9 @@ class MessageEngine:
                     )
                     if result:
                         return result
-                return "Nisam siguran što tražite. Možete pitati za:\n* Rezervaciju vozila\n* Kilometražu\n* Prijavu štete\n* Informacije o vozilu"
+                # After exiting a flow, if re-route doesn't match anything useful,
+                # confirm cancellation instead of showing confusing fallback
+                return "U redu, odustali ste. Kako vam još mogu pomoći?"
             else:
                 logger.warning("UNIFIED ROUTER: exit_flow received but not in flow - ignoring")
                 return "Kako vam mogu pomoći?"

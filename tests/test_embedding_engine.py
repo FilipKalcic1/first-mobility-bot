@@ -1,31 +1,14 @@
 """Tests for services/registry/embedding_engine.py – EmbeddingEngine."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
+from services.registry.embedding_engine import EmbeddingEngine
 from services.tool_contracts import ParameterDefinition, DependencySource
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-def _make_engine():
-    ms = MagicMock()
-    ms.AZURE_OPENAI_ENDPOINT = "https://test.openai.azure.com"
-    ms.AZURE_OPENAI_API_KEY = "test-key"
-    ms.AZURE_OPENAI_API_VERSION = "2024-02-15"
-    ms.AZURE_OPENAI_EMBEDDING_DEPLOYMENT = "text-embedding"
-
-    with patch("services.registry.embedding_engine._get_settings", return_value=ms):
-        with patch("services.openai_client.get_embedding_client", return_value=MagicMock()):
-            from services.registry.embedding_engine import EmbeddingEngine
-            engine = EmbeddingEngine()
-    return engine
 
 
 @pytest.fixture
 def engine():
-    return _make_engine()
+    return EmbeddingEngine()
 
 
 def _param(name, context_key=None, source=DependencySource.FROM_USER):
@@ -140,44 +123,6 @@ class TestBuildEmbeddingText:
             "op", "svc", "/api", "GET", "", {}, ["FullVehicleName"]
         )
         assert "Full Vehicle Name" in text
-
-
-# ===========================================================================
-# generate_embeddings
-# ===========================================================================
-
-class TestGenerateEmbeddings:
-    @pytest.mark.asyncio
-    async def test_all_cached(self, engine):
-        tools = {"t1": MagicMock()}
-        existing = {"t1": [0.1, 0.2]}
-        result = await engine.generate_embeddings(tools, existing)
-        assert result == existing
-
-    @pytest.mark.asyncio
-    async def test_generates_missing(self, engine):
-        tool = MagicMock()
-        tool.embedding_text = "test text"
-        tools = {"t1": tool}
-
-        mock_resp = MagicMock()
-        mock_resp.data = [MagicMock(embedding=[0.1, 0.2, 0.3])]
-        engine.openai.embeddings.create = AsyncMock(return_value=mock_resp)
-
-        result = await engine.generate_embeddings(tools, {})
-        assert "t1" in result
-        assert result["t1"] == [0.1, 0.2, 0.3]
-
-    @pytest.mark.asyncio
-    async def test_embedding_error(self, engine):
-        tool = MagicMock()
-        tool.embedding_text = "test"
-        tools = {"t1": tool}
-
-        engine.openai.embeddings.create = AsyncMock(side_effect=RuntimeError("API error"))
-
-        result = await engine.generate_embeddings(tools, {})
-        assert "t1" not in result
 
 
 # ===========================================================================

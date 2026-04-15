@@ -11,6 +11,24 @@ Fixes mismatches between 001_initial migration and current ORM models:
 - All DateTime columns: upgrade to timezone-aware
 - user_mappings: upgrade created_at/updated_at to timezone-aware
 - Recreate indexes to match ORM __table_args__
+
+WARNING — DATA-DESTRUCTIVE MIGRATION
+------------------------------------
+This migration DROPS production columns after a best-effort UPDATE copy:
+  conversations: last_activity, message_count, state
+  messages:     created_at, metadata
+  tool_executions: conversation_id (and its FK)
+
+The copy into ended_at/status and timestamp is NOT transactional with the
+drops across all rows under concurrent writes. Before running:
+
+  1) Take a full logical backup (`pg_dump`) of the target database.
+  2) Run in a maintenance window with application writes paused, OR run on
+     a staging clone first and diff row counts.
+  3) Verify `downgrade()` on that staging clone — it restores columns as
+     NULL, so downgrade is NOT a full undo of lost data.
+
+Do NOT run this in production without the above checklist.
 """
 from typing import Sequence, Union
 

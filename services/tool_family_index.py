@@ -11,13 +11,10 @@ Example:
     → Direct hit, 0 FAISS calls, 100% precision.
 """
 import logging
-from typing import Dict, Optional, List, TYPE_CHECKING
+from typing import Dict, Optional, List
 import threading
 
-if TYPE_CHECKING:
-    from services.tool_registry import ToolRegistry
-
-from services.query_type_classifier import QueryType
+from services.types.query_type import QueryType
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +63,13 @@ class ToolFamilyIndex:
         self.families_with_method: Dict[str, Dict[str, str]] = {}
 
     def build(self, tool_ids: List[str]):
-        """Build family index from tool IDs."""
-        self.families.clear()
-        self.families_with_method.clear()
+        """Build family index from tool IDs.
+
+        Uses atomic swap: builds into new dicts, then replaces references.
+        This prevents resolve() from seeing empty dicts during rebuild.
+        """
+        new_families: Dict[str, Dict[str, str]] = {}
+        new_families_with_method: Dict[str, Dict[str, str]] = {}
 
         for tool_id in tool_ids:
             entity, variant, method = self._parse_tool_id(tool_id)
@@ -79,36 +80,26 @@ class ToolFamilyIndex:
 
             # Simple family (no method prefix — used for GET queries)
             # Prefer GET over other methods so get_Persons isn't overwritten by post_Persons
-            existing = self.families.get(entity_lower, {}).get(variant)
+            existing = new_families.get(entity_lower, {}).get(variant)
             if existing is None or method == "get":
-                self.families.setdefault(entity_lower, {})[variant] = tool_id
+                new_families.setdefault(entity_lower, {})[variant] = tool_id
 
             # Method-qualified family (used for action-specific queries)
             method_variant = f"{method}_{variant}" if method != "get" else variant
-            self.families_with_method.setdefault(entity_lower, {})[method_variant] = tool_id
+            new_families_with_method.setdefault(entity_lower, {})[method_variant] = tool_id
+
+        # Atomic swap — resolve() always sees a complete index
+        self.families = new_families
+        self.families_with_method = new_families_with_method
 
         logger.info(f"ToolFamilyIndex: Built {len(self.families)} entity families")
 
-    def resolve(self, entity: str, query_type: QueryType, method: Optional[str] = None, variant_override: Optional[str] = None) -> Optional[str]:
-        """
-        Direct lookup: entity + query_type → tool_id.
-
-        Args:
-            entity: Detected entity key (e.g., "expenses", "vehicles")
-            query_type: Detected query type
-            method: Optional HTTP method filter (e.g., "delete", "post")
-
-        Returns:
-            tool_id if found, None otherwise
-        """
+    def resolve(self, entity: str, query_type: QueryType, method: Optional[str] = None) -> Optional[str]:
+        """Direct lookup: entity + query_type → tool_id."""
         entity_lower = entity.lower()
         variant = _QUERY_TYPE_TO_VARIANT.get(query_type)
         if not variant:
             return None
-
-        # Allow explicit variant override (e.g., "agg" vs "groupby")
-        if variant_override:
-            variant = variant_override
 
         family = self.families_with_method.get(entity_lower, {})
 

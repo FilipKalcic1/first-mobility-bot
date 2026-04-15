@@ -322,7 +322,7 @@ class TestExecuteToolCall:
             mock_cr.return_value = MagicMock()
             mock_cr.return_value.record_success = MagicMock()
             mock_cr.return_value.should_inject_person_id.return_value = (False, None, None)
-            mock_eval.return_value = MagicMock()
+            mock_eval.return_value = MagicMock(record_success=AsyncMock(), record_failure=AsyncMock())
 
             result = await handler.execute_tool_call(
                 {"tool": "get_MasterData", "parameters": {}},
@@ -354,7 +354,7 @@ class TestExecuteToolCall:
              patch("services.engine.tool_handler.get_error_translator") as mock_et:
             mock_cr.return_value = MagicMock()
             mock_cr.return_value.should_inject_person_id.return_value = (False, None, None)
-            mock_eval.return_value = MagicMock()
+            mock_eval.return_value = MagicMock(record_success=AsyncMock(), record_failure=AsyncMock())
             mock_et.return_value.get_ai_feedback.return_value = "Check params"
             mock_et.return_value.get_user_message.return_value = "Greška 404"
 
@@ -403,7 +403,7 @@ class TestExecuteToolCall:
             mock_cr.return_value = MagicMock()
             mock_cr.return_value.record_success = MagicMock()
             mock_cr.return_value.should_inject_person_id.return_value = (False, None, None)
-            mock_eval.return_value = MagicMock()
+            mock_eval.return_value = MagicMock(record_success=AsyncMock(), record_failure=AsyncMock())
 
             result = await handler.execute_tool_call(
                 {"tool": "get_MasterData", "parameters": {}},
@@ -439,7 +439,7 @@ class TestExecuteToolCall:
             mock_cr.return_value = MagicMock()
             mock_cr.return_value.record_success = MagicMock()
             mock_cr.return_value.should_inject_person_id.return_value = (False, None, None)
-            mock_eval.return_value = MagicMock()
+            mock_eval.return_value = MagicMock(record_success=AsyncMock(), record_failure=AsyncMock())
 
             result = await handler.execute_tool_call(
                 {"tool": "get_MasterData", "parameters": {}},
@@ -475,7 +475,7 @@ class TestExecuteToolCall:
              patch("services.engine.tool_handler.get_error_translator") as mock_et:
             mock_cr.return_value = MagicMock()
             mock_cr.return_value.should_inject_person_id.return_value = (False, None, None)
-            mock_eval.return_value = MagicMock()
+            mock_eval.return_value = MagicMock(record_success=AsyncMock(), record_failure=AsyncMock())
             mock_et.return_value.get_ai_feedback.return_value = "Check params"
             mock_et.return_value.get_user_message.return_value = "Greška"
 

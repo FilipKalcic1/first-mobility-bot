@@ -11,7 +11,8 @@ from openai import RateLimitError, APIStatusError, APITimeoutError
 from prometheus_client import Counter as PromCounter, Histogram, Gauge
 
 from config import get_settings
-from services.patterns import PatternRegistry
+from services.utils.pattern_registry import PatternRegistry
+from services.utils.llm_json import parse_llm_json
 from services.context import UserContextManager
 from services.openai_client import get_openai_client, get_llm_circuit_breaker
 from services.circuit_breaker import CircuitOpenError
@@ -104,7 +105,7 @@ class AIOrchestrator:
     BASE_DELAY = 1.0
     MAX_JITTER = 0.5
 
-    def __init__(self) -> None:
+    def __init__(self, cost_tracker=None) -> None:
         """Initialize AI orchestrator."""
         # Shared client: rate limiting + connection pooling across all services
         # SDK retries disabled - we use our own exponential backoff (1-4 seconds)
@@ -113,7 +114,11 @@ class AIOrchestrator:
 
         self.model = _get_settings().AZURE_OPENAI_DEPLOYMENT_NAME
 
-        # Token tracking (approximate — asyncio single-thread safe)
+        # Redis-backed cost tracking (optional — graceful if None)
+        self._cost_tracker = cost_tracker
+
+        # Token tracking — serialized via asyncio.Lock so concurrent analyze()
+        # calls don't corrupt counters under Python's non-atomic += on ints.
         self._total_prompt_tokens = 0
         self._total_completion_tokens = 0
         self._total_requests = 0
@@ -133,7 +138,7 @@ class AIOrchestrator:
 
         if not self.tokenizer:
             # Fallback token counting for Croatian language (when tiktoken unavailable)
-            total_chars = sum(len(m.get("content", "")) for m in messages)
+            total_chars = sum(len(m.get("content") or "") for m in messages)
             return int(total_chars / CROATIAN_CHARS_PER_TOKEN) + len(messages) * MESSAGE_TOKEN_OVERHEAD
 
         num_tokens = 0
@@ -223,6 +228,16 @@ class AIOrchestrator:
                         "completion_tokens": response.usage.completion_tokens,
                         "total_tokens": response.usage.prompt_tokens + response.usage.completion_tokens
                     }
+
+                    # Persist to Redis via CostTracker
+                    if self._cost_tracker:
+                        try:
+                            await self._cost_tracker.record_usage(
+                                response.usage.prompt_tokens,
+                                response.usage.completion_tokens,
+                            )
+                        except Exception as ct_err:
+                            logger.warning(f"CostTracker record failed: {ct_err}")
 
                     logger.debug(
                         f"Tokens: prompt={response.usage.prompt_tokens}, "
@@ -694,17 +709,21 @@ Vrati SAMO JSON, bez drugog teksta."""
                     max_tokens=300
                 )
 
+                # Track extract_parameters usage in CostTracker
+                if self._cost_tracker and hasattr(response, 'usage') and response.usage:
+                    try:
+                        await self._cost_tracker.record_usage(
+                            response.usage.prompt_tokens,
+                            response.usage.completion_tokens,
+                        )
+                    except Exception as e:
+                        logger.warning(f"CostTracker record failed in extract_parameters: {e}")
+
                 content = response.choices[0].message.content or "{}"
-
-                # Clean markdown
-                content = content.strip()
-                if content.startswith("```"):
-                    content = content.split("```")[1]
-                    if content.startswith("json"):
-                        content = content[4:]
-                    content = content.strip()
-
-                return json.loads(content)
+                parsed = parse_llm_json(content)
+                if parsed is None:
+                    raise json.JSONDecodeError("No JSON object found", content, 0)
+                return parsed
 
             except json.JSONDecodeError:
                 err = GatewayError(ErrorCode.VALIDATION_ERROR, "Parameter extraction JSON error")

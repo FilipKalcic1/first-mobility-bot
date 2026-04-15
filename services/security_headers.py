@@ -31,10 +31,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Control referrer information leakage
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
+        # HSTS — only effective over HTTPS (browsers ignore it over HTTP)
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
+
         # Content Security Policy - restrict resource loading
         # Relax CSP for Swagger/ReDoc UI paths (they load CSS/JS from CDN)
-        path = request.url.path
-        if path.endswith(("/docs", "/redoc", "/openapi.json")):
+        normalized_path = request.url.path.rstrip("/")
+        is_docs = normalized_path in ("/docs", "/redoc", "/openapi.json")
+        if is_docs:
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; "
                 "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
@@ -48,9 +52,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Permissions Policy - disable unused browser features
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
 
-        # Prevent caching of sensitive API responses
-        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
+        # Prevent caching of sensitive API responses (skip docs — they are static)
+        if not is_docs:
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
 
         # Remove server identification header
         if "server" in response.headers:

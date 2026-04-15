@@ -44,11 +44,13 @@ def get_tool_documentation() -> Dict[str, Any]:
         ]
 
         for doc_path in possible_paths:
-            if doc_path.exists():
+            try:
                 with open(doc_path, 'r', encoding='utf-8') as f:
                     _tool_documentation_cache = json.load(f)
-                    logger.info(f"Loaded {len(_tool_documentation_cache)} Croatian tool descriptions")
-                    return _tool_documentation_cache
+                logger.info(f"Loaded {len(_tool_documentation_cache)} Croatian tool descriptions")
+                return _tool_documentation_cache
+            except FileNotFoundError:
+                continue
 
         logger.warning("tool_documentation.json not found, using English descriptions")
         _tool_documentation_cache = {}

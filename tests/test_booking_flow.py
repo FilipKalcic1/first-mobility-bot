@@ -77,7 +77,7 @@ async def test_booking_flow():
     print("✅ API Gateway initialized")
 
     # Tool Registry
-    from services.tool_registry import ToolRegistry
+    from services.registry import ToolRegistry
     registry = ToolRegistry(redis_client=redis_client)
 
     print("📥 Loading tools from Swagger...")
@@ -282,7 +282,7 @@ async def test_flow_handler_directly():
 
     # Initialize services
     from services.api_gateway import APIGateway
-    from services.tool_registry import ToolRegistry
+    from services.registry import ToolRegistry
     from services.tool_executor import ToolExecutor
     from services.ai_orchestrator import AIOrchestrator
     from services.response_formatter import ResponseFormatter

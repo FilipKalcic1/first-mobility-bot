@@ -9,12 +9,10 @@ dependencies as parameters instead of `self`.
 """
 
 import logging
-import re
-from typing import Dict, Any, List, Optional, Tuple, Union
+from typing import Dict, Any, Tuple, Union
 
 from services.booking_contracts import AssigneeType, EntryType
 from services.error_translator import get_error_translator
-from services.confirmation_dialog import get_confirmation_dialog
 from services.context.user_context_manager import UserContextManager
 from services.errors import ConversationError, ErrorCode, InfrastructureError
 from services.tracing import get_tracer, trace_span

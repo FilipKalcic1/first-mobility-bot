@@ -12,77 +12,60 @@ Design:
 
 from __future__ import annotations
 
-from typing import Dict, FrozenSet, List, Final
+from typing import Dict, FrozenSet, List, Final, Tuple
 
 
 # ---------------------------------------------------------------------------
-# Additive boost values (v4.0)
+# Additive boost values — kept small so FAISS cosine stays dominant.
+# Boosts are tie-breakers between top-5 candidates (FAISS spread ~0.01-0.05).
+# Total post-boost capped to [MIN_TOTAL_BOOST, MAX_TOTAL_BOOST].
 # ---------------------------------------------------------------------------
-# FAISS score (~0.3-0.9) stays dominant; boosts only nudge ranking.
-# Max total boost: +0.55, min: -0.35. Predictable and debuggable.
 
-BOOST_ENTITY_MATCH: Final[float] = 0.30        # Tool entity == detected entity
-BOOST_ENTITY_MISMATCH: Final[float] = -0.20    # Tool entity ≠ detected entity
-BOOST_QUERY_TYPE_MATCH: Final[float] = 0.25    # Suffix matches QueryType preference
-BOOST_QUERY_TYPE_EXCLUDED: Final[float] = -0.15  # Suffix excluded for this QueryType
-BOOST_PRIMARY_ENTITY: Final[float] = 0.20      # Primary entity tool (get_Vehicles)
-BOOST_SECONDARY_ENTITY: Final[float] = 0.10    # Secondary entity (Types, Groups)
-BOOST_BASE_LIST: Final[float] = 0.08           # Any base list tool
-BOOST_PRIMARY_ACTION: Final[float] = 0.15      # PRIMARY_ACTION_TOOLS keyword match
-BOOST_CATEGORY: Final[float] = 0.05            # Category match
-BOOST_DOC: Final[float] = 0.05                 # Query words in tool docs
-BOOST_HELPER_PENALTY: Final[float] = -0.15     # Lookup/helper/stats for list query
-BOOST_COMPLEX_SUFFIX_PENALTY: Final[float] = -0.10  # Complex suffix for entity query
-BOOST_LOOKUP_PENALTY: Final[float] = -0.10     # Lookup tool for single entity query
-BOOST_GENERIC_CRUD_PENALTY: Final[float] = -0.20  # Hardcoded misrouting prevention
-BOOST_FAMILY_MATCH: Final[float] = 0.35        # Tool Family Index direct match
-BOOST_POSSESSIVE_ID: Final[float] = 0.15       # "moj auto" → get_Vehicles_id
-BOOST_POSSESSIVE_PROFILE: Final[float] = 0.15  # "moj broj" → get_PersonData
-BOOST_POSSESSIVE_LIST_PENALTY: Final[float] = -0.10  # Possessive penalizes list tools
-BM25_WEIGHT: Final[float] = 0.15               # Additive BM25 boost weight
+BOOST_ENTITY_MATCH: Final[float] = 0.08        # Tool entity == detected entity
+BOOST_ENTITY_MISMATCH: Final[float] = -0.05    # Tool entity ≠ detected entity
+BOOST_QUERY_TYPE_MATCH: Final[float] = 0.06    # Suffix matches QueryType preference
+BOOST_QUERY_TYPE_EXCLUDED: Final[float] = -0.04  # Suffix excluded for this QueryType
+BOOST_PRIMARY_ENTITY: Final[float] = 0.05      # Primary entity tool (get_Vehicles)
+BOOST_SECONDARY_ENTITY: Final[float] = 0.03    # Secondary entity (Types, Groups)
+BOOST_BASE_LIST: Final[float] = 0.02           # Any base list tool
+BOOST_PRIMARY_ACTION: Final[float] = 0.04      # PRIMARY_ACTION_TOOLS keyword match
+BOOST_CATEGORY: Final[float] = 0.02            # Category match
+BOOST_DOC: Final[float] = 0.02                 # Query words in tool docs
+BOOST_HELPER_PENALTY: Final[float] = -0.04     # Lookup/helper/stats for list query
+BOOST_COMPLEX_SUFFIX_PENALTY: Final[float] = -0.03  # Complex suffix for entity query
+BOOST_LOOKUP_PENALTY: Final[float] = -0.03     # Lookup tool for single entity query
+BOOST_GENERIC_CRUD_PENALTY: Final[float] = -0.05  # Hardcoded misrouting prevention
+BOOST_FAMILY_MATCH: Final[float] = 0.09        # Tool Family Index direct match
+BOOST_POSSESSIVE_ID: Final[float] = 0.04       # "moj auto" → get_Vehicles_id
+BOOST_POSSESSIVE_PROFILE: Final[float] = 0.04  # "moj broj" → get_PersonData
+BOOST_POSSESSIVE_LIST_PENALTY: Final[float] = -0.03  # Possessive penalizes list tools
+BM25_WEIGHT: Final[float] = 0.07               # Additive BM25 boost weight
+BOOST_METHOD_MISMATCH: Final[float] = -0.05    # Verb↔HTTP method mismatch
 
 # Additive cap: prevent extreme swings
-MAX_TOTAL_BOOST: Final[float] = 0.55
-MIN_TOTAL_BOOST: Final[float] = -0.35
+MAX_TOTAL_BOOST: Final[float] = 0.15
+MIN_TOTAL_BOOST: Final[float] = -0.10
 
 
 # ---------------------------------------------------------------------------
-# Entity detection keywords for boost matching
+# Suffix-Intent Boost — reward when query's analytical/structural
+# intent matches the tool suffix. Keys are suffix substrings tested via
+# `tool_id.lower().endswith(key)` (except `_lookup` handled separately as prefix).
 # ---------------------------------------------------------------------------
-# Keys = lowercase entity names matching tool_id parts (e.g., "get_Vehicles" → "vehicles")
-# Values = stem prefixes for Croatian diacritic-normalized matching
 
-ENTITY_KEYWORDS: Final[Dict[str, List[str]]] = {
-    "companies": ["kompanij", "tvrtk", "firm", "poduzec"],
-    "vehicles": ["vozil", "auto", "automobil", "flot"],
-    "persons": ["osob", "korisnik", "zaposlenik", "radnik", "voditelj"],
-    "expenses": ["trosk", "troska", "izdatak", "racun", "cijena"],
-    "trips": ["putovanj", "trip", "voznj", "putni"],
-    "cases": ["slucaj", "steta", "kvar", "incident"],
-    "equipment": ["oprem", "uredaj", "stroj"],
-    "partners": ["partner", "dobavljac", "klijent"],
-    "teams": ["tim", "grupa", "ekip"],
-    "orgunits": ["organizacij", "jedinic", "odjel", "sektor"],
-    "costcenters": ["troskovn", "centar troska", "cost center"],
-    "vehiclecalendar": ["rezervacij", "booking", "kalendar"],
-    "documents": ["dokument", "prilog", "datoteka", "pdf"],
-    "metadata": ["metapodac", "struktur", "shema", "polja"],
-    # Extended entity coverage
-    "vehicletypes": ["tip vozil", "vrsta vozil", "kategorija vozil"],
-    "vehiclecontracts": ["ugovor vozil", "leasing", "najam vozil"],
-    "equipmenttypes": ["tip oprem", "vrsta oprem"],
-    "equipmentcalendar": ["kalendar oprem", "raspored oprem"],
-    "periodicactivities": ["periodicn", "servis", "redovn aktiv"],
-    "schedulingmodels": ["model raspored", "raspored model"],
-    "mileagereports": ["kilometraz", "izvjest km", "km izvjest"],
-    "roles": ["ulog", "rola", "dozvol", "permisij"],
-    "tags": ["oznaka", "tag", "label"],
-    "pools": ["pool", "bazen vozil"],
-    "tenants": ["tenant", "najmoprimc"],
-    "casetypes": ["tip slucaj", "vrsta stete", "kategorija prijav"],
-    "expensetypes": ["tip trosk", "vrsta trosk", "kategorija trosk"],
-    "expensegroups": ["grupa trosk", "skupine trosk"],
+SUFFIX_INTENT_BOOST: Final[Dict[str, Tuple[List[str], float]]] = {
+    "_agg":          (["agregiran", "zbirn", "statisticki", "prosjek", "zbroj", "suma", "count", "broj "], 0.06),
+    "_groupby":      (["grupiran", "razvrstan", "po polju", "klasifikacij", "segmentiran", "group by"], 0.06),
+    "_projectto":    (["projekcij", "odabrane kolone", "odabrana polja", "samo polja", "parcijaln"], 0.05),
+    "_thumb":        (["slicic", "thumbnail", "minijatur", "mala slika"], 0.05),
+    "_setasdefault": (["postavi zadan", "kao zadan", "default", "primarn"], 0.05),
+    "_multipatch":   (["grupno", "bulk", "masovno", "vise zapisa", "batch"], 0.05),
 }
+
+# Lookup tools matched by prefix `get_lookup_`.
+LOOKUP_INTENT_BOOST: Final[Tuple[List[str], float]] = (
+    ["sifrarnik", "dropdown", "izbornik", "skraceni popis", "popis id"], 0.05
+)
 
 
 # ---------------------------------------------------------------------------
@@ -140,20 +123,6 @@ VERB_METHOD_MAP: Final[Dict[str, str]] = {
     "dodaj": "post", "kreiraj": "post", "napravi": "post", "unesi": "post",
     "upisi": "post",
 }
-
-
-# ---------------------------------------------------------------------------
-# Short query detection indicators
-# ---------------------------------------------------------------------------
-
-ID_INDICATORS: Final[List[str]] = [
-    "id", "po id", "detalj", "konkret", "jednog", "jednu", "jedno",
-]
-
-CRITERIA_INDICATORS: Final[List[str]] = [
-    "sve ", "svi ", "sva ", "prema", "kriterij", "filtr",
-    "vise ", "više ", "za 20", "starij",
-]
 
 
 # ---------------------------------------------------------------------------

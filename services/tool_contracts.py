@@ -49,6 +49,10 @@ class ParameterDefinition(BaseModel):
         default=None,
         description="Filter format pattern, e.g., '{name}({operator}){value}' or 'OData'"
     )
+    filter_template: Optional[str] = Field(
+        default=None,
+        description="Bootstrap template using {context_key} placeholders, e.g. 'Phone(=){phone}'."
+    )
 
     @field_validator('location')
     @classmethod
@@ -85,6 +89,10 @@ class UnifiedToolDefinition(BaseModel):
     output_keys: List[str] = Field(
         default_factory=list,
         description="Keys this tool returns (e.g., ['id', 'name'])"
+    )
+    output_key_aliases: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Per-tool semantic rename of response keys, e.g. {'Id': 'VehicleId'}."
     )
 
     # Categorization

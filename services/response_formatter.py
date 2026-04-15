@@ -111,8 +111,13 @@ class ResponseFormatter:
         for pattern, emoji in EMOJI_PATTERNS.items()
     ]
 
-    def __init__(self) -> None:
-        self._current_query: Optional[str] = None
+    # Pre-compiled patterns for field name humanization and date detection
+    _CAMEL_CASE_RE = re.compile(r'([A-Z])')
+    _DATE_PATTERNS = [
+        re.compile(r'^\d{4}-\d{2}-\d{2}'),   # YYYY-MM-DD
+        re.compile(r'^\d{2}\.\d{2}\.\d{4}'),  # DD.MM.YYYY
+        re.compile(r'^\d{2}/\d{2}/\d{4}'),    # DD/MM/YYYY
+    ]
 
     def format_result(
         self,
@@ -132,8 +137,6 @@ class ResponseFormatter:
             Formatted string for WhatsApp
         """
         with trace_span(_tracer, "response_formatter.format_result", {"has_tool": tool is not None, "success": result.get("success", False)}) as span:
-            self._current_query = user_query
-
             # Handle errors
             if not result.get("success"):
                 error = result.get("error", "Nepoznata greška")
@@ -423,7 +426,7 @@ class ResponseFormatter:
             return "Polje"
 
         # Split CamelCase
-        name = re.sub(r'([A-Z])', r' \1', field_name)
+        name = self._CAMEL_CASE_RE.sub(r' \1', field_name)
         # Split snake_case
         name = name.replace('_', ' ')
         # Clean up
@@ -501,14 +504,7 @@ class ResponseFormatter:
         if not value or not isinstance(value, str):
             return False
 
-        # ISO format patterns
-        date_patterns = [
-            r'^\d{4}-\d{2}-\d{2}',  # YYYY-MM-DD
-            r'^\d{2}\.\d{2}\.\d{4}',  # DD.MM.YYYY
-            r'^\d{2}/\d{2}/\d{4}',  # DD/MM/YYYY or MM/DD/YYYY
-        ]
-
-        return any(re.match(p, value) for p in date_patterns)
+        return any(p.match(value) for p in self._DATE_PATTERNS)
 
     def _format_date(self, value: str) -> str:
         """Format date/datetime to Croatian locale."""

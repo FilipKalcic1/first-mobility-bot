@@ -1,0 +1,2333 @@
+{
+  "ranks": [
+    {
+      "tool_id": "delete_Cases_id",
+      "query": "Želim izbrisati određenu stavku na temelju njenog identifikatora.",
+      "rank": 64,
+      "score": 0.8199,
+      "top1_tool": "delete_Persons_id",
+      "top1_score": 0.8523
+    },
+    {
+      "tool_id": "delete_Cases_id",
+      "query": "Trebam se riješiti jednog od starih predmeta s njegovim ID-jem.",
+      "rank": 65,
+      "score": 0.7948,
+      "top1_tool": "get_VehiclesHistoricalEntries_id",
+      "top1_score": 0.8192
+    },
+    {
+      "tool_id": "delete_Cases_id",
+      "query": "Možeš li obrisati stavku koja je zastarjela koristeći njen jedinstveni ključ?",
+      "rank": 12,
+      "score": 0.8126,
+      "top1_tool": "delete_DashboardItems_id",
+      "top1_score": 0.8244
+    },
+    {
+      "tool_id": "delete_EquipmentCalendar_id_documents_documentId",
+      "query": "Molim vas da trajno maknete potvrdu koja se odnosi na ovu stavku iz hodograma.",
+      "rank": 398,
+      "score": 0.7813,
+      "top1_tool": "get_Lookup_PeriodicActivityStatuses",
+      "top1_score": 0.814
+    },
+    {
+      "tool_id": "delete_EquipmentCalendar_id_documents_documentId",
+      "query": "Želim izbrisati ispravu povezanu s stavkom u mom planu termina.",
+      "rank": 17,
+      "score": 0.8313,
+      "top1_tool": "delete_Trips_id_documents_documentId",
+      "top1_score": 0.8443
+    },
+    {
+      "tool_id": "delete_EquipmentCalendar_id_documents_documentId",
+      "query": "Moliću te da izbrišeš zapisnik koji je vezan za predmet.",
+      "rank": 57,
+      "score": 0.8174,
+      "top1_tool": "delete_Cases_id_documents_documentId",
+      "top1_score": 0.858
+    },
+    {
+      "tool_id": "delete_EquipmentTypes_DeleteByCriteria",
+      "query": "Zanima me kako da se oslobodim raznih skupina instrumenta koji ispunjavaju zadan",
+      "rank": 159,
+      "score": 0.7931,
+      "top1_tool": "get_Lookup_SchedulingModelId",
+      "top1_score": 0.8193
+    },
+    {
+      "tool_id": "delete_EquipmentTypes_DeleteByCriteria",
+      "query": "Trebam izbrisati razne vrste instrumenta koji ispunjavaju zadane uvjete.",
+      "rank": 1,
+      "score": 0.8484,
+      "top1_tool": "delete_EquipmentTypes_DeleteByCriteria",
+      "top1_score": 0.8484
+    },
+    {
+      "tool_id": "delete_EquipmentTypes_DeleteByCriteria",
+      "query": "Molim te da mi pomogneš s uklanjanjem raznih prosječnih sredstava koja zadovolja",
+      "rank": 44,
+      "score": 0.8105,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8327
+    },
+    {
+      "tool_id": "delete_Equipment_DeleteByCriteria",
+      "query": "Trebam eliminirati razne sprave koje ne zadovoljavaju specifične kriterije.",
+      "rank": 6,
+      "score": 0.8264,
+      "top1_tool": "delete_DocumentTypes_DeleteByCriteria",
+      "top1_score": 0.8388
+    },
+    {
+      "tool_id": "delete_Equipment_DeleteByCriteria",
+      "query": "Trebam eliminirati razne aparate koji ispunjavaju specifične zahtjeve.",
+      "rank": 1,
+      "score": 0.8482,
+      "top1_tool": "delete_Equipment_DeleteByCriteria",
+      "top1_score": 0.8482
+    },
+    {
+      "tool_id": "delete_Equipment_DeleteByCriteria",
+      "query": "Treba mi pomoć da eliminiram višak tehničkih sredstava koja ne ispunjavaju posta",
+      "rank": 1,
+      "score": 0.842,
+      "top1_tool": "delete_Equipment_DeleteByCriteria",
+      "top1_score": 0.842
+    },
+    {
+      "tool_id": "delete_Equipment_id_documents_documentId",
+      "query": "Želim trajno izbrisati ispravu koja se odnosi na moje motorno sredstvo.",
+      "rank": 56,
+      "score": 0.8326,
+      "top1_tool": "delete_Vehicles_id_documents_documentId",
+      "top1_score": 0.8742
+    },
+    {
+      "tool_id": "delete_Equipment_id_documents_documentId",
+      "query": "Zanima me kako da obrišem zapis koji pripada mojoj mehaničkoj jedinici.",
+      "rank": 5,
+      "score": 0.825,
+      "top1_tool": "delete_VehiclesHistoricalEntries_id",
+      "top1_score": 0.8336
+    },
+    {
+      "tool_id": "delete_Equipment_id_documents_documentId",
+      "query": "Želim trajno izbrisati spis vezan uz određeno motorno sredstvo.",
+      "rank": 3,
+      "score": 0.8858,
+      "top1_tool": "delete_Vehicles_id_documents_documentId",
+      "top1_score": 0.8968
+    },
+    {
+      "tool_id": "delete_Expenses_id_documents_documentId",
+      "query": "Želim da se izbaci spis koji se odnosi na određene izdatke.",
+      "rank": 4,
+      "score": 0.8517,
+      "top1_tool": "delete_Expenses_id",
+      "top1_score": 0.8593
+    },
+    {
+      "tool_id": "delete_Expenses_id_documents_documentId",
+      "query": "Želim da se riješim isprave koja više nije potrebna.",
+      "rank": 23,
+      "score": 0.8021,
+      "top1_tool": "get_Master",
+      "top1_score": 0.8135
+    },
+    {
+      "tool_id": "delete_Expenses_id_documents_documentId",
+      "query": "Trebam se osloboditi obrazca koji više nije točan.",
+      "rank": 18,
+      "score": 0.8037,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8193
+    },
+    {
+      "tool_id": "delete_LatestEquipmentCalendar_DeleteByCriteria",
+      "query": "Molim te da obrišeš najnovije unose iz plana termina koji zadovoljavaju postavlj",
+      "rank": 11,
+      "score": 0.8251,
+      "top1_tool": "delete_LatestVehicleContracts_DeleteByCriteria",
+      "top1_score": 0.8402
+    },
+    {
+      "tool_id": "delete_LatestEquipmentCalendar_DeleteByCriteria",
+      "query": "Trebam da se izbrišu elementi iz agende koji ispunjavaju specifične kriterije.",
+      "rank": 36,
+      "score": 0.8199,
+      "top1_tool": "delete_PeriodicActivities_DeleteByCriteria",
+      "top1_score": 0.835
+    },
+    {
+      "tool_id": "delete_LatestEquipmentCalendar_DeleteByCriteria",
+      "query": "Zamoli asistenta da se uklone unos koji su se posljednje pojavili u hodogramu na",
+      "rank": 14,
+      "score": 0.8365,
+      "top1_tool": "delete_LatestPersonPeriodicActivities_DeleteByCriteria",
+      "top1_score": 0.8514
+    },
+    {
+      "tool_id": "delete_OrgUnits",
+      "query": "Želim izbrisati više upravnih cjelina u isto vrijeme.",
+      "rank": 1,
+      "score": 0.8585,
+      "top1_tool": "delete_OrgUnits",
+      "top1_score": 0.8585
+    },
+    {
+      "tool_id": "delete_OrgUnits",
+      "query": "Možeš li mi pomoći da se riješim više administrativnih segmenata?",
+      "rank": 1,
+      "score": 0.8269,
+      "top1_tool": "delete_OrgUnits",
+      "top1_score": 0.8269
+    },
+    {
+      "tool_id": "delete_OrgUnits",
+      "query": "Želim izbrisati više radnih skupina iz sustava.",
+      "rank": 7,
+      "score": 0.8373,
+      "top1_tool": "delete_Teams",
+      "top1_score": 0.8484
+    },
+    {
+      "tool_id": "delete_PeriodicActivitiesSchedules",
+      "query": "Trebam izbrisati više unosa iz agende.",
+      "rank": 25,
+      "score": 0.8025,
+      "top1_tool": "get_Master",
+      "top1_score": 0.8219
+    },
+    {
+      "tool_id": "delete_PeriodicActivitiesSchedules",
+      "query": "Molim te da makneš grupu stavki iz programa.",
+      "rank": 24,
+      "score": 0.801,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8191
+    },
+    {
+      "tool_id": "delete_PeriodicActivitiesSchedules",
+      "query": "Želim da se više točaka izbriše iz hodograma.",
+      "rank": 1,
+      "score": 0.8245,
+      "top1_tool": "delete_PeriodicActivitiesSchedules",
+      "top1_score": 0.8245
+    },
+    {
+      "tool_id": "delete_PeriodicActivitiesSchedules_DeleteByCriteria",
+      "query": "Želim izbrisati grupu termina temeljenom na specifičnim parametrima filtriranja.",
+      "rank": 9,
+      "score": 0.8426,
+      "top1_tool": "delete_Teams_DeleteByCriteria",
+      "top1_score": 0.8669
+    },
+    {
+      "tool_id": "delete_PeriodicActivitiesSchedules_DeleteByCriteria",
+      "query": "Kako da se oslobodim svih termina koji su u skladu s definiranim mjerilima?",
+      "rank": 47,
+      "score": 0.8068,
+      "top1_tool": "get_Lookup_SchedulingModelId",
+      "top1_score": 0.8316
+    },
+    {
+      "tool_id": "delete_PeriodicActivitiesSchedules_DeleteByCriteria",
+      "query": "Tražim da se eliminiraju svi unosi iz hodograma koji odgovaraju filtrima.",
+      "rank": 17,
+      "score": 0.8159,
+      "top1_tool": "delete_VehiclesHistoricalEntries_DeleteByCriteria",
+      "top1_score": 0.8282
+    },
+    {
+      "tool_id": "delete_PeriodicActivityTypes_id",
+      "query": "Želim da se izbriše određena kategorija rasporeda po ID-u.",
+      "rank": 27,
+      "score": 0.8622,
+      "top1_tool": "delete_VehicleTypes_id",
+      "top1_score": 0.885
+    },
+    {
+      "tool_id": "delete_PeriodicActivityTypes_id",
+      "query": "Trebam izbrisati određenu klasifikaciju termina koja više nije potrebna.",
+      "rank": 21,
+      "score": 0.8266,
+      "top1_tool": "delete_DocumentTypes_DeleteByCriteria",
+      "top1_score": 0.8435
+    },
+    {
+      "tool_id": "delete_PeriodicActivityTypes_id",
+      "query": "Možeš li mi pomoći da se oslobodim jedne vrste rasporeda na temelju ID-a?",
+      "rank": 120,
+      "score": 0.8049,
+      "top1_tool": "delete_Persons_id",
+      "top1_score": 0.8278
+    },
+    {
+      "tool_id": "delete_PersonActivityTypes_id_documents_documentId",
+      "query": "Molim vas da obrišete akt koji se odnosi na tu vrstu zaduženja.",
+      "rank": 2,
+      "score": 0.8483,
+      "top1_tool": "delete_PeriodicActivityTypes_id_documents_documentId",
+      "top1_score": 0.8518
+    },
+    {
+      "tool_id": "delete_PersonActivityTypes_id_documents_documentId",
+      "query": "Tražim da se makne akt koji je povezan s određenim kategorijama.",
+      "rank": 53,
+      "score": 0.827,
+      "top1_tool": "get_DocumentTypes_id_documents",
+      "top1_score": 0.8487
+    },
+    {
+      "tool_id": "delete_PersonActivityTypes_id_documents_documentId",
+      "query": "Ljubazno molim da se izbriše zapisnik koji se odnosi na određene poslove.",
+      "rank": 46,
+      "score": 0.8262,
+      "top1_tool": "delete_Persons_id_documents_documentId",
+      "top1_score": 0.8486
+    },
+    {
+      "tool_id": "delete_PersonOrgUnits",
+      "query": "Želim da se maknu više odabranih skupina prema filtriranim podacima.",
+      "rank": 78,
+      "score": 0.8103,
+      "top1_tool": "delete_PersonTypes_DeleteByCriteria",
+      "top1_score": 0.8346
+    },
+    {
+      "tool_id": "delete_PersonOrgUnits",
+      "query": "Treba mi gašenje nekoliko poslovnih entiteta koji ispunjavaju uvjete.",
+      "rank": 230,
+      "score": 0.7997,
+      "top1_tool": "get_Lookup_AssignedToId",
+      "top1_score": 0.8275
+    },
+    {
+      "tool_id": "delete_PersonOrgUnits",
+      "query": "Ljubazno te molim da eliminiraš više institucija prema odabranim pravilima.",
+      "rank": 2,
+      "score": 0.8222,
+      "top1_tool": "delete_VehicleContracts_DeleteByCriteria",
+      "top1_score": 0.8237
+    },
+    {
+      "tool_id": "delete_PersonPeriodicActivities",
+      "query": "Treba mi da se oslobodim svih ponavljajućih obveza koje su izgubile važnost.",
+      "rank": 32,
+      "score": 0.8011,
+      "top1_tool": "delete_VehicleContracts",
+      "top1_score": 0.8294
+    },
+    {
+      "tool_id": "delete_PersonPeriodicActivities",
+      "query": "Molim da se uklone svi nevažeći rasporedi koji su ostali u sustavu.",
+      "rank": 39,
+      "score": 0.8101,
+      "top1_tool": "delete_PeriodicActivitiesSchedules",
+      "top1_score": 0.8411
+    },
+    {
+      "tool_id": "delete_PersonPeriodicActivities",
+      "query": "Želim da se uklone sve stare zadatke koji su se ponavljali.",
+      "rank": 13,
+      "score": 0.8131,
+      "top1_tool": "delete_LatestPeriodicActivities",
+      "top1_score": 0.8281
+    },
+    {
+      "tool_id": "delete_PersonTypes",
+      "query": "Molim te da izbrišeš sve navedene tipove članova iz baze podataka.",
+      "rank": 2,
+      "score": 0.8635,
+      "top1_tool": "delete_PersonTypes_DeleteByCriteria",
+      "top1_score": 0.8644
+    },
+    {
+      "tool_id": "delete_PersonTypes",
+      "query": "Trebam da se odjednom eliminiraju razne skupine pojedinaca.",
+      "rank": 48,
+      "score": 0.8015,
+      "top1_tool": "get_Teams",
+      "top1_score": 0.8187
+    },
+    {
+      "tool_id": "delete_PersonTypes",
+      "query": "Želim eliminirati više kategorija pojedinaca odjednom.",
+      "rank": 1,
+      "score": 0.8857,
+      "top1_tool": "delete_PersonTypes",
+      "top1_score": 0.8857
+    },
+    {
+      "tool_id": "delete_PersonTypes_DeleteByCriteria",
+      "query": "Trebam trajno izbaciti različite klase subjekata koja ne ispunjavaju definicije.",
+      "rank": 2,
+      "score": 0.8249,
+      "top1_tool": "delete_Pools_DeleteByCriteria",
+      "top1_score": 0.8276
+    },
+    {
+      "tool_id": "delete_PersonTypes_DeleteByCriteria",
+      "query": "Želim se osloboditi više kategorija pojedinaca temeljenih na specifičnim uvjetim",
+      "rank": 1,
+      "score": 0.8677,
+      "top1_tool": "delete_PersonTypes_DeleteByCriteria",
+      "top1_score": 0.8677
+    },
+    {
+      "tool_id": "delete_PersonTypes_DeleteByCriteria",
+      "query": "Molim te da izbrišeš određene grupe ljudi koji ne ispunjavaju zadane zahtjeve.",
+      "rank": 2,
+      "score": 0.8349,
+      "top1_tool": "delete_TeamMembers_DeleteByCriteria",
+      "top1_score": 0.8405
+    },
+    {
+      "tool_id": "delete_Pools_id_documents_documentId",
+      "query": "Prosim te da izbrišeš jedan zapis iz ove grupe.",
+      "rank": 16,
+      "score": 0.8124,
+      "top1_tool": "delete_Teams_id_documents_documentId",
+      "top1_score": 0.8277
+    },
+    {
+      "tool_id": "delete_Pools_id_documents_documentId",
+      "query": "Mogu li izbrisati određeni spis koji se odnosi na grupu?",
+      "rank": 14,
+      "score": 0.8417,
+      "top1_tool": "delete_Teams_id_documents_documentId",
+      "top1_score": 0.8648
+    },
+    {
+      "tool_id": "delete_Pools_id_documents_documentId",
+      "query": "Kako mogu maknuti akt koji pripada toj kolekciji?",
+      "rank": 114,
+      "score": 0.8077,
+      "top1_tool": "delete_PeriodicActivityTypes_id_documents_documentId",
+      "top1_score": 0.8318
+    },
+    {
+      "tool_id": "delete_Teams",
+      "query": "Želim da se više kolektiva istovremeno izbriše iz sustava.",
+      "rank": 4,
+      "score": 0.8255,
+      "top1_tool": "delete_Pools_DeleteByCriteria",
+      "top1_score": 0.829
+    },
+    {
+      "tool_id": "delete_Teams",
+      "query": "Možeš li izbrisati više suradničkih sastava?",
+      "rank": 2,
+      "score": 0.8532,
+      "top1_tool": "delete_TeamMembers",
+      "top1_score": 0.8542
+    },
+    {
+      "tool_id": "delete_Teams",
+      "query": "Želim da se istovremeno maknu svi organizacijski sklopovi koje ne koristim.",
+      "rank": 35,
+      "score": 0.8066,
+      "top1_tool": "get_Lookup_OrgUnitId",
+      "top1_score": 0.829
+    },
+    {
+      "tool_id": "delete_TenantPermissions_id_documents_documentId",
+      "query": "Želim iz sustava izbaciti određeni spis koji više nije potreban.",
+      "rank": 27,
+      "score": 0.829,
+      "top1_tool": "delete_Persons_id_documents_documentId",
+      "top1_score": 0.8529
+    },
+    {
+      "tool_id": "delete_TenantPermissions_id_documents_documentId",
+      "query": "Trebam da se izbriše akt koji je zastario iz naših evidencija.",
+      "rank": 73,
+      "score": 0.815,
+      "top1_tool": "delete_PersonPeriodicActivities_id_documents_documentId",
+      "top1_score": 0.8383
+    },
+    {
+      "tool_id": "delete_TenantPermissions_id_documents_documentId",
+      "query": "Molim vas da mi pomognete s uklanjanjem potvrde koja nam više ne treba.",
+      "rank": 24,
+      "score": 0.8029,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8294
+    },
+    {
+      "tool_id": "delete_TripTypes_id_documents_documentId",
+      "query": "Molim te, izbjegni prisustvo tog akta u registru.",
+      "rank": 101,
+      "score": 0.7781,
+      "top1_tool": "delete_Cases",
+      "top1_score": 0.8026
+    },
+    {
+      "tool_id": "delete_TripTypes_id_documents_documentId",
+      "query": "Trebam da se taj zapisnik obriše iz arhive.",
+      "rank": 57,
+      "score": 0.8191,
+      "top1_tool": "delete_VehiclesHistoricalEntries_id_documents_documentId",
+      "top1_score": 0.849
+    },
+    {
+      "tool_id": "delete_TripTypes_id_documents_documentId",
+      "query": "Trebam da se iz sustava makne potvrda vezana uz put.",
+      "rank": 36,
+      "score": 0.8117,
+      "top1_tool": "get_Trips_id_documents_documentId",
+      "top1_score": 0.8496
+    },
+    {
+      "tool_id": "delete_Vehicles",
+      "query": "Želim se riješiti nekoliko motornih sredstava iz sustava.",
+      "rank": 1,
+      "score": 0.8441,
+      "top1_tool": "delete_Vehicles",
+      "top1_score": 0.8441
+    },
+    {
+      "tool_id": "delete_Vehicles",
+      "query": "Molim te da makneš nekoliko kombija iz evidencije.",
+      "rank": 53,
+      "score": 0.8011,
+      "top1_tool": "get_Vehicles_id_documents_documentId",
+      "top1_score": 0.8238
+    },
+    {
+      "tool_id": "delete_Vehicles",
+      "query": "Želim se riješiti više motornih sredstava odjednom.",
+      "rank": 1,
+      "score": 0.8376,
+      "top1_tool": "delete_Vehicles",
+      "top1_score": 0.8376
+    },
+    {
+      "tool_id": "delete_VehiclesHistoricalEntries_id_documents_documentId",
+      "query": "Želim da izbrišeš spis koji je povezan s mojim motornim sredstvom.",
+      "rank": 1,
+      "score": 0.8631,
+      "top1_tool": "delete_VehiclesHistoricalEntries_id_documents_documentId",
+      "top1_score": 0.8631
+    },
+    {
+      "tool_id": "delete_VehiclesHistoricalEntries_id_documents_documentId",
+      "query": "Trebam izbrisati akt koji je vezan uz povijesnu evidenciju mog limuzine.",
+      "rank": 1,
+      "score": 0.856,
+      "top1_tool": "delete_VehiclesHistoricalEntries_id_documents_documentId",
+      "top1_score": 0.856
+    },
+    {
+      "tool_id": "delete_VehiclesHistoricalEntries_id_documents_documentId",
+      "query": "Želim da se poništi obrazac vezan uz povijesne unose mojih limuzina.",
+      "rank": 2,
+      "score": 0.8494,
+      "top1_tool": "get_VehiclesHistoricalEntries_id_documents",
+      "top1_score": 0.8501
+    },
+    {
+      "tool_id": "delete_Vehicles_id_documents_documentId",
+      "query": "Molim te da izbrišeš potvrdu vezanu uz moje motorno sredstvo.",
+      "rank": 5,
+      "score": 0.8482,
+      "top1_tool": "delete_Equipment_id_documents_documentId",
+      "top1_score": 0.8521
+    },
+    {
+      "tool_id": "delete_Vehicles_id_documents_documentId",
+      "query": "Molim za brisanje zapisnika koji je povezan s mojim kombijem.",
+      "rank": 3,
+      "score": 0.8407,
+      "top1_tool": "delete_VehiclesHistoricalEntries_id_documents_documentId",
+      "top1_score": 0.8496
+    },
+    {
+      "tool_id": "delete_Vehicles_id_documents_documentId",
+      "query": "Želim da se izbaci spis koji se odnosi na to prijevozno sredstvo.",
+      "rank": 8,
+      "score": 0.8723,
+      "top1_tool": "delete_VehiclesHistoricalEntries",
+      "top1_score": 0.8783
+    },
+    {
+      "tool_id": "get_Companies_Agg",
+      "query": "Želim saznati vrijednosti koje se izračunavaju za poslovne subjekte.",
+      "rank": 40,
+      "score": 0.8182,
+      "top1_tool": "get_Lookup_ExpenseGroupId",
+      "top1_score": 0.8465
+    },
+    {
+      "tool_id": "get_Companies_Agg",
+      "query": "Možeš li mi prikazati ukupne rezultate za organizacije prema zadanim kriterijima",
+      "rank": 81,
+      "score": 0.8153,
+      "top1_tool": "get_OrgUnits_Agg",
+      "top1_score": 0.8482
+    },
+    {
+      "tool_id": "get_Companies_Agg",
+      "query": "Kako se izračunavaju zbirne vrijednosti za različite entitete?",
+      "rank": 11,
+      "score": 0.8302,
+      "top1_tool": "get_OrgUnits_Agg",
+      "top1_score": 0.8402
+    },
+    {
+      "tool_id": "get_Companies_id_metadata",
+      "query": "Kako mogu pristupiti podacima o karakteristikama entiteta koristeći njegov jedin",
+      "rank": 132,
+      "score": 0.8117,
+      "top1_tool": "get_Master_id",
+      "top1_score": 0.8584
+    },
+    {
+      "tool_id": "get_Companies_id_metadata",
+      "query": "Trebam izvršiti pregled metapodataka za entitet sa specifičnim identifikacijskim",
+      "rank": 275,
+      "score": 0.8014,
+      "top1_tool": "get_Master_id",
+      "top1_score": 0.8618
+    },
+    {
+      "tool_id": "get_Companies_id_metadata",
+      "query": "Možeš li mi pružiti uvid u atribute entiteta prema zadanom ID-u?",
+      "rank": 260,
+      "score": 0.8015,
+      "top1_tool": "get_Persons_id",
+      "top1_score": 0.8514
+    },
+    {
+      "tool_id": "get_DashboardItems_id",
+      "query": "Želim pregledati određenu komponentu na upravljačkom sučelju.",
+      "rank": 4,
+      "score": 0.822,
+      "top1_tool": "get_DashboardItems",
+      "top1_score": 0.837
+    },
+    {
+      "tool_id": "get_DashboardItems_id",
+      "query": "Možeš li mi dati informacije o specifičnom elementu u radnom prikazu?",
+      "rank": 4,
+      "score": 0.8253,
+      "top1_tool": "get_Lookup_VehicleId_id",
+      "top1_score": 0.8321
+    },
+    {
+      "tool_id": "get_DashboardItems_id",
+      "query": "Trebam pristupiti jednom resursu unutar prikaza podataka.",
+      "rank": 96,
+      "score": 0.8019,
+      "top1_tool": "get_Master",
+      "top1_score": 0.8418
+    },
+    {
+      "tool_id": "get_DocumentTypes_id",
+      "query": "Molim te da prikažeš ispravu prema zadnjem ID-u koji imam.",
+      "rank": 36,
+      "score": 0.8168,
+      "top1_tool": "get_LatestVehicleContracts_id",
+      "top1_score": 0.8352
+    },
+    {
+      "tool_id": "get_DocumentTypes_id",
+      "query": "Želim pregledati akt koji odgovara određenom ključu.",
+      "rank": 23,
+      "score": 0.834,
+      "top1_tool": "get_PeriodicActivityTypes_id_documents_documentId",
+      "top1_score": 0.8517
+    },
+    {
+      "tool_id": "get_DocumentTypes_id",
+      "query": "Možeš li mi pokazati spis koji se odnosi na taj broj?",
+      "rank": 13,
+      "score": 0.8352,
+      "top1_tool": "get_DocumentTypes_id_documents",
+      "top1_score": 0.8546
+    },
+    {
+      "tool_id": "get_DocumentTypes_id_documents_documentId_thumb",
+      "query": "Želim vidjeti vizualizaciju akta koji pripada određenim kategorijama.",
+      "rank": 7,
+      "score": 0.8277,
+      "top1_tool": "get_Lookup_CategoryId",
+      "top1_score": 0.846
+    },
+    {
+      "tool_id": "get_DocumentTypes_id_documents_documentId_thumb",
+      "query": "Zanima me kako izgleda miniatura jednog spisa iz različitih grupa.",
+      "rank": 28,
+      "score": 0.7933,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8093
+    },
+    {
+      "tool_id": "get_DocumentTypes_id_documents_documentId_thumb",
+      "query": "Trebam pregledati minijaturu jednog obrasca iz odabrane kategorije.",
+      "rank": 10,
+      "score": 0.8047,
+      "top1_tool": "get_Lookup_CategoryId",
+      "top1_score": 0.8152
+    },
+    {
+      "tool_id": "get_Equipment",
+      "query": "Zanima me pregled svih strojeva uz opciju filtriranja i podjele na stranice.",
+      "rank": 3,
+      "score": 0.8587,
+      "top1_tool": "get_Equipment_ProjectTo",
+      "top1_score": 0.8646
+    },
+    {
+      "tool_id": "get_Equipment",
+      "query": "Trebam informacije o svim aparaturama, uz mogućnost sortiranja i paginacije.",
+      "rank": 2,
+      "score": 0.8473,
+      "top1_tool": "get_Equipment_ProjectTo",
+      "top1_score": 0.8492
+    },
+    {
+      "tool_id": "get_Equipment",
+      "query": "Možeš li mi prikazati sve instrumente s opcijama za razvrstavanje i stranice?",
+      "rank": 4,
+      "score": 0.8332,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8368
+    },
+    {
+      "tool_id": "get_EquipmentCalendarOnPersonVehicle_on_Agg",
+      "query": "Trebam prikaz sažetka za motorna sredstva u rasporedu.",
+      "rank": 115,
+      "score": 0.8112,
+      "top1_tool": "get_Lookup_SchedulingModelId",
+      "top1_score": 0.84
+    },
+    {
+      "tool_id": "get_EquipmentCalendarOnPersonVehicle_on_Agg",
+      "query": "Možeš li mi prikazati agregirane informacije o prijevoznim sredstvima i planu te",
+      "rank": 2,
+      "score": 0.8625,
+      "top1_tool": "get_VehiclesAssignmentsOverview_on_Agg",
+      "top1_score": 0.8634
+    },
+    {
+      "tool_id": "get_EquipmentCalendarOnPersonVehicle_on_Agg",
+      "query": "Molim te da mi daš pregled prosječnih podataka o planiranju i limuzinama.",
+      "rank": 5,
+      "score": 0.8315,
+      "top1_tool": "get_VehiclesMonthlyExpenses_id_metadata",
+      "top1_score": 0.8382
+    },
+    {
+      "tool_id": "get_EquipmentCalendarOn_on_GroupBy",
+      "query": "Kako mogu dobiti informacije o stavkama organiziranim po hodogramu za specifičan",
+      "rank": 15,
+      "score": 0.8413,
+      "top1_tool": "get_VehicleCalendar_id_documents_documentId",
+      "top1_score": 0.8551
+    },
+    {
+      "tool_id": "get_EquipmentCalendarOn_on_GroupBy",
+      "query": "Želim vidjeti raspored povezanih stavki za taj dan koristeći dostupne kriterije.",
+      "rank": 3,
+      "score": 0.8556,
+      "top1_tool": "get_AvailabilityProjection",
+      "top1_score": 0.8588
+    },
+    {
+      "tool_id": "get_EquipmentCalendarOn_on_GroupBy",
+      "query": "Kako mogu dobiti uvid u klasificirane informacije za taj rezervacijski plan?",
+      "rank": 16,
+      "score": 0.8398,
+      "top1_tool": "get_VehicleCalendar_id_documents_documentId",
+      "top1_score": 0.8617
+    },
+    {
+      "tool_id": "get_EquipmentCalendar_id",
+      "query": "Zanima me plan termina za to motorno sredstvo.",
+      "rank": 19,
+      "score": 0.8733,
+      "top1_tool": "get_VehicleCalendar_id_metadata",
+      "top1_score": 0.8864
+    },
+    {
+      "tool_id": "get_EquipmentCalendar_id",
+      "query": "Možeš li mi prikazati hodogram vezan za ovu ispravnu stavku?",
+      "rank": 27,
+      "score": 0.8567,
+      "top1_tool": "get_VehicleCalendar_id_metadata",
+      "top1_score": 0.8696
+    },
+    {
+      "tool_id": "get_EquipmentCalendar_id",
+      "query": "Treba mi pregled rezervacijskog plana za ovo vozilo.",
+      "rank": 105,
+      "score": 0.8147,
+      "top1_tool": "post_Booking",
+      "top1_score": 0.8537
+    },
+    {
+      "tool_id": "get_EquipmentTypes_id_documents_documentId_thumb",
+      "query": "Možeš li mi poslati sliku isprave koja se odnosi na određeni tip motornih sredst",
+      "rank": 9,
+      "score": 0.8212,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8316
+    },
+    {
+      "tool_id": "get_EquipmentTypes_id_documents_documentId_thumb",
+      "query": "Molim te, daj mi vizualni prikaz akta povezanog s određenim prijevoznim sredstvo",
+      "rank": 286,
+      "score": 0.796,
+      "top1_tool": "get_Vehicles_id_documents",
+      "top1_score": 0.8401
+    },
+    {
+      "tool_id": "get_EquipmentTypes_id_documents_documentId_thumb",
+      "query": "Trebam da mi prikažeš sliku akta koja je povezana s određenim modelom.",
+      "rank": 82,
+      "score": 0.813,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8394
+    },
+    {
+      "tool_id": "get_ExpenseTypes",
+      "query": "Možeš li mi pokazati sve kategorije financijskih obveza?",
+      "rank": 48,
+      "score": 0.8176,
+      "top1_tool": "get_VehicleContracts",
+      "top1_score": 0.8738
+    },
+    {
+      "tool_id": "get_ExpenseTypes",
+      "query": "Mogu li vidjeti sve vrste trošenja na temelju određenih parametara?",
+      "rank": 1,
+      "score": 0.8493,
+      "top1_tool": "get_ExpenseTypes",
+      "top1_score": 0.8493
+    },
+    {
+      "tool_id": "get_ExpenseTypes",
+      "query": "Možete li mi pokazati sve kategorije trošenja koje postoje u sustavu?",
+      "rank": 2,
+      "score": 0.8564,
+      "top1_tool": "get_Lookup_ExpenseCategories",
+      "top1_score": 0.8582
+    },
+    {
+      "tool_id": "get_Expenses_Agg",
+      "query": "Zanima me pregled minimalnih i maksimalnih stavki u vezi s iznosima.",
+      "rank": 1,
+      "score": 0.8572,
+      "top1_tool": "get_Expenses_Agg",
+      "top1_score": 0.8572
+    },
+    {
+      "tool_id": "get_Expenses_Agg",
+      "query": "Možeš li mi dati uvid u sve agregirane informacije vezane uz financijske stavke?",
+      "rank": 1,
+      "score": 0.8585,
+      "top1_tool": "get_Expenses_Agg",
+      "top1_score": 0.8585
+    },
+    {
+      "tool_id": "get_Expenses_Agg",
+      "query": "Želim pregledati agregirane podatke o iznosima koji uključuju najniže i najviše ",
+      "rank": 6,
+      "score": 0.8727,
+      "top1_tool": "get_Master_Agg",
+      "top1_score": 0.886
+    },
+    {
+      "tool_id": "get_Expenses_ProjectTo",
+      "query": "Možeš li mi dostaviti informacije o iznosima za taj specifični plan?",
+      "rank": 6,
+      "score": 0.8222,
+      "top1_tool": "get_VehicleContracts_id",
+      "top1_score": 0.8307
+    },
+    {
+      "tool_id": "get_Expenses_ProjectTo",
+      "query": "Trebam pregledati stavke koje se odnose na moj trenutni zadatak.",
+      "rank": 74,
+      "score": 0.8177,
+      "top1_tool": "get_Lookup_AssignedToId",
+      "top1_score": 0.8451
+    },
+    {
+      "tool_id": "get_Expenses_ProjectTo",
+      "query": "Molim te da mi prikažeš sve relevantne stavke za moju aktivnost.",
+      "rank": 197,
+      "score": 0.799,
+      "top1_tool": "get_Lookup_ActivityStatusId",
+      "top1_score": 0.847
+    },
+    {
+      "tool_id": "get_LatestMileageReports",
+      "query": "Mogu li dobiti pregled svih najnovijih podataka o potrošnji vozila?",
+      "rank": 64,
+      "score": 0.8376,
+      "top1_tool": "get_VehiclesMonthlyExpenses",
+      "top1_score": 0.8638
+    },
+    {
+      "tool_id": "get_LatestMileageReports",
+      "query": "Trebam informacije o svim nedavnim statistikama potrošnje za moj motorni promet.",
+      "rank": 17,
+      "score": 0.8337,
+      "top1_tool": "get_Stats_NumOfVehiclesWithoutMileageSince",
+      "top1_score": 0.8512
+    },
+    {
+      "tool_id": "get_LatestMileageReports",
+      "query": "Kako mogu pregledati sve nedavne analize vožnje za svoje prijevozno sredstvo?",
+      "rank": 55,
+      "score": 0.8484,
+      "top1_tool": "get_Stats_NumOfVehiclesWithoutMileageSince",
+      "top1_score": 0.874
+    },
+    {
+      "tool_id": "get_LatestMileageReports_id",
+      "query": "Molim te da mi prikažeš najnoviji prikaz o pređenoj udaljenosti prema zadanom ID",
+      "rank": 1,
+      "score": 0.8524,
+      "top1_tool": "get_LatestMileageReports_id",
+      "top1_score": 0.8524
+    },
+    {
+      "tool_id": "get_LatestMileageReports_id",
+      "query": "Želim dobiti posljednji pregled podataka o mjerenju udaljenosti za određeni klju",
+      "rank": 2,
+      "score": 0.8418,
+      "top1_tool": "get_LatestMileageReports_id_metadata",
+      "top1_score": 0.8483
+    },
+    {
+      "tool_id": "get_LatestMileageReports_id",
+      "query": "Trebam najnoviji zapis o pređenoj udaljenosti za specificirani ključ.",
+      "rank": 6,
+      "score": 0.8168,
+      "top1_tool": "get_Master_id",
+      "top1_score": 0.8304
+    },
+    {
+      "tool_id": "get_LatestVehicleCalendar",
+      "query": "Molim te da mi prikažeš sve dostupne informacije o najnovijim prijevoznim sredst",
+      "rank": 1,
+      "score": 0.8592,
+      "top1_tool": "get_LatestVehicleCalendar",
+      "top1_score": 0.8592
+    },
+    {
+      "tool_id": "get_LatestVehicleCalendar",
+      "query": "Želim dobiti pregled svih aktuelnih motornih sredstava s planom termina.",
+      "rank": 12,
+      "score": 0.8297,
+      "top1_tool": "get_Equipment_Available_from_to",
+      "top1_score": 0.8412
+    },
+    {
+      "tool_id": "get_LatestVehicleCalendar",
+      "query": "Možeš li mi pokazati sve nove limuzine prema planu događanja?",
+      "rank": 3,
+      "score": 0.8222,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8262
+    },
+    {
+      "tool_id": "get_Lookup_EntityTypes",
+      "query": "Možeš li mi dati popis svih vrsta objekata?",
+      "rank": 46,
+      "score": 0.8094,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8374
+    },
+    {
+      "tool_id": "get_Lookup_EntityTypes",
+      "query": "Želim saznati koji su dostupni razredi jedinica.",
+      "rank": 40,
+      "score": 0.8111,
+      "top1_tool": "get_Lookup_SchedulingModelId",
+      "top1_score": 0.8391
+    },
+    {
+      "tool_id": "get_Lookup_EntityTypes",
+      "query": "Trebam pregledati sve kategorije subjekata koje su mi na raspolaganju.",
+      "rank": 45,
+      "score": 0.822,
+      "top1_tool": "get_Lookup_CategoryId",
+      "top1_score": 0.854
+    },
+    {
+      "tool_id": "get_Lookup_EquipmentTypeId",
+      "query": "Možeš li mi reći koje su vrste tehnike trenutno navedene?",
+      "rank": 6,
+      "score": 0.8151,
+      "top1_tool": "get_EquipmentTypes",
+      "top1_score": 0.8216
+    },
+    {
+      "tool_id": "get_Lookup_EquipmentTypeId",
+      "query": "Tražim popis raznih modela naprava koje imate.",
+      "rank": 3,
+      "score": 0.8435,
+      "top1_tool": "get_Lookup_SchedulingModelId",
+      "top1_score": 0.8506
+    },
+    {
+      "tool_id": "get_Lookup_EquipmentTypeId",
+      "query": "Zanima me koje su kategorije aparata trenutno u ponudi.",
+      "rank": 12,
+      "score": 0.8245,
+      "top1_tool": "get_EquipmentTypes",
+      "top1_score": 0.8421
+    },
+    {
+      "tool_id": "get_Lookup_ExpenseStatuses",
+      "query": "Zanima me pregled svih trenutnih stanja financijskih obaveza.",
+      "rank": 93,
+      "score": 0.8329,
+      "top1_tool": "get_PersonPeriodicActivities_id_documents",
+      "top1_score": 0.8686
+    },
+    {
+      "tool_id": "get_Lookup_ExpenseStatuses",
+      "query": "Molim te, daj mi uvid u sve oznake potrošnje koje su trenutno aktivne.",
+      "rank": 86,
+      "score": 0.816,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8516
+    },
+    {
+      "tool_id": "get_Lookup_ExpenseStatuses",
+      "query": "Želim provjeriti koje su sve oznake dostupne za financijske stavke.",
+      "rank": 3,
+      "score": 0.8443,
+      "top1_tool": "get_Lookup_ExpenseTypeId",
+      "top1_score": 0.853
+    },
+    {
+      "tool_id": "get_Lookup_PersonActivityCategories",
+      "query": "Zanima me pregled svih vrsta poslova koji se odnose na ljude.",
+      "rank": 6,
+      "score": 0.8402,
+      "top1_tool": "get_Persons_id_documents",
+      "top1_score": 0.8495
+    },
+    {
+      "tool_id": "get_Lookup_PersonActivityCategories",
+      "query": "Možeš li mi pokazati sve klase angažmana za članove?",
+      "rank": 6,
+      "score": 0.8053,
+      "top1_tool": "get_WhatCanIDo",
+      "top1_score": 0.8186
+    },
+    {
+      "tool_id": "get_Lookup_PersonActivityCategories",
+      "query": "Možeš li mi reći sve vrste djelatnosti koje provode pojedinci?",
+      "rank": 14,
+      "score": 0.8315,
+      "top1_tool": "get_PersonPeriodicActivities_id_documents",
+      "top1_score": 0.8396
+    },
+    {
+      "tool_id": "get_Lookup_PoolId",
+      "query": "Možeš li mi pružiti informacije o identifikatorima i nazivima vodenih objekata?",
+      "rank": 8,
+      "score": 0.8221,
+      "top1_tool": "get_Lookup_VehiclePoolId",
+      "top1_score": 0.8359
+    },
+    {
+      "tool_id": "get_Lookup_PoolId",
+      "query": "Zanima me popis oznaka i naziva za vodoopskrbne sustave.",
+      "rank": 13,
+      "score": 0.8121,
+      "top1_tool": "get_Tags",
+      "top1_score": 0.8197
+    },
+    {
+      "tool_id": "get_Lookup_PoolId",
+      "query": "Molim te da mi prikažeš oznake i nazive za vodenim resursima.",
+      "rank": 8,
+      "score": 0.8092,
+      "top1_tool": "get_Pools_id_documents_documentId",
+      "top1_score": 0.8202
+    },
+    {
+      "tool_id": "get_Lookup_SearchTypes",
+      "query": "Želim provjeriti specifične kategorije upita.",
+      "rank": 12,
+      "score": 0.828,
+      "top1_tool": "get_Lookup_ExpenseCategories",
+      "top1_score": 0.8454
+    },
+    {
+      "tool_id": "get_Lookup_SearchTypes",
+      "query": "Možeš li mi reći koje su opcije za pretragu?",
+      "rank": 2,
+      "score": 0.845,
+      "top1_tool": "get_WhatCanIDo",
+      "top1_score": 0.8468
+    },
+    {
+      "tool_id": "get_Lookup_SearchTypes",
+      "query": "Zanima me koji su dostupni oblikovi istraživanja.",
+      "rank": 2,
+      "score": 0.8407,
+      "top1_tool": "get_Lookup_SchedulingModelId",
+      "top1_score": 0.8419
+    },
+    {
+      "tool_id": "get_Lookup_TimeZones",
+      "query": "Mogu li dobiti pregled svih vremenskih odrednica?",
+      "rank": 1,
+      "score": 0.8489,
+      "top1_tool": "get_Lookup_TimeZones",
+      "top1_score": 0.8489
+    },
+    {
+      "tool_id": "get_Lookup_TimeZones",
+      "query": "Trebam popis svih vremenskih odrednica u sustavu.",
+      "rank": 1,
+      "score": 0.8539,
+      "top1_tool": "get_Lookup_TimeZones",
+      "top1_score": 0.8539
+    },
+    {
+      "tool_id": "get_Lookup_TimeZones",
+      "query": "Možeš li mi pokazati sve varijacije satnih područja?",
+      "rank": 1,
+      "score": 0.8306,
+      "top1_tool": "get_Lookup_TimeZones",
+      "top1_score": 0.8306
+    },
+    {
+      "tool_id": "get_Master",
+      "query": "Mogu li dobiti sve relevantne stavke vezane uz glavne informacije?",
+      "rank": 3,
+      "score": 0.8335,
+      "top1_tool": "get_WhatCanIDo",
+      "top1_score": 0.848
+    },
+    {
+      "tool_id": "get_Master",
+      "query": "Želim pregledati sve elemente koji se odnose na ključne aspekte.",
+      "rank": 1,
+      "score": 0.8435,
+      "top1_tool": "get_Master",
+      "top1_score": 0.8435
+    },
+    {
+      "tool_id": "get_Master",
+      "query": "Zanima me uvid u sve relevantne informacije vezane uz centralne aspekte.",
+      "rank": 5,
+      "score": 0.8119,
+      "top1_tool": "get_Lookup_CostCenterId",
+      "top1_score": 0.8257
+    },
+    {
+      "tool_id": "get_Metadata_Agg",
+      "query": "Možeš mi reći koje su agregirane vrijednosti za određene parametre?",
+      "rank": 25,
+      "score": 0.8464,
+      "top1_tool": "get_Master_Agg",
+      "top1_score": 0.8776
+    },
+    {
+      "tool_id": "get_Metadata_Agg",
+      "query": "Želim dobiti sažete rezultate na temelju postavljenih filtara.",
+      "rank": 133,
+      "score": 0.8017,
+      "top1_tool": "get_Lookup_VehiclePoolId",
+      "top1_score": 0.8408
+    },
+    {
+      "tool_id": "get_Metadata_Agg",
+      "query": "Pomozi mi da analiziram skup podataka prema odabranim filtrima.",
+      "rank": 89,
+      "score": 0.8205,
+      "top1_tool": "get_Lookup_VehiclePoolId",
+      "top1_score": 0.8467
+    },
+    {
+      "tool_id": "get_Metadata_ProjectTo",
+      "query": "Želim vidjeti sve relevantne elemente za određeni projekt s pripadajućim detalji",
+      "rank": 41,
+      "score": 0.8184,
+      "top1_tool": "get_AvailabilityProjection",
+      "top1_score": 0.8385
+    },
+    {
+      "tool_id": "get_Metadata_ProjectTo",
+      "query": "Kako mogu pristupiti svim informacijama o projektu i njegovim svojstvima?",
+      "rank": 13,
+      "score": 0.8188,
+      "top1_tool": "get_WhatCanIDo",
+      "top1_score": 0.8419
+    },
+    {
+      "tool_id": "get_Metadata_ProjectTo",
+      "query": "Tražim da se prikažu svi relevantni podaci za projekt zajedno s njihovim karakte",
+      "rank": 38,
+      "score": 0.8197,
+      "top1_tool": "get_AvailabilityProjection",
+      "top1_score": 0.8398
+    },
+    {
+      "tool_id": "get_Partners_ProjectTo",
+      "query": "Zanima me lista svih suradničkih odnosa i povezanih projekata.",
+      "rank": 1,
+      "score": 0.8506,
+      "top1_tool": "get_Partners_ProjectTo",
+      "top1_score": 0.8506
+    },
+    {
+      "tool_id": "get_Partners_ProjectTo",
+      "query": "Mogu li dobiti sve informacije o suradničkim projektima na temelju postavljenih ",
+      "rank": 1,
+      "score": 0.8432,
+      "top1_tool": "get_Partners_ProjectTo",
+      "top1_score": 0.8432
+    },
+    {
+      "tool_id": "get_Partners_ProjectTo",
+      "query": "Želim pregledati sve aspekte naših zajedničkih projekata sa svim relevantnim pod",
+      "rank": 10,
+      "score": 0.8172,
+      "top1_tool": "get_AvailabilityProjection",
+      "top1_score": 0.8292
+    },
+    {
+      "tool_id": "get_Partners_id_documents_documentId",
+      "query": "Možeš li mi reći detalje o aktima vezanim uz jednog od naših kooperanata?",
+      "rank": 1,
+      "score": 0.8228,
+      "top1_tool": "get_Partners_id_documents_documentId",
+      "top1_score": 0.8228
+    },
+    {
+      "tool_id": "get_Partners_id_documents_documentId",
+      "query": "Molim te da mi prikažeš sadržaj potvrde tog poslovnog subjekta.",
+      "rank": 4,
+      "score": 0.8192,
+      "top1_tool": "get_Companies_id_documents_documentId",
+      "top1_score": 0.8306
+    },
+    {
+      "tool_id": "get_Partners_id_documents_documentId",
+      "query": "Zanima me pregled zapisa koji se odnosi na određenu suradnju.",
+      "rank": 2,
+      "score": 0.8385,
+      "top1_tool": "get_Partners_id_documents",
+      "top1_score": 0.8408
+    },
+    {
+      "tool_id": "get_PeriodicActivityTypes",
+      "query": "Želim vidjeti sve oblike planiranja prema postavljenim kriterijima.",
+      "rank": 52,
+      "score": 0.8072,
+      "top1_tool": "delete_SchedulingModels_DeleteByCriteria",
+      "top1_score": 0.84
+    },
+    {
+      "tool_id": "get_PeriodicActivityTypes",
+      "query": "Molim te da prikažeš sve varijante organiziranih događaja u mojem rasporedu.",
+      "rank": 25,
+      "score": 0.8208,
+      "top1_tool": "get_PeriodicActivitiesSchedules",
+      "top1_score": 0.8478
+    },
+    {
+      "tool_id": "get_PeriodicActivityTypes",
+      "query": "Tražim informacije o svim mogućim tipovima redovitih planova.",
+      "rank": 19,
+      "score": 0.814,
+      "top1_tool": "get_PeriodicActivitiesSchedules",
+      "top1_score": 0.8311
+    },
+    {
+      "tool_id": "get_PeriodicActivityTypes_id_documents_documentId",
+      "query": "Želim dobiti pregled svih aktova vezanih uz redovne stavke.",
+      "rank": 18,
+      "score": 0.8323,
+      "top1_tool": "get_PeriodicActivities_id_documents",
+      "top1_score": 0.8467
+    },
+    {
+      "tool_id": "get_PeriodicActivityTypes_id_documents_documentId",
+      "query": "Kako mogu pogledati detalje o različitim spisima?",
+      "rank": 54,
+      "score": 0.8097,
+      "top1_tool": "get_DocumentTypes_id_documents",
+      "top1_score": 0.8285
+    },
+    {
+      "tool_id": "get_PeriodicActivityTypes_id_documents_documentId",
+      "query": "Trebam informacije o raznim oblicima dokumenata koji se koriste.",
+      "rank": 30,
+      "score": 0.8295,
+      "top1_tool": "get_DocumentTypes_id_documents",
+      "top1_score": 0.8507
+    },
+    {
+      "tool_id": "get_PersonActivityTypes_GroupBy",
+      "query": "Zanima me kako su različiti članovi grupe obavljali svoje dužnosti unutar određe",
+      "rank": 4,
+      "score": 0.8214,
+      "top1_tool": "get_TeamMembers_GroupBy",
+      "top1_score": 0.8341
+    },
+    {
+      "tool_id": "get_PersonActivityTypes_GroupBy",
+      "query": "Treba mi pregled svih članova i njihovih angažmana podijeljenih u razne klase.",
+      "rank": 235,
+      "score": 0.7976,
+      "top1_tool": "get_TeamMembers",
+      "top1_score": 0.842
+    },
+    {
+      "tool_id": "get_PersonActivityTypes_GroupBy",
+      "query": "Možeš li mi dati pregled uloga ljudi unutar specifičnih zadataka?",
+      "rank": 77,
+      "score": 0.7993,
+      "top1_tool": "get_Lookup_AssignedToId",
+      "top1_score": 0.8391
+    },
+    {
+      "tool_id": "get_PersonActivityTypes_id_metadata",
+      "query": "Želim saznati specifikacije vezane uz određeni oblik ponašanja.",
+      "rank": 32,
+      "score": 0.8018,
+      "top1_tool": "get_PeriodicActivityTypes_id",
+      "top1_score": 0.8174
+    },
+    {
+      "tool_id": "get_PersonActivityTypes_id_metadata",
+      "query": "Zanima me koji su dodatni podaci dostupni za specifičnu aktivnost.",
+      "rank": 31,
+      "score": 0.8377,
+      "top1_tool": "get_Lookup_PeriodicActivityTypeName",
+      "top1_score": 0.8658
+    },
+    {
+      "tool_id": "get_PersonActivityTypes_id_metadata",
+      "query": "Želim dobiti pregled metapodataka za specifičnu vrstu akcije koju obavlja netko.",
+      "rank": 8,
+      "score": 0.844,
+      "top1_tool": "get_Lookup_PeriodicActivityTypeName",
+      "top1_score": 0.8527
+    },
+    {
+      "tool_id": "get_Roles",
+      "query": "Mogu li dobiti sve dostupne funkcije unutar sustava?",
+      "rank": 56,
+      "score": 0.7899,
+      "top1_tool": "get_WhatCanIDo",
+      "top1_score": 0.8587
+    },
+    {
+      "tool_id": "get_Roles",
+      "query": "Možeš li mi prikazati sve karakteristike korisničkih prava?",
+      "rank": 148,
+      "score": 0.8163,
+      "top1_tool": "get_Persons_id_metadata",
+      "top1_score": 0.8653
+    },
+    {
+      "tool_id": "get_Roles",
+      "query": "Tražim informacije o svim administrativnim ovlastima u sustavu.",
+      "rank": 19,
+      "score": 0.8154,
+      "top1_tool": "get_Roles_id",
+      "top1_score": 0.8321
+    },
+    {
+      "tool_id": "get_TeamMembers_GroupBy",
+      "query": "Možeš li mi pokazati popis svih suradnika u mojoj grupi?",
+      "rank": 1,
+      "score": 0.8252,
+      "top1_tool": "get_TeamMembers_GroupBy",
+      "top1_score": 0.8252
+    },
+    {
+      "tool_id": "get_TeamMembers_GroupBy",
+      "query": "Želim dobiti pregled svih sudionika u mom radnom kolektivu.",
+      "rank": 9,
+      "score": 0.8082,
+      "top1_tool": "get_Persons_id_documents",
+      "top1_score": 0.822
+    },
+    {
+      "tool_id": "get_TeamMembers_GroupBy",
+      "query": "Želim pregledati informacije o osobama unutar radne skupine.",
+      "rank": 11,
+      "score": 0.831,
+      "top1_tool": "get_Persons_id_metadata",
+      "top1_score": 0.8442
+    },
+    {
+      "tool_id": "get_Teams_GroupBy",
+      "query": "Mogu li dobiti pregled svih timskih sastanaka koje imamo?",
+      "rank": 33,
+      "score": 0.8116,
+      "top1_tool": "get_Teams",
+      "top1_score": 0.8478
+    },
+    {
+      "tool_id": "get_Teams_GroupBy",
+      "query": "Zanima me kako su organizirane grupe u našim projektima.",
+      "rank": 2,
+      "score": 0.8286,
+      "top1_tool": "get_OrgUnits_Agg",
+      "top1_score": 0.83
+    },
+    {
+      "tool_id": "get_Teams_GroupBy",
+      "query": "Trebam informacije o svim kolektivima u našem sustavu.",
+      "rank": 148,
+      "score": 0.8084,
+      "top1_tool": "get_Lookup_SupplierId",
+      "top1_score": 0.8433
+    },
+    {
+      "tool_id": "get_TenantPermissions",
+      "query": "Želim vidjeti sve ovlasti koje su dodijeljene korisnicima sustava.",
+      "rank": 3,
+      "score": 0.8443,
+      "top1_tool": "get_Persons",
+      "top1_score": 0.8489
+    },
+    {
+      "tool_id": "get_TenantPermissions",
+      "query": "Trebam pregledati sve autorizacije za članove platforme.",
+      "rank": 1,
+      "score": 0.8243,
+      "top1_tool": "get_TenantPermissions",
+      "top1_score": 0.8243
+    },
+    {
+      "tool_id": "get_TenantPermissions",
+      "query": "Možeš li mi pružiti pregled svih privilegija koje su dostupne unutar sustava?",
+      "rank": 5,
+      "score": 0.829,
+      "top1_tool": "get_WhatCanIDo",
+      "top1_score": 0.8388
+    },
+    {
+      "tool_id": "get_Tenants",
+      "query": "Želim provjeriti sve korisnike sustava koji su trenutno aktivni.",
+      "rank": 7,
+      "score": 0.8323,
+      "top1_tool": "get_Lookup_PeriodicActivityStatuses",
+      "top1_score": 0.8402
+    },
+    {
+      "tool_id": "get_Tenants",
+      "query": "Možeš li mi prikazati sve iznajmljivače koje imamo?",
+      "rank": 1,
+      "score": 0.8514,
+      "top1_tool": "get_Tenants",
+      "top1_score": 0.8514
+    },
+    {
+      "tool_id": "get_Tenants",
+      "query": "Tražim informacije o svim korisnicima koji su izvršili najam.",
+      "rank": 2,
+      "score": 0.8532,
+      "top1_tool": "get_Tenants_Join_invitationId",
+      "top1_score": 0.8533
+    },
+    {
+      "tool_id": "get_TripTypes_id_documents_documentId_thumb",
+      "query": "Zanima me kako mogu pristupiti sličici potvrde.",
+      "rank": 85,
+      "score": 0.7913,
+      "top1_tool": "get_Persons_id_documents_documentId_thumb",
+      "top1_score": 0.832
+    },
+    {
+      "tool_id": "get_TripTypes_id_documents_documentId_thumb",
+      "query": "Trebam vidjeti minijaturu obrasca za svoju ispravu.",
+      "rank": 96,
+      "score": 0.7913,
+      "top1_tool": "get_Persons_id_documents_documentId",
+      "top1_score": 0.8203
+    },
+    {
+      "tool_id": "get_TripTypes_id_documents_documentId_thumb",
+      "query": "Tražim način da prikažem sliku spisa koji sam zabilježio.",
+      "rank": 43,
+      "score": 0.807,
+      "top1_tool": "get_Master",
+      "top1_score": 0.829
+    },
+    {
+      "tool_id": "get_VehicleBoard_id",
+      "query": "Kako mogu provjeriti informacije o mom motornom sredstvu?",
+      "rank": 43,
+      "score": 0.8219,
+      "top1_tool": "get_VehicleInputHelper_PreviousVehicle_fullModelName",
+      "top1_score": 0.848
+    },
+    {
+      "tool_id": "get_VehicleBoard_id",
+      "query": "Zanima me pregled aktivnosti mog kombija u sustavu.",
+      "rank": 93,
+      "score": 0.8238,
+      "top1_tool": "get_Lookup_PeriodicActivityTypeId",
+      "top1_score": 0.8593
+    },
+    {
+      "tool_id": "get_VehicleBoard_id",
+      "query": "Želim pregledati aktivnosti mog prijevoznog sredstva.",
+      "rank": 163,
+      "score": 0.815,
+      "top1_tool": "get_ExpensesInputHelper_CompanyVehicles_companyId_date",
+      "top1_score": 0.8515
+    },
+    {
+      "tool_id": "get_VehicleCalendar",
+      "query": "Zanima me pregled planova termina za motorna sredstva s opcijom stranice za lakš",
+      "rank": 47,
+      "score": 0.8206,
+      "top1_tool": "get_VehicleCalendar_id_documents",
+      "top1_score": 0.8376
+    },
+    {
+      "tool_id": "get_VehicleCalendar",
+      "query": "Trebam informacije o planovima termina za limuzine i mogućnost da ih poredam ili",
+      "rank": 68,
+      "score": 0.8088,
+      "top1_tool": "get_Lookup_TripTypeId",
+      "top1_score": 0.8263
+    },
+    {
+      "tool_id": "get_VehicleCalendar",
+      "query": "Možeš li mi pomoći da dobijem sve hodograme za kombije uz opciju sortiranja rezu",
+      "rank": 162,
+      "score": 0.7992,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.85
+    },
+    {
+      "tool_id": "get_VehicleCalendar_id_metadata",
+      "query": "Zanima me pregled informacija o mom prijevoznom sredstvu i planu termina.",
+      "rank": 1,
+      "score": 0.8545,
+      "top1_tool": "get_VehicleCalendar_id_metadata",
+      "top1_score": 0.8545
+    },
+    {
+      "tool_id": "get_VehicleContracts_Agg",
+      "query": "Mogu li dobiti sažetak o financijskim uvjetima za moje prijevozno sredstvo?",
+      "rank": 8,
+      "score": 0.857,
+      "top1_tool": "get_Equipment_Available_from_to",
+      "top1_score": 0.87
+    },
+    {
+      "tool_id": "get_VehicleContracts_Agg",
+      "query": "Zanima me ukupna analiza troškova za moj motorni sredstvo.",
+      "rank": 22,
+      "score": 0.8472,
+      "top1_tool": "get_Stats_VehicleAverageMonthlyExpenses_vehicleId",
+      "top1_score": 0.8706
+    },
+    {
+      "tool_id": "get_VehicleContracts_Agg",
+      "query": "Želim vidjeti detalje o financijskim obvezama vezanim uz moju limuzinu.",
+      "rank": 23,
+      "score": 0.8058,
+      "top1_tool": "get_VehicleContracts_id",
+      "top1_score": 0.8361
+    },
+    {
+      "tool_id": "get_VehicleTypes_ProjectTo",
+      "query": "Mogu li dobiti sve vrste motornih sredstava s mogućnošću filtriranja i sortiranj",
+      "rank": 18,
+      "score": 0.8316,
+      "top1_tool": "get_Vehicles",
+      "top1_score": 0.8518
+    },
+    {
+      "tool_id": "get_VehicleTypes_ProjectTo",
+      "query": "Želim pregledati sve dostupne kategorije prijevoznih sredstava uz opciju paginac",
+      "rank": 7,
+      "score": 0.8611,
+      "top1_tool": "get_VehiclesAssignmentsOverview_on",
+      "top1_score": 0.8717
+    },
+    {
+      "tool_id": "get_VehicleTypes_ProjectTo",
+      "query": "Mogu li dobiti sve vrste prijevoznih sredstava uz mogućnost sortiranja i paginac",
+      "rank": 15,
+      "score": 0.841,
+      "top1_tool": "get_Vehicles",
+      "top1_score": 0.8603
+    },
+    {
+      "tool_id": "get_VehiclesAssignmentsOverview_on_ProjectTo",
+      "query": "Možeš li mi dati popis svih dodijeljenih prijevoznih sredstava za određeni proje",
+      "rank": 1,
+      "score": 0.8537,
+      "top1_tool": "get_VehiclesAssignmentsOverview_on_ProjectTo",
+      "top1_score": 0.8537
+    },
+    {
+      "tool_id": "get_VehiclesAssignmentsOverview_on_ProjectTo",
+      "query": "Trebam informacije o svim limuzinama koje su dodijeljene za moj projekt.",
+      "rank": 1,
+      "score": 0.8413,
+      "top1_tool": "get_VehiclesAssignmentsOverview_on_ProjectTo",
+      "top1_score": 0.8413
+    },
+    {
+      "tool_id": "get_VehiclesAssignmentsOverview_on_ProjectTo",
+      "query": "Želio bih vidjeti sve podatke o kombijima koji su raspoređeni unutar određenog p",
+      "rank": 1,
+      "score": 0.8645,
+      "top1_tool": "get_VehiclesAssignmentsOverview_on_ProjectTo",
+      "top1_score": 0.8645
+    },
+    {
+      "tool_id": "get_VehiclesHistoricalEntries_id_documents_documentId",
+      "query": "Možeš li mi pomoći da dobijem detalje o spisu koji se odnosi na moj motor?",
+      "rank": 4,
+      "score": 0.8285,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8451
+    },
+    {
+      "tool_id": "get_VehiclesMonthlyExpenses_Agg",
+      "query": "Molim te da mi prikažeš ukupne izdatke za sve limuzine za tekući raspored.",
+      "rank": 13,
+      "score": 0.8273,
+      "top1_tool": "get_VehiclesMonthlyExpenses_id_metadata",
+      "top1_score": 0.8394
+    },
+    {
+      "tool_id": "get_VehiclesMonthlyExpenses_Agg",
+      "query": "Možeš li mi prikazati ukupne izdatke za motorna sredstva u svakom planu termina?",
+      "rank": 12,
+      "score": 0.8443,
+      "top1_tool": "get_VehiclesMonthlyExpenses_id_metadata",
+      "top1_score": 0.8597
+    },
+    {
+      "tool_id": "get_VehiclesMonthlyExpenses_Agg",
+      "query": "Želim znati ukupne izdatke povezanih s motornim sredstvima tijekom posljednjeg r",
+      "rank": 7,
+      "score": 0.853,
+      "top1_tool": "get_VehiclesMonthlyExpenses",
+      "top1_score": 0.865
+    },
+    {
+      "tool_id": "get_Vehicles_id_documents_documentId_thumb",
+      "query": "Treba mi brzi pregled potvrde vezane uz motorno sredstvo.",
+      "rank": 4,
+      "score": 0.8536,
+      "top1_tool": "get_Vehicles_id_documents_documentId",
+      "top1_score": 0.8651
+    },
+    {
+      "tool_id": "get_Vehicles_id_documents_documentId_thumb",
+      "query": "Tražim pregled obrazaca koji se odnose na moje kombi.",
+      "rank": 8,
+      "score": 0.8626,
+      "top1_tool": "get_Vehicles_id_documents_documentId",
+      "top1_score": 0.8738
+    },
+    {
+      "tool_id": "get_Vehicles_id_documents_documentId_thumb",
+      "query": "Mogu li dobiti pregled sličice isprave za prijevozno sredstvo?",
+      "rank": 6,
+      "score": 0.8597,
+      "top1_tool": "get_Equipment_Available_from_to",
+      "top1_score": 0.8725
+    },
+    {
+      "tool_id": "patch_ExpenseGroups_id",
+      "query": "Treba mi izmjena informacija vezanih uz financijske stavke u skupu.",
+      "rank": 22,
+      "score": 0.8501,
+      "top1_tool": "put_Expenses_id",
+      "top1_score": 0.866
+    },
+    {
+      "tool_id": "patch_ExpenseGroups_id",
+      "query": "Možeš li mi pomoći s izmjenom podataka u vezi s financijskim stavkama?",
+      "rank": 105,
+      "score": 0.8101,
+      "top1_tool": "put_Expenses_id_documents_documentId_SetAsDefault",
+      "top1_score": 0.84
+    },
+    {
+      "tool_id": "patch_ExpenseGroups_id",
+      "query": "Trebam izvršiti izmjene na pojedinim dijelovima jedne financijske kategorije.",
+      "rank": 13,
+      "score": 0.8313,
+      "top1_tool": "get_MonthlyFuelExpensesAndMileages_ProjectTo",
+      "top1_score": 0.8418
+    },
+    {
+      "tool_id": "patch_PeriodicActivityTypes_id",
+      "query": "Želim ažurirati neke aspekte planova vezanih uz redovite događaje.",
+      "rank": 40,
+      "score": 0.8339,
+      "top1_tool": "put_PeriodicActivitiesSchedules_id",
+      "top1_score": 0.8662
+    },
+    {
+      "tool_id": "patch_PeriodicActivityTypes_id",
+      "query": "Trebam revidirati detalje o raznim tipovima događaja u svom planu termina.",
+      "rank": 161,
+      "score": 0.8013,
+      "top1_tool": "get_Lookup_TripTypeId",
+      "top1_score": 0.8307
+    },
+    {
+      "tool_id": "patch_PeriodicActivityTypes_id",
+      "query": "Trebam prilagoditi neke aspekte jedne od klasa redovnih obaveza.",
+      "rank": 12,
+      "score": 0.826,
+      "top1_tool": "put_PeriodicActivityTypes_id",
+      "top1_score": 0.836
+    },
+    {
+      "tool_id": "patch_Pools_id",
+      "query": "Trebam osvežiti neke aspekte trenutnog spremnika, možeš li mi pomoći?",
+      "rank": 153,
+      "score": 0.7658,
+      "top1_tool": "get_Lookup_AssigneeId",
+      "top1_score": 0.81
+    },
+    {
+      "tool_id": "patch_Pools_id",
+      "query": "Zainteresiran sam za izmjenu dijelova podataka vezanih uz moj akumulacijski sust",
+      "rank": 36,
+      "score": 0.8161,
+      "top1_tool": "patch_VehicleContracts_id",
+      "top1_score": 0.8294
+    },
+    {
+      "tool_id": "patch_Pools_id",
+      "query": "Možeš li izvršiti prilagodbu nekih elemenata koji se tiču mog spremišta?",
+      "rank": 352,
+      "score": 0.7944,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8276
+    },
+    {
+      "tool_id": "post_Cases_id_documents",
+      "query": "Zanima me kako mogu unijeti dodatne akte vezane uz moju situaciju.",
+      "rank": 8,
+      "score": 0.8252,
+      "top1_tool": "post_AddCase_parse",
+      "top1_score": 0.849
+    },
+    {
+      "tool_id": "post_Cases_id_documents",
+      "query": "Povezujem dodatne akte s aktivnim spisom.",
+      "rank": 96,
+      "score": 0.7926,
+      "top1_tool": "get_PersonPeriodicActivities_id_documents",
+      "top1_score": 0.8289
+    },
+    {
+      "tool_id": "post_Cases_id_documents",
+      "query": "Mogu li unijeti nove potvrde za taj pravni postupak?",
+      "rank": 8,
+      "score": 0.806,
+      "top1_tool": "post_AddCase_parse",
+      "top1_score": 0.829
+    },
+    {
+      "tool_id": "post_Companies_multipatch",
+      "query": "Želim izvršiti promjene za više poslovnih subjekata u jednom zahtjevu.",
+      "rank": 1,
+      "score": 0.8387,
+      "top1_tool": "post_Companies_multipatch",
+      "top1_score": 0.8387
+    },
+    {
+      "tool_id": "post_Companies_multipatch",
+      "query": "Molim te da obaviš izmjene informacija za nekoliko trgovačkih društava u jednoj ",
+      "rank": 4,
+      "score": 0.8305,
+      "top1_tool": "patch_Companies_id",
+      "top1_score": 0.8399
+    },
+    {
+      "tool_id": "post_Companies_multipatch",
+      "query": "Trebam promijeniti podatke o više organizacija istovremeno.",
+      "rank": 207,
+      "score": 0.8022,
+      "top1_tool": "get_Lookup_OrgUnitId",
+      "top1_score": 0.8504
+    },
+    {
+      "tool_id": "post_CostCenters_multipatch",
+      "query": "Želim istovremeno promijeniti parametre za više poslovnih entiteta.",
+      "rank": 167,
+      "score": 0.8041,
+      "top1_tool": "patch_Partners_id",
+      "top1_score": 0.8367
+    },
+    {
+      "tool_id": "post_CostCenters_multipatch",
+      "query": "Zanima me kako mogu prilagoditi više financijskih podjela istovremeno?",
+      "rank": 369,
+      "score": 0.7807,
+      "top1_tool": "get_WhatCanIDo",
+      "top1_score": 0.8272
+    },
+    {
+      "tool_id": "post_CostCenters_multipatch",
+      "query": "Mogu li istovremeno promijeniti informacije za više ekonomskih jedinica?",
+      "rank": 306,
+      "score": 0.7939,
+      "top1_tool": "patch_VehicleContracts_id",
+      "top1_score": 0.8329
+    },
+    {
+      "tool_id": "post_Equipment_id_documents",
+      "query": "Želim priložiti isprave za određeno motorno sredstvo.",
+      "rank": 7,
+      "score": 0.8676,
+      "top1_tool": "get_Equipment_Available_from_to",
+      "top1_score": 0.8738
+    },
+    {
+      "tool_id": "post_Equipment_id_documents",
+      "query": "Možeš li mi pomoći da povežem spis s mojim prijevoznim sredstvom?",
+      "rank": 68,
+      "score": 0.8325,
+      "top1_tool": "get_Vehicles_id_documents",
+      "top1_score": 0.864
+    },
+    {
+      "tool_id": "post_Equipment_id_documents",
+      "query": "Kako mogu unijeti nove akte vezane za svoje dostavno vozilo?",
+      "rank": 160,
+      "score": 0.8122,
+      "top1_tool": "post_Vehicles_id_documents",
+      "top1_score": 0.871
+    },
+    {
+      "tool_id": "post_Metadata_multipatch",
+      "query": "Kako da istovremeno obradim više informacija o svojstvima?",
+      "rank": 125,
+      "score": 0.8087,
+      "top1_tool": "get_VehicleContracts_id",
+      "top1_score": 0.8343
+    },
+    {
+      "tool_id": "post_Metadata_multipatch",
+      "query": "Možeš li mi pomoći s istovremenim prilagođavanjem više oznaka?",
+      "rank": 238,
+      "score": 0.7885,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8434
+    },
+    {
+      "tool_id": "post_Metadata_multipatch",
+      "query": "Želim obaviti parcijalno osvježavanje više skupina oznaka odjednom.",
+      "rank": 241,
+      "score": 0.7839,
+      "top1_tool": "post_Tags_multipatch",
+      "top1_score": 0.8246
+    },
+    {
+      "tool_id": "post_OrgUnits",
+      "query": "Trebam stvoriti još jedan dio za proširenje mojih poslovnih operacija.",
+      "rank": 95,
+      "score": 0.7929,
+      "top1_tool": "get_Master",
+      "top1_score": 0.8156
+    },
+    {
+      "tool_id": "post_OrgUnits",
+      "query": "Potrebno mi je formirati dodatni segment unutar naše uprave.",
+      "rank": 1,
+      "score": 0.8371,
+      "top1_tool": "post_OrgUnits",
+      "top1_score": 0.8371
+    },
+    {
+      "tool_id": "post_OrgUnits",
+      "query": "Molim te, pomogni mi u stvaranju nove grane unutar moje poslovne strukture.",
+      "rank": 6,
+      "score": 0.801,
+      "top1_tool": "post_AddCase",
+      "top1_score": 0.8112
+    },
+    {
+      "tool_id": "post_Partners_id_documents",
+      "query": "Želim priložiti zapisnike za mog odabranog kolegu.",
+      "rank": 18,
+      "score": 0.8029,
+      "top1_tool": "get_PersonPeriodicActivities_id_documents",
+      "top1_score": 0.8154
+    },
+    {
+      "tool_id": "post_Partners_id_documents",
+      "query": "Želim priložiti potvrde za kolegu iz suradnje.",
+      "rank": 6,
+      "score": 0.7928,
+      "top1_tool": "get_Partners_id_documents_documentId",
+      "top1_score": 0.8057
+    },
+    {
+      "tool_id": "post_Partners_id_documents",
+      "query": "Kako mogu priložiti zapisnike jednom od naših poslovnih kontakata?",
+      "rank": 12,
+      "score": 0.8251,
+      "top1_tool": "post_AddCase_parse",
+      "top1_score": 0.8385
+    },
+    {
+      "tool_id": "post_Partners_linktenant_partnerId",
+      "query": "Trebam li izvršiti operaciju spajanja kooperanta i stanara unutar sustava?",
+      "rank": 43,
+      "score": 0.7953,
+      "top1_tool": "get_Partners_ProjectTo",
+      "top1_score": 0.812
+    },
+    {
+      "tool_id": "post_Partners_linktenant_partnerId",
+      "query": "Trebam uspostaviti odnos između kolege i sustava.",
+      "rank": 20,
+      "score": 0.8042,
+      "top1_tool": "get_Lookup_ProviderId",
+      "top1_score": 0.8226
+    },
+    {
+      "tool_id": "post_Partners_linktenant_partnerId",
+      "query": "Potreban mi je način za uspostavljanje odnosa između poslovnog subjekta i iznajm",
+      "rank": 1,
+      "score": 0.8573,
+      "top1_tool": "post_Partners_linktenant_partnerId",
+      "top1_score": 0.8573
+    },
+    {
+      "tool_id": "post_PersonPeriodicActivities",
+      "query": "Molim te, zabilježi redovnu obavezu za člana.",
+      "rank": 2,
+      "score": 0.8055,
+      "top1_tool": "post_AddCase",
+      "top1_score": 0.8076
+    },
+    {
+      "tool_id": "post_PersonPeriodicActivities",
+      "query": "Kako mogu unijeti još jednu stavku za angažman na listi?",
+      "rank": 8,
+      "score": 0.8141,
+      "top1_tool": "post_AddCase_parse",
+      "top1_score": 0.8314
+    },
+    {
+      "tool_id": "post_PersonTypes_id_documents",
+      "query": "Kako mogu unijeti potvrdu za odabrani tip pojedinca?",
+      "rank": 11,
+      "score": 0.8326,
+      "top1_tool": "get_PersonTypes_id_documents_documentId",
+      "top1_score": 0.8462
+    },
+    {
+      "tool_id": "post_PersonTypes_id_documents",
+      "query": "Molim te, pomozi mi s unosom aktiva za definiranu grupu ljudi.",
+      "rank": 288,
+      "score": 0.7854,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8317
+    },
+    {
+      "tool_id": "post_PersonTypes_id_documents",
+      "query": "Želim unijeti obrazac za određenu kategoriju ljudi.",
+      "rank": 3,
+      "score": 0.8585,
+      "top1_tool": "post_DocumentTypes_id_documents",
+      "top1_score": 0.8594
+    },
+    {
+      "tool_id": "post_SchedulingModels_id_documents",
+      "query": "Želim unijeti ispravu za određeni raspored termina.",
+      "rank": 27,
+      "score": 0.8399,
+      "top1_tool": "put_VehicleCalendar_id_documents_documentId",
+      "top1_score": 0.8605
+    },
+    {
+      "tool_id": "post_SchedulingModels_id_documents",
+      "query": "Zanima me kako unijeti spis za određeno motorno sredstvo.",
+      "rank": 227,
+      "score": 0.826,
+      "top1_tool": "post_Vehicles_id_documents",
+      "top1_score": 0.8904
+    },
+    {
+      "tool_id": "post_SchedulingModels_id_documents",
+      "query": "Pomozi mi s unosom obrasca vezano za moj raspored.",
+      "rank": 155,
+      "score": 0.7884,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8257
+    },
+    {
+      "tool_id": "post_VehicleCalendar_multipatch",
+      "query": "Kako mogu provesti simultano modificiranje nekoliko elemenata u planu termina za",
+      "rank": 93,
+      "score": 0.8015,
+      "top1_tool": "post_Vehicles_multipatch",
+      "top1_score": 0.828
+    },
+    {
+      "tool_id": "post_VehicleCalendar_multipatch",
+      "query": "Možete li mi pomoći s izmjenom određenih dijelova više stavki u agendi za kombi?",
+      "rank": 29,
+      "score": 0.8331,
+      "top1_tool": "get_ExpensesInputHelper_CompanyVehicles_companyId_date",
+      "top1_score": 0.8578
+    },
+    {
+      "tool_id": "post_VehicleCalendar_multipatch",
+      "query": "Molim te da ažuriraš određene informacije u planu termina za motorno sredstvo.",
+      "rank": 41,
+      "score": 0.8553,
+      "top1_tool": "get_Equipment_Available_from_to",
+      "top1_score": 0.8785
+    },
+    {
+      "tool_id": "post_VehicleContracts",
+      "query": "Možete li mi pomoći u upisu povijesti akvizicije mog motornog sredstva?",
+      "rank": 23,
+      "score": 0.8243,
+      "top1_tool": "get_VehiclesHistoricalEntries_id_documents",
+      "top1_score": 0.8468
+    },
+    {
+      "tool_id": "post_VehicleContracts",
+      "query": "Molim te, pomozi mi s unosom novog sporazuma za moj limuzinu.",
+      "rank": 1,
+      "score": 0.8295,
+      "top1_tool": "post_VehicleContracts",
+      "top1_score": 0.8295
+    },
+    {
+      "tool_id": "post_VehicleContracts",
+      "query": "Tražim način za unos novog sporazuma koji se odnosi na limuzinu.",
+      "rank": 4,
+      "score": 0.8233,
+      "top1_tool": "get_VehicleInputHelper_DistinctBrands",
+      "top1_score": 0.8325
+    },
+    {
+      "tool_id": "post_VehicleContracts_multipatch",
+      "query": "Kako mogu istovremeno obraditi promjene za više dokumenata vezanih uz motorna sr",
+      "rank": 6,
+      "score": 0.8557,
+      "top1_tool": "post_Vehicles_id_documents",
+      "top1_score": 0.8638
+    },
+    {
+      "tool_id": "post_VehicleContracts_multipatch",
+      "query": "Želim obaviti djelomične izmjene na nekoliko akti vezanih uz limuzine.",
+      "rank": 6,
+      "score": 0.8353,
+      "top1_tool": "patch_VehicleContracts_id",
+      "top1_score": 0.8476
+    },
+    {
+      "tool_id": "post_VehicleContracts_multipatch",
+      "query": "Zanima me kako mogu istovremeno izmijeniti više dokumenata za različita prijevoz",
+      "rank": 2,
+      "score": 0.8576,
+      "top1_tool": "post_Vehicles_id_documents",
+      "top1_score": 0.8586
+    },
+    {
+      "tool_id": "put_CostCenters_id_documents_documentId_SetAsDefault",
+      "query": "Želim označiti ispravu kao glavnu za trošne jedinice.",
+      "rank": 4,
+      "score": 0.8337,
+      "top1_tool": "put_Cases_id_documents_documentId_SetAsDefault",
+      "top1_score": 0.842
+    },
+    {
+      "tool_id": "put_CostCenters_id_documents_documentId_SetAsDefault",
+      "query": "Možeš li mi pomoći da odredim obrazac kao osnovni za budžetske segmente?",
+      "rank": 36,
+      "score": 0.8173,
+      "top1_tool": "put_Expenses_id_documents_documentId_SetAsDefault",
+      "top1_score": 0.8427
+    },
+    {
+      "tool_id": "put_CostCenters_id_documents_documentId_SetAsDefault",
+      "query": "Tražim način da registriram potvrdu kao prioritarnu za ekonomske skupine.",
+      "rank": 511,
+      "score": 0.7711,
+      "top1_tool": "post_AddCase",
+      "top1_score": 0.8133
+    },
+    {
+      "tool_id": "put_EquipmentCalendar_id",
+      "query": "Potreban mi je novi unos u rezervacijskom planu za moje motorno sredstvo.",
+      "rank": 46,
+      "score": 0.8474,
+      "top1_tool": "get_Equipment_Available_from_to",
+      "top1_score": 0.8759
+    },
+    {
+      "tool_id": "put_EquipmentCalendar_id",
+      "query": "Želim unijeti nove podatke za motorno sredstvo u hodogram.",
+      "rank": 15,
+      "score": 0.8699,
+      "top1_tool": "post_VehicleCalendar_id_documents",
+      "top1_score": 0.8792
+    },
+    {
+      "tool_id": "put_ExpenseTypes_id_documents_documentId",
+      "query": "Želio bih unijeti nove podatke za jedan zapisnik.",
+      "rank": 171,
+      "score": 0.821,
+      "top1_tool": "put_DocumentTypes_id_documents_documentId",
+      "top1_score": 0.8657
+    },
+    {
+      "tool_id": "put_ExpenseTypes_id_documents_documentId",
+      "query": "Trebam ažurirati podatke vezane uz moj spis.",
+      "rank": 91,
+      "score": 0.8082,
+      "top1_tool": "put_DocumentTypes_id_documents_documentId",
+      "top1_score": 0.8464
+    },
+    {
+      "tool_id": "put_ExpenseTypes_id_documents_documentId",
+      "query": "Želim prilagoditi specificirane podatke za moj akt.",
+      "rank": 203,
+      "score": 0.8024,
+      "top1_tool": "get_PersonPeriodicActivities_id_documents_documentId",
+      "top1_score": 0.8506
+    },
+    {
+      "tool_id": "put_PeriodicActivityTypes_id",
+      "query": "Želim ažurirati podatke o redovnom rasporedu.",
+      "rank": 50,
+      "score": 0.8306,
+      "top1_tool": "put_PeriodicActivitiesSchedules_id",
+      "top1_score": 0.8629
+    },
+    {
+      "tool_id": "put_PeriodicActivityTypes_id",
+      "query": "Tražim da se ažurira informacija o pravilnom planu zadatka.",
+      "rank": 18,
+      "score": 0.8258,
+      "top1_tool": "put_PeriodicActivitiesSchedules_id",
+      "top1_score": 0.8377
+    },
+    {
+      "tool_id": "put_PeriodicActivityTypes_id",
+      "query": "Molim te da mi ažuriraš informacije o postojećem planu termina.",
+      "rank": 27,
+      "score": 0.8133,
+      "top1_tool": "put_PeriodicActivitiesSchedules_id",
+      "top1_score": 0.8371
+    },
+    {
+      "tool_id": "put_PersonOrgUnits_id_documents_documentId",
+      "query": "Trebam ažurirati informacije o određenom akta.",
+      "rank": 139,
+      "score": 0.8082,
+      "top1_tool": "get_Lookup_PersonId_id",
+      "top1_score": 0.8368
+    },
+    {
+      "tool_id": "put_PersonOrgUnits_id_documents_documentId",
+      "query": "Možeš li osigurati promjenu podataka za taj zapis?",
+      "rank": 52,
+      "score": 0.8045,
+      "top1_tool": "put_Persons_id_documents_documentId",
+      "top1_score": 0.8319
+    },
+    {
+      "tool_id": "put_PersonOrgUnits_id_documents_documentId",
+      "query": "Trebam izvršiti promjenu na jednom od dokumenata.",
+      "rank": 79,
+      "score": 0.7982,
+      "top1_tool": "put_Persons_id_documents_documentId",
+      "top1_score": 0.8112
+    },
+    {
+      "tool_id": "put_PersonTypes_id_documents_documentId_SetAsDefault",
+      "query": "Molim te, odredi spis kao ključni za odabranu grupu.",
+      "rank": 96,
+      "score": 0.8172,
+      "top1_tool": "get_DocumentTypes_GroupBy",
+      "top1_score": 0.8483
+    },
+    {
+      "tool_id": "put_PersonTypes_id_documents_documentId_SetAsDefault",
+      "query": "Treba mi da definiram potvrdu kao primarnu za određeni razred.",
+      "rank": 29,
+      "score": 0.8068,
+      "top1_tool": "get_DocumentTypes_id",
+      "top1_score": 0.8232
+    },
+    {
+      "tool_id": "put_PersonTypes_id_documents_documentId_SetAsDefault",
+      "query": "Možeš li učiniti da obrazac postane osnovni za neku klasifikaciju?",
+      "rank": 22,
+      "score": 0.8268,
+      "top1_tool": "post_DocumentTypes",
+      "top1_score": 0.8455
+    },
+    {
+      "tool_id": "put_SchedulingModels_id_documents_documentId_SetAsDefault",
+      "query": "Želim označiti određeni akt kao primarni za svoj raspored.",
+      "rank": 3,
+      "score": 0.8535,
+      "top1_tool": "put_PeriodicActivitiesSchedules_id_documents_documentId_SetAsDefault",
+      "top1_score": 0.8588
+    },
+    {
+      "tool_id": "put_SchedulingModels_id_documents_documentId_SetAsDefault",
+      "query": "Trebam odabrati spis koji će biti glavni u mom rasporedu.",
+      "rank": 21,
+      "score": 0.8162,
+      "top1_tool": "get_SchedulingModels_id_documents_documentId",
+      "top1_score": 0.8281
+    },
+    {
+      "tool_id": "put_SchedulingModels_id_documents_documentId_SetAsDefault",
+      "query": "Želim definirati potvrdu kao osnovnu za moj hodogram.",
+      "rank": 56,
+      "score": 0.8261,
+      "top1_tool": "put_VehicleCalendar_id_documents_documentId_SetAsDefault",
+      "top1_score": 0.8563
+    },
+    {
+      "tool_id": "put_Tags_id",
+      "query": "Želim izvršiti potpunu promjenu trenutnog tagiranja.",
+      "rank": 3,
+      "score": 0.8384,
+      "top1_tool": "put_Tags_id_documents_documentId",
+      "top1_score": 0.8422
+    },
+    {
+      "tool_id": "put_Tags_id",
+      "query": "Molim te da izvršiš potpunu promjenu za postojeću oznaku.",
+      "rank": 3,
+      "score": 0.8192,
+      "top1_tool": "put_Tags_id_documents_documentId",
+      "top1_score": 0.826
+    },
+    {
+      "tool_id": "put_Tags_id",
+      "query": "Želim da se ažurira moj postojeći tag u sustavu.",
+      "rank": 2,
+      "score": 0.8511,
+      "top1_tool": "put_Tags_id_documents_documentId",
+      "top1_score": 0.8558
+    },
+    {
+      "tool_id": "put_Tenants_id_documents_documentId_SetAsDefault",
+      "query": "Mogu li označiti ovu ispravu kao osnovnu za korisnika?",
+      "rank": 35,
+      "score": 0.8136,
+      "top1_tool": "put_Persons_id_documents_documentId_SetAsDefault",
+      "top1_score": 0.834
+    },
+    {
+      "tool_id": "put_Tenants_id_documents_documentId_SetAsDefault",
+      "query": "Želim da ovaj spis postane glavni za iznajmljivača.",
+      "rank": 21,
+      "score": 0.8364,
+      "top1_tool": "get_Tenants_id_documents",
+      "top1_score": 0.8513
+    },
+    {
+      "tool_id": "put_Tenants_id_documents_documentId_SetAsDefault",
+      "query": "Kako da odredim ovu potvrdu kao prioritetnu za korisnika sustava?",
+      "rank": 126,
+      "score": 0.7894,
+      "top1_tool": "post_AddCase_parse",
+      "top1_score": 0.838
+    },
+    {
+      "tool_id": "put_Trips_id_documents_documentId",
+      "query": "Možeš li prilagoditi zapisnik vezan za moju turističku destinaciju?",
+      "rank": 1,
+      "score": 0.8748,
+      "top1_tool": "put_Trips_id_documents_documentId",
+      "top1_score": 0.8748
+    },
+    {
+      "tool_id": "put_Trips_id_documents_documentId",
+      "query": "Molim te da izvršiš potpuni ažuriranje podataka vezanih uz ispravu za moj put.",
+      "rank": 1,
+      "score": 0.8535,
+      "top1_tool": "put_Trips_id_documents_documentId",
+      "top1_score": 0.8535
+    },
+    {
+      "tool_id": "put_Trips_id_documents_documentId",
+      "query": "Zamoli te da mi ažuriraš spis koji se odnosi na moje putne planove.",
+      "rank": 1,
+      "score": 0.859,
+      "top1_tool": "put_Trips_id_documents_documentId",
+      "top1_score": 0.859
+    },
+    {
+      "tool_id": "put_VehicleCalendar_id_documents_documentId",
+      "query": "Molim te da ažuriraš podatke o ispravi vezanoj uz moje motorno sredstvo.",
+      "rank": 41,
+      "score": 0.8509,
+      "top1_tool": "patch_Equipment_id",
+      "top1_score": 0.8801
+    },
+    {
+      "tool_id": "put_VehicleCalendar_id_documents_documentId",
+      "query": "Želim izvršiti potpunu izmjenu podataka u planu termina za moju limuzinu.",
+      "rank": 2,
+      "score": 0.8297,
+      "top1_tool": "patch_VehicleContracts_id",
+      "top1_score": 0.8303
+    },
+    {
+      "tool_id": "put_VehicleContracts_id_documents_documentId_SetAsDefault",
+      "query": "Želim označiti ispravu kao primarnu za moje motorno sredstvo.",
+      "rank": 14,
+      "score": 0.8391,
+      "top1_tool": "put_Vehicles_id_documents_documentId_SetAsDefault",
+      "top1_score": 0.8555
+    },
+    {
+      "tool_id": "put_VehicleContracts_id_documents_documentId_SetAsDefault",
+      "query": "Molim te, učini da mi potvrda bude ključna za to limuzinu.",
+      "rank": 10,
+      "score": 0.8115,
+      "top1_tool": "get_VehicleContracts_id_documents_documentId",
+      "top1_score": 0.8272
+    },
+    {
+      "tool_id": "put_VehicleContracts_id_documents_documentId_SetAsDefault",
+      "query": "Želim da moj obrazac bude prioritetan za ovo prijevozno sredstvo.",
+      "rank": 49,
+      "score": 0.8348,
+      "top1_tool": "get_Vehicles_id_documents_documentId",
+      "top1_score": 0.8555
+    }
+  ],
+  "buckets": {
+    "51-100": 35,
+    "6-20": 71,
+    "201+": 16,
+    "101-200": 23,
+    "1": 38,
+    "21-50": 57,
+    "2-5": 50
+  }
+}

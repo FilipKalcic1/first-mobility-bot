@@ -225,8 +225,8 @@ class CacheService:
             acquired = await self.redis.set(
                 lock_key, lock_token, nx=True, ex=lock_timeout
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Cache lock acquire failed (best-effort): {e}")
 
         if not acquired:
             # Another caller is computing — poll with backoff then fallback
@@ -251,8 +251,8 @@ class CacheService:
                         ATOMIC_LOCK_RELEASE_LUA,
                         1, lock_key, lock_token
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Cache lock release failed (best-effort): {e}")
 
     async def increment(self, key: str, ttl: Optional[int] = None) -> int:
         """

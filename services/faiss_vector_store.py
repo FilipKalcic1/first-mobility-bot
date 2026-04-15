@@ -15,23 +15,39 @@ Performance:
 import json
 import logging
 import asyncio
+import os
+import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional
-from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass, field
 import threading
 
 from services.tracing import get_tracer, trace_span
 from services.errors import SearchError, ErrorCode
 
 import re
+import time
 
 import numpy as np
 import faiss
+from prometheus_client import Histogram
 
 from config import get_settings
 
 logger = logging.getLogger(__name__)
 _tracer = get_tracer("faiss_vector_store")
+
+FAISS_SEARCH_DURATION = Histogram(
+    'faiss_search_duration_seconds',
+    'FAISS vector search duration',
+    buckets=[0.001, 0.005, 0.01, 0.05, 0.1, 0.5],
+)
+
+EMBEDDING_API_DURATION = Histogram(
+    'embedding_api_duration_seconds',
+    'Azure OpenAI embedding API call duration',
+    buckets=[0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0],
+)
 
 
 def _get_settings():
@@ -43,12 +59,27 @@ CACHE_DIR = Path(__file__).parent.parent / ".cache"
 EMBEDDINGS_FILE = CACHE_DIR / "tool_embeddings.json"
 EMBEDDING_DIM = 1536  # Azure OpenAI text-embedding-ada-002
 
+# Bump when `_build_embedding_text` template changes. Old caches with a different
+# version are rejected on load so stale vectors don't produce stale rankings.
+EMBED_TEXT_VERSION = "v6.0-zlatni-put-v1"
+
+# HTTP method → Croatian verb phrase. Injected into embedding text for action-intent signal.
+METHOD_VERB_TEXT = {
+    "get": "dohvati prikaži pogledaj vrati",
+    "post": "dodaj kreiraj napravi unesi",
+    "put": "ažuriraj zamijeni izmijeni",
+    "patch": "djelomično ažuriraj parcijalno promijeni",
+    "delete": "obriši ukloni izbriši makni brisanje",
+}
+
 @dataclass
 class SearchResult:
-    """Result from FAISS search."""
+    """Result from FAISS search (optionally annotated by boost_engine)."""
     tool_id: str
-    score: float  # Cosine similarity (0-1)
+    score: float  # Cosine similarity (0-1), or post-boost score after boost_engine
     method: str   # HTTP method (GET/POST/PUT/DELETE)
+    base_score: float = 0.0  # Pre-boost FAISS score; set by boost_engine
+    boosts_applied: List[tuple] = field(default_factory=list)  # [(name, delta, score_after)]
 
 class FAISSVectorStore:
     """
@@ -72,6 +103,8 @@ class FAISSVectorStore:
         self._embeddings: Dict[str, List[float]] = {}
         self._initialized = False
         self._openai_client = None
+        # Entity centroids for embedding-based entity classification
+        self._entity_centroids: Dict[str, np.ndarray] = {}  # entity -> normalized centroid vector
 
         # Ensure cache directory exists
         CACHE_DIR.mkdir(exist_ok=True)
@@ -118,8 +151,8 @@ class FAISSVectorStore:
                     self._tool_methods[tool_id] = "GET"  # Default
             logger.info(f"Extracted HTTP methods from tool_id prefixes: {len(self._tool_methods)} tools")
 
-        # Try to load cached embeddings
-        cached = self._load_cached_embeddings()
+        # Try to load cached embeddings (offload blocking I/O to thread)
+        cached = await asyncio.to_thread(self._load_cached_embeddings)
 
         # Determine which tools need embedding generation
         tools_to_embed = []
@@ -129,56 +162,76 @@ class FAISSVectorStore:
 
         logger.info(f"Cached: {len(cached)}, Need to generate: {len(tools_to_embed)}")
 
-        # Generate missing embeddings
+        # Seed with cached embeddings. _generate_embeddings appends the missing
+        # ones; if there are none, this is just a plain assignment.
+        self._embeddings = cached
         if tools_to_embed:
             await self._generate_embeddings(tools_to_embed, tool_documentation)
-        else:
-            self._embeddings = cached
 
         # Build FAISS index
         self._build_index()
+
+        # Compute entity centroids for embedding-based entity classification
+        self._compute_entity_centroids()
 
         self._initialized = True
         logger.info(f"FAISSVectorStore initialized: {len(self._tool_ids)} tools indexed")
 
     def _load_cached_embeddings(self) -> Dict[str, List[float]]:
-        """Load embeddings from cache file."""
-        if not EMBEDDINGS_FILE.exists():
-            return {}
-
+        """Load embeddings from cache file. Returns {} if cache is absent, unreadable, or stale."""
         try:
             with open(EMBEDDINGS_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-
-            # Handle both formats:
-            # 1. New flat format: {tool_id: [embedding], ...}
-            # 2. Old nested format: {version, timestamp, embeddings: {tool_id: [embedding]}}
-            if "embeddings" in data and isinstance(data["embeddings"], dict):
-                # Nested format - extract embeddings dict
-                embeddings = data["embeddings"]
-                logger.info(f"Loaded {len(embeddings)} cached embeddings (nested format)")
-            else:
-                # Flat format - filter out non-embedding keys
-                embeddings = {
-                    k: v for k, v in data.items()
-                    if isinstance(v, list) and len(v) == EMBEDDING_DIM
-                }
-                logger.info(f"Loaded {len(embeddings)} cached embeddings (flat format)")
-
-            return embeddings
-        except Exception as e:
+        except FileNotFoundError:
+            return {}
+        except (OSError, json.JSONDecodeError) as e:
             err = SearchError(ErrorCode.FAISS_NOT_INITIALIZED, f"Failed to load cached embeddings: {e}")
             logger.warning(str(err))
             return {}
 
-    def _save_embeddings_to_cache(self) -> None:
-        """Save embeddings to cache file."""
-        try:
-            with open(EMBEDDINGS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(self._embeddings, f)
+        # Nested format carries a schema version. Reject mismatches so a template
+        # change in `_build_embedding_text` doesn't silently keep stale vectors.
+        if "embeddings" in data and isinstance(data["embeddings"], dict):
+            cached_version = data.get("embed_text_version")
+            if cached_version and cached_version != EMBED_TEXT_VERSION:
+                logger.info(
+                    f"Embedding cache version mismatch "
+                    f"(cached={cached_version}, current={EMBED_TEXT_VERSION}) — rebuilding"
+                )
+                return {}
+            embeddings = data["embeddings"]
+            logger.info(f"Loaded {len(embeddings)} cached embeddings (nested format)")
+        else:
+            # Flat legacy format — no version tag. Accept but log once; rebuild will
+            # eventually upgrade it to the nested format with version on next save.
+            embeddings = {
+                k: v for k, v in data.items()
+                if isinstance(v, list) and len(v) == EMBEDDING_DIM
+            }
+            logger.info(f"Loaded {len(embeddings)} cached embeddings (flat legacy format)")
+        return embeddings
 
+    def _save_embeddings_to_cache(self) -> None:
+        """Save embeddings to cache file (atomic write via temp file + rename)."""
+        try:
+            cache_dir = str(EMBEDDINGS_FILE.parent)
+            fd, tmp_path = tempfile.mkstemp(suffix='.tmp', dir=cache_dir)
+            try:
+                payload = {
+                    "embed_text_version": EMBED_TEXT_VERSION,
+                    "embeddings": self._embeddings,
+                }
+                with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                    json.dump(payload, f, ensure_ascii=False)
+                os.replace(tmp_path, str(EMBEDDINGS_FILE))
+            except BaseException:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
             logger.info(f"Saved {len(self._embeddings)} embeddings to cache")
-        except Exception as e:
+        except (OSError, TypeError) as e:
             err = SearchError(ErrorCode.FAISS_INDEX_CORRUPT, f"Failed to save embeddings to cache: {e}")
             logger.warning(str(err))
 
@@ -200,361 +253,267 @@ class FAISSVectorStore:
         if self._openai_client is None:
             self._openai_client = get_embedding_client()
 
-        # Load existing cached embeddings
-        self._embeddings = self._load_cached_embeddings()
-
         logger.info(f"Generating embeddings for {len(tool_ids)} tools...")
 
-        generated_count = 0
+        # Collect (tool_id, text) pairs up-front. ada-002 accepts a list `input`,
+        # so batching cuts cold-start from ~50s+ serial to a few seconds.
+        batch_items: List[tuple] = []
         for tool_id in tool_ids:
             doc = tool_documentation.get(tool_id, {})
-
-            # Build embedding text from DOCUMENTATION (not training_queries!)
             text = self._build_embedding_text(tool_id, doc)
-
             if not text:
                 logger.warning(f"No text for {tool_id}, skipping")
                 continue
+            batch_items.append((tool_id, text[:8000]))
 
+        deployment = _get_settings().AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+        batch_size = 32
+        generated_count = 0
+
+        for start in range(0, len(batch_items), batch_size):
+            chunk = batch_items[start:start + batch_size]
+            ids = [it[0] for it in chunk]
+            texts = [it[1] for it in chunk]
             try:
                 response = await self._openai_client.embeddings.create(
-                    input=[text[:8000]],
-                    model=_get_settings().AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+                    input=texts, model=deployment,
                 )
-                embedding = response.data[0].embedding
-                self._embeddings[tool_id] = embedding
-                generated_count += 1
-
-                # Rate limiting
-                await asyncio.sleep(0.05)
-
-                if generated_count % 100 == 0:
-                    logger.info(f"Generated {generated_count}/{len(tool_ids)} embeddings")
-                    # Save intermediate progress
-                    self._save_embeddings_to_cache()
-
+                # Azure returns data in index order, but keying by .index is safer.
+                for item in response.data:
+                    self._embeddings[ids[item.index]] = item.embedding
+                generated_count += len(chunk)
             except Exception as e:
-                err = SearchError(ErrorCode.EMBEDDING_GENERATION_FAILED, f"Failed to generate embedding for {tool_id}: {e}")
+                err = SearchError(
+                    ErrorCode.EMBEDDING_GENERATION_FAILED,
+                    f"Batch embedding failed ({len(chunk)} tools starting {ids[0]}): {e}",
+                )
                 logger.warning(str(err))
+                continue
 
-        # Save final embeddings
-        self._save_embeddings_to_cache()
+            if generated_count % 100 < batch_size:
+                logger.info(f"Generated {generated_count}/{len(batch_items)} embeddings")
+                await asyncio.to_thread(self._save_embeddings_to_cache)
+
+        await asyncio.to_thread(self._save_embeddings_to_cache)
         logger.info(f"Generated {generated_count} new embeddings")
+
+    # Compound Index: rich Croatian entity descriptions for embedding prefix.
+    # Putting entity FIRST in text gives text-embedding-ada-002 strong
+    # disambiguation between tools with identical purpose text.
+    # e.g., "Vozila (vehicles) - upravljanje vozilima, automobilima, flotom."
+    _ENTITY_COMPOUND_PREFIX = {
+        "companies": "Kompanije tvrtke firme (companies) - upravljanje kompanijama, tvrtkama, poduzećima, poslovnim subjektima.",
+        "vehicles": "Vozila automobili auti (vehicles) - upravljanje vozilima, automobilima, flotom, prijevoznim sredstvima.",
+        "vehicletypes": "Tipovi vozila kategorije vozila (vehicletypes) - vrste i kategorije vozila u sustavu.",
+        "vehiclecalendar": "Kalendar vozila raspored rezervacija vozila (vehiclecalendar) - rezervacije, raspoloživost i kalendar korištenja vozila.",
+        "vehiclecontracts": "Ugovori vozila leasing najam (vehiclecontracts) - ugovori o leasingu, najmu i korištenju vozila.",
+        "vehicleassignments": "Dodjele vozila raspodjela vozila (vehicleassignments) - tko koristi koje vozilo, dodjela vozača.",
+        "persons": "Osobe zaposlenici radnici djelatnici (persons) - upravljanje zaposlenicima, radnicima, korisnicima sustava.",
+        "persontypes": "Tipovi osoba kategorije zaposlenika (persontypes) - vrste i kategorije zaposlenika.",
+        "personorgunits": "Organizacijske jedinice osoba odjeli zaposlenika (personorgunits) - pripadnost zaposlenika organizacijskim jedinicama.",
+        "personperiodicactivities": "Periodične aktivnosti osoba servisi zaposlenika (personperiodicactivities) - redovne aktivnosti dodijeljene zaposlenicima.",
+        "personactivitytypes": "Tipovi aktivnosti osoba (personactivitytypes) - vrste aktivnosti koje se dodjeljuju zaposlenicima.",
+        "teams": "Timovi grupe ekipe (teams) - upravljanje timovima, radnim grupama, ekipama.",
+        "teammembers": "Članovi tima zaposlenici u timu (teammembers) - članstvo u timovima, tko je u kojem timu.",
+        "cases": "Slučajevi predmeti štete kvarovi prijave (cases) - upravljanje slučajevima, štetama, kvarovima, prijavama problema.",
+        "casetypes": "Tipovi slučajeva vrste prijava (casetypes) - kategorije slučajeva, šteta i prijava.",
+        "expenses": "Troškovi izdaci računi rashodi (expenses) - upravljanje troškovima, izdacima, financijskim stavkama.",
+        "expensetypes": "Tipovi troškova vrste troškova (expensetypes) - kategorije i vrste troškova.",
+        "expensegroups": "Grupe troškova skupine troškova (expensegroups) - grupiranje troškova po skupinama.",
+        "trips": "Putovanja putni nalozi (trips) - upravljanje putovanjima, putnim nalozima, službenim putovima.",
+        "triptypes": "Tipovi putovanja vrste putovanja (triptypes) - kategorije putovanja i putnih naloga.",
+        "mileage": "Kilometraža prijeđeni kilometri (mileage) - praćenje kilometraže, prijeđenog puta vozila.",
+        "equipment": "Oprema inventar alati (equipment) - upravljanje opremom, inventarom, alatima, sredstvima.",
+        "equipmenttypes": "Tipovi opreme vrste opreme (equipmenttypes) - kategorije i vrste opreme.",
+        "equipmentcalendar": "Kalendar opreme raspored opreme (equipmentcalendar) - rezervacije i raspoloživost opreme.",
+        "partners": "Partneri dobavljači klijenti suradnici (partners) - upravljanje poslovnim partnerima, dobavljačima, klijentima.",
+        "documents": "Dokumenti prilozi datoteke (documents) - upravljanje dokumentima, prilozima, datotekama.",
+        "documenttypes": "Tipovi dokumenata vrste dokumenata (documenttypes) - kategorije dokumenata.",
+        "orgunits": "Organizacijske jedinice odjeli sektori (orgunits) - upravljanje organizacijskim jedinicama, odjelima.",
+        "costcenters": "Troškovni centri mjesta troška (costcenters) - upravljanje troškovnim centrima, mjestima troška.",
+        "roles": "Uloge dozvole permisije (roles) - upravljanje ulogama, dozvolama, pravima pristupa.",
+        "tenants": "Tenanti najmovi korisnici sustava (tenants) - upravljanje tenantima, najmovima.",
+        "tenantpermissions": "Dozvole tenanta korisničke dozvole (tenantpermissions) - upravljanje dozvolama i pravima tenanta.",
+        "periodicactivities": "Periodične aktivnosti servisi redovni poslovi (periodicactivities) - upravljanje periodičnim aktivnostima, servisima.",
+        "periodicactivitiesschedules": "Rasporedi periodičnih aktivnosti kalendar servisa (periodicactivitiesschedules) - rasporedi i termini periodičnih aktivnosti.",
+        "schedulingmodels": "Modeli raspoređivanja rasporedi sheme (schedulingmodels) - modeli i sheme za raspoređivanje aktivnosti.",
+        "tags": "Oznake tagovi labele (tags) - upravljanje oznakama, tagovima.",
+        "pools": "Poolovi grupe resursa (pools) - upravljanje poolovima, grupama resursa.",
+        "settings": "Postavke konfiguracija (settings) - postavke i konfiguracija sustava.",
+        "metadata": "Metapodaci shema struktura polja (metadata) - metapodaci, struktura i definicija polja.",
+        "booking": "Rezervacija booking zauzimanje (booking) - rezervacije, zauzimanje resursa.",
+        "masterdata": "Matični podaci profil korisnika (masterdata) - matični podaci, korisnički profil.",
+        "persondata": "Osobni podaci profil zaposlenika (persondata) - osobni podaci korisnika.",
+        "calendar": "Kalendar raspored (calendar) - kalendar, rasporedi, termini.",
+        "lookup": "Šifrarnik referentni podaci katalog (lookup) - šifrarnici, lookup tablice, referentni podaci sustava.",
+        "dashboarditems": "Elementi nadzorne ploče radni prikaz (dashboarditems) - stavke na kontrolnoj ploči, dashboard elementi.",
+        "vehicleshistoricalentries": "Povijesni zapisi vozila (vehicleshistoricalentries) - povijest promjena i unosa za vozila.",
+        "vehiclesmonthlyexpenses": "Mjesečni troškovi vozila (vehiclesmonthlyexpenses) - mjesečni pregled troškova po vozilima.",
+        "vehicleboard": "Ploča vozila pregled vozila (vehicleboard) - vizualni pregled stanja voznog parka.",
+        "equipmentcalendaronpersonvehicle": "Kalendar opreme po osobi i vozilu (equipmentcalendaronpersonvehicle) - raspored opreme vezan za osobu i vozilo.",
+        "availablevehicles": "Dostupna vozila slobodna vozila (availablevehicles) - popis vozila dostupnih za rezervaciju.",
+        "whatcanido": "Što mogu raditi mogućnosti (whatcanido) - popis dostupnih akcija i mogućnosti korisnika.",
+        "latestvehiclecalendar": "Najnoviji kalendar vozila posljednje rezervacije (latestvehiclecalendar) - najnovije rezervacije i raspoloživost vozila.",
+        "latestvehiclecontracts": "Najnoviji ugovori vozila posljednji leasinzi (latestvehiclecontracts) - najnoviji ugovori o korištenju vozila.",
+        "latestperiodicactivities": "Najnovije periodične aktivnosti posljednji servisi (latestperiodicactivities) - najnovije periodične aktivnosti.",
+        "latestpersonperiodicactivities": "Najnovije aktivnosti osobe posljednje aktivnosti zaposlenika (latestpersonperiodicactivities) - najnovije aktivnosti dodijeljene zaposlenicima.",
+    }
+
+    def _get_entity_compound_prefix(self, tool_id: str) -> str:
+        """Extract entity from tool_id and return rich compound prefix.
+
+        Returns a descriptive Croatian sentence that anchors the embedding
+        to the correct entity family, disambiguating tools with identical
+        purpose text (e.g., 123 tools share 'Brisanje stavke...').
+        """
+        # Strip HTTP method prefix
+        name = re.sub(r'^(get|post|put|patch|delete)_', '', tool_id, flags=re.IGNORECASE)
+
+        # Strip suffixes to get base entity
+        SUFFIX_STRIP = [
+            '_id_documents_documentId_thumb', '_id_documents_documentId_SetAsDefault',
+            '_id_documents_documentId', '_id_documents', '_id_metadata',
+            '_DeleteByCriteria', '_multipatch', '_SetAsDefault',
+            '_GroupBy', '_ProjectTo', '_Agg', '_tree', '_id',
+        ]
+        name_lower = name.lower()
+        for suffix in SUFFIX_STRIP:
+            if name_lower.endswith(suffix.lower()):
+                name = name[:len(name) - len(suffix)]
+                break
+
+        # Match entity (longest first)
+        name_lower = name.lower()
+        for entity_key in sorted(self._ENTITY_COMPOUND_PREFIX.keys(), key=len, reverse=True):
+            if entity_key in name_lower:
+                return self._ENTITY_COMPOUND_PREFIX[entity_key]
+
+        return ""
+
+    # Entity nouns for purpose enrichment — replace generic "stavka" with entity-specific noun
+    _ENTITY_PURPOSE_NOUNS = {
+        "vehicles": "vozilo vozila prijevozno sredstvo",
+        "vehicletypes": "tip vozila vrsta vozila kategorija vozila",
+        "vehiclecalendar": "kalendar vozila rezervacija vozila raspored vozila",
+        "vehiclecontracts": "ugovor vozila leasing najam vozila",
+        "vehicleassignments": "dodjela vozila raspodjela vozila",
+        "vehicleshistoricalentries": "povijest vozila povijesni zapis vozila",
+        "vehiclesmonthlyexpenses": "mjesečni trošak vozila",
+        "vehicleboard": "ploča vozila pregled voznog parka",
+        "latestvehiclecalendar": "najnoviji kalendar vozila posljednja rezervacija",
+        "latestvehiclecontracts": "najnoviji ugovor vozila",
+        "availablevehicles": "dostupno vozilo slobodno vozilo",
+        "equipment": "oprema inventar alat uređaj stroj",
+        "equipmenttypes": "tip opreme vrsta opreme kategorija opreme",
+        "equipmentcalendar": "kalendar opreme rezervacija opreme raspored opreme",
+        "equipmentcalendaron": "kalendar opreme po filteru",
+        "equipmentcalendaronpersonvehicle": "kalendar opreme po osobi i vozilu",
+        "latestequipmentcalendar": "najnoviji kalendar opreme posljednja rezervacija opreme",
+        "persons": "osoba zaposlenik radnik djelatnik",
+        "persontypes": "tip osobe vrsta zaposlenika kategorija osobe",
+        "personorgunits": "organizacijska jedinica osobe odjel zaposlenika",
+        "personperiodicactivities": "periodična aktivnost osobe zadatak zaposlenika",
+        "personactivitytypes": "tip aktivnosti osobe vrsta zadatka zaposlenika",
+        "latestpersonperiodicactivities": "najnovija aktivnost osobe",
+        "teams": "tim grupa ekipa radna skupina",
+        "teammembers": "član tima pripadnik grupe",
+        "cases": "slučaj predmet šteta kvar prijava problem",
+        "casetypes": "tip slučaja vrsta prijave kategorija štete",
+        "expenses": "trošak izdatak račun rashod financijska stavka",
+        "expensetypes": "tip troška vrsta troška kategorija rashoda",
+        "expensegroups": "grupa troškova skupina troškova",
+        "trips": "putovanje putni nalog službeni put",
+        "triptypes": "tip putovanja vrsta putnog naloga",
+        "partners": "partner dobavljač klijent suradnik",
+        "documents": "dokument prilog datoteka",
+        "documenttypes": "tip dokumenta vrsta dokumenta kategorija dokumenta",
+        "orgunits": "organizacijska jedinica odjel sektor",
+        "costcenters": "troškovni centar mjesto troška",
+        "roles": "uloga dozvola pravo pristupa",
+        "tenants": "tenant najam korisnik sustava",
+        "tenantpermissions": "dozvola tenanta korisničko pravo",
+        "periodicactivities": "periodična aktivnost servis redovni posao",
+        "periodicactivitiesschedules": "raspored periodičnih aktivnosti termin servisa",
+        "periodicactivitytypes": "tip periodične aktivnosti vrsta servisa",
+        "schedulingmodels": "model raspoređivanja shema rasporeda",
+        "tags": "oznaka tag labela",
+        "pools": "pool grupa resursa",
+        "metadata": "metapodatak shema struktura polje definicija",
+        "lookup": "šifrarnik referentni podatak katalog",
+        "dashboarditems": "element nadzorne ploče dashboard stavka",
+        "booking": "rezervacija zauzimanje",
+        "mileagereports": "izvještaj o kilometraži prijeđeni kilometri",
+        "latestmileagereports": "najnoviji izvještaj o kilometraži",
+        "master": "matični podatak profil",
+        "persondata": "osobni podatak profil zaposlenika",
+        "vehiclesassignmentsoverview": "pregled dodjela vozila",
+        "mileage": "kilometraža prijeđeni put",
+    }
 
     def _build_embedding_text(self, tool_id: str, doc: Dict) -> str:
         """
         Build text for embedding from tool documentation.
 
-        V3.0: Added synonyms_hr support for improved semantic matching.
-
-        Priority order (highest weight first):
-        1. SYNONYMS_HR (5x) - User-provided Croatian synonyms (HIGHEST WEIGHT)
-        2. BASE TOOL KEYWORDS (3x) - explicit phrases for primary entities
-        3. Structural info (method, entity, suffix) - AUTO-GENERATED CROATIAN
-        4. purpose (what it does) - CROATIAN
-        5. when_to_use (use cases) - CROATIAN
-        6. example_queries_hr (Croatian example queries) - CROATIAN
+        V6.0 — Entity-dominant embedding: entity prefix + entity-enriched purpose.
+        Shorter text with entity as dominant signal → pushes tools into distinct
+        entity clusters. Generic "stavka" in purpose replaced with entity noun.
 
         Does NOT use training_queries.json!
         """
         parts = []
 
-        # V3.0: SYNONYMS_HR - highest priority (5x repetition)
-        # These are curated Croatian phrases that users actually use
-        synonyms = doc.get("synonyms_hr", [])
-        if synonyms:
-            synonym_text = " ".join(synonyms)
-            # Repeat 5x to heavily weight user synonyms
-            for _ in range(5):
-                parts.append(synonym_text)
+        # 1. COMPOUND INDEX PREFIX — entity description (dominant signal)
+        entity_prefix = self._get_entity_compound_prefix(tool_id)
+        if entity_prefix:
+            parts.append(entity_prefix)
 
-        # V2.0: Add explicit keywords for BASE CRUD tools
-        # These ensure primary entities rank higher than helpers/lookups
-        base_keywords = self._get_base_tool_keywords(tool_id)
-        if base_keywords:
-            # List tools get 3x weight, ID/special tools get 1x
-            tool_lower = tool_id.lower()
-            is_list_tool = any(tool_lower == k for k in [
-                "get_companies", "get_vehicles", "get_persons", "get_expenses",
-                "get_cases", "get_teams", "get_trips", "get_partners",
-                "get_equipment", "get_orgunits", "get_costcenters",
-                "get_roles", "get_tags", "get_pools", "get_tenants",
-                "get_vehicletypes", "get_persontypes", "get_casetypes",
-                "get_expensetypes", "get_expensegroups", "get_equipmenttypes",
-                "get_periodicactivities", "get_triptypes", "get_vehiclecontracts",
-                "get_schedulingmodels", "get_periodicactivitiesschedules",
-                "get_personactivitytypes", "get_personorgunits",
-                "get_tenantpermissions", "get_documenttypes",
-                "get_teammembers", "get_vehicleassignments",
-                "get_personperiodicactivities",
-            ])
-            repeat = 3 if is_list_tool else 1
-            for _ in range(repeat):
-                parts.append(base_keywords)
-
-        # Method-verb repetition (3x) — strengthens action intent signal in embedding
-        METHOD_VERB_TEXT = {
-            "get": "dohvati prikaži pokaži pogledaj vrati",
-            "post": "dodaj kreiraj napravi unesi novi nova novo",
-            "put": "ažuriraj promijeni zamijeni update izmijeni",
-            "patch": "djelomično ažuriraj parcijalno promijeni",
-            "delete": "obriši ukloni makni izbriši trajno brisanje",
-        }
-        method_prefix = tool_id.split("_")[0].lower()
-        method_verbs = METHOD_VERB_TEXT.get(method_prefix, "")
-        if method_verbs:
-            for _ in range(3):
-                parts.append(method_verbs)
-
-        # Structural info (method, entity, suffix)
-        structural_info = self._extract_structural_info(tool_id)
-        if structural_info:
-            parts.append(structural_info)
-
-        # Purpose
+        # 2. Entity-enriched PURPOSE
+        # Replace generic "stavka/element" with entity-specific nouns
         purpose = doc.get("purpose", "")
+        entity_key = self._extract_entity_key(tool_id)
+        entity_nouns = self._ENTITY_PURPOSE_NOUNS.get(entity_key, "")
         if purpose:
-            parts.append(purpose)
+            if entity_nouns:
+                # Append entity nouns to purpose for semantic association
+                parts.append(f"{purpose} ({entity_nouns})")
+            else:
+                parts.append(purpose)
 
-        # When to use
+        # 3. When to use (operation-specific context)
         when_to_use = doc.get("when_to_use", [])
         if when_to_use:
             parts.append(" ".join(when_to_use))
 
-        # Example queries (Croatian)
-        example_queries = doc.get("example_queries_hr", [])
-        if example_queries:
-            parts.append(" ".join(example_queries))
+        # 4. Method verbs (action intent signal)
+        method_prefix = tool_id.split("_")[0].lower()
+        method_verbs = METHOD_VERB_TEXT.get(method_prefix, "")
+        if method_verbs:
+            parts.append(method_verbs)
+
+        # 5. Synonyms (1x — for lexical coverage in BM25/concept matching)
+        synonyms = doc.get("synonyms_hr", [])
+        if synonyms:
+            parts.append(" ".join(synonyms))
+
+        # 6. Entity prefix AGAIN at end (sandwich — reinforces entity in embedding)
+        if entity_prefix:
+            parts.append(entity_prefix)
 
         return " ".join(parts)
 
-    def _get_base_tool_keywords(self, tool_id: str) -> str:
-        """
-        Get explicit Croatian keywords for base CRUD tools.
-
-        These keywords ensure that:
-        - get_Vehicles ranks #1 for "dohvati sva vozila"
-        - get_Persons ranks #1 for "dohvati sve zaposlenike"
-        - etc.
-        """
-        tool_lower = tool_id.lower()
-
-        # PRIMARY ENTITY LIST ENDPOINTS (get_X without suffixes)
-        BASE_LIST_KEYWORDS = {
-            "get_companies": "dohvati sve kompanije lista svih kompanija popis kompanija pregledaj kompanije tvrtke firme",
-            "get_vehicles": "dohvati sva vozila lista svih vozila popis vozila pregledaj vozila automobili auti",
-            "get_persons": "dohvati sve osobe lista svih osoba popis osoba zaposlenici radnici djelatnici ljudi",
-            "get_expenses": "dohvati sve troškove lista svih troškova popis troškova pregledaj troškove izdaci računi",
-            "get_cases": "dohvati sve slučajeve lista svih slučajeva popis slučajeva štete kvarovi prijave",
-            "get_teams": "dohvati sve timove lista svih timova popis timova grupe ekipe",
-            "get_trips": "dohvati sva putovanja lista svih putovanja popis putovanja putni nalozi",
-            "get_partners": "dohvati sve partnere lista svih partnera popis partnera dobavljači klijenti",
-            "get_equipment": "dohvati svu opremu lista sve opreme popis opreme inventar alati",
-            "get_orgunits": "dohvati sve organizacijske jedinice lista org jedinica popis odjela sektori",
-            "get_costcenters": "dohvati sve troškovne centre lista mjesta troška popis cost centara",
-            "get_roles": "dohvati sve uloge lista svih uloga popis uloga dozvole permisije",
-            "get_tags": "dohvati sve oznake lista svih oznaka popis tagova",
-            "get_pools": "dohvati sve poolove lista svih poolova popis poolova",
-            "get_tenants": "dohvati sve tenante lista svih tenanata popis najmova",
-            # Extended list endpoints
-            "get_vehicletypes": "tipovi vozila vrste vozila kategorije vozila popis tipova vozila",
-            "get_persontypes": "tipovi osoba vrste zaposlenika kategorije korisnika popis tipova osoba",
-            "get_casetypes": "tipovi slučajeva vrste prijava kategorije šteta popis tipova slučajeva",
-            "get_expensetypes": "tipovi troškova vrste troškova kategorije izdataka popis tipova troškova",
-            "get_expensegroups": "grupe troškova skupine troškova kategorije troškova popis grupa troškova",
-            "get_equipmenttypes": "tipovi opreme vrste opreme kategorije opreme popis tipova opreme",
-            "get_periodicactivities": "periodične aktivnosti servisi redovni poslovi popis periodičnih aktivnosti",
-            "get_triptypes": "tipovi putovanja vrste putovanja kategorije tripova popis tipova putovanja",
-            "get_vehiclecontracts": "ugovori vozila leasing najam lizing popis ugovora vozila",
-            "get_schedulingmodels": "modeli raspoređivanja raspored sheme popis modela raspoređivanja",
-            "get_periodicactivitiesschedules": "rasporedi periodičnih aktivnosti kalendar servisa popis rasporeda",
-            "get_personactivitytypes": "tipovi aktivnosti osobe vrste aktivnosti zaposlenika popis aktivnosti",
-            "get_personorgunits": "organizacijske jedinice osobe odjeli zaposlenika popis org jedinica osobe",
-            "get_tenantpermissions": "dozvole tenanta korisničke dozvole permisije popis dozvola",
-            "get_documenttypes": "tipovi dokumenata vrste dokumenata kategorije dokumenata popis tipova dokumenata",
-            "get_teammembers": "članovi tima popis članova tima zaposlenici u timu",
-            "get_vehicleassignments": "dodjele vozila tko vozi što popis dodjela vozila",
-            "get_personperiodicactivities": "periodične aktivnosti osobe servisi zaposlenika redovne aktivnosti osobe",
-        }
-
-        # PRIMARY ENTITY BY ID ENDPOINTS (get_X_id)
-        BASE_ID_KEYWORDS = {
-            "get_companies_id": "dohvati jednu kompaniju po ID-u detalji kompanije informacije o kompaniji",
-            "get_vehicles_id": "dohvati jedno vozilo po ID-u detalji vozila informacije o vozilu podaci vozila",
-            "get_persons_id": "dohvati jednu osobu po ID-u detalji osobe informacije o zaposleniku podaci osobe",
-            "get_expenses_id": "dohvati jedan trošak po ID-u detalji troška informacije o trošku",
-            "get_cases_id": "dohvati jedan slučaj po ID-u detalji slučaja informacije o šteti",
-            "get_teams_id": "dohvati jedan tim po ID-u detalji tima informacije o timu",
-            "get_trips_id": "dohvati jedno putovanje po ID-u detalji putovanja informacije o putovanju",
-            "get_equipment_id": "dohvati jednu opremu po ID-u detalji opreme informacije o opremi",
-            "get_orgunits_id": "dohvati jednu org jedinicu po ID-u detalji odjela informacije o sektoru",
-            # Extended ID endpoints
-            "get_vehicletypes_id": "detalji tipa vozila informacije o vrsti vozila",
-            "get_casetypes_id": "detalji tipa slučaja informacije o vrsti prijave",
-            "get_expensetypes_id": "detalji tipa troška informacije o vrsti troška",
-            "get_periodicactivities_id": "detalji periodične aktivnosti informacije o servisu",
-            "get_vehiclecontracts_id": "detalji ugovora vozila informacije o leasingu",
-            "get_partners_id": "detalji partnera informacije o dobavljaču klijentu",
-            "get_costcenters_id": "detalji troškovnog centra informacije o mjestu troška",
-            "get_roles_id": "detalji uloge informacije o roli dozvoli",
-            "get_tags_id": "detalji oznake informacije o tagu",
-        }
-
-        # SPECIAL TOOLS (write operations and functional endpoints)
-        SPECIAL_KEYWORDS = {
-            "get_vehiclecalendar": "kalendar vozila raspored vozila moje rezervacije vozila booking vozila pregled rezervacija svi bookings",
-            "get_availablevehicles": "dostupna vozila slobodna vozila koja vozila su slobodna raspoloživa vozila",
-            "get_masterdata": "osnovni podaci vozila master data registracija tablica kilometraža koliko km ima vozilo ukupna kilometraža podaci o vozilu",
-            "post_addcase": "prijavi štetu prijavi kvar nova šteta novi kvar udario sam ogrebao sam oštećenje imam kvar na autu slomio sam",
-            "post_addmileage": "unesi kilometražu dodaj km upiši kilometre prijeđeni put nova kilometraža",
-            "post_vehiclecalendar": "nova rezervacija vozila rezerviraj vozilo zauzmi vozilo booking dodaj rezervaciju",
-            "post_booking": "nova rezervacija booking rezerviraj zauzmi dodaj booking",
-            "get_orgunits_tree": "hijerarhija organizacijskih jedinica stablo odjela struktura odjela parent child",
-            # Extended write operations
-            "post_expenses": "dodaj trošak unesi novi trošak kreiraj izdatak novi rashod",
-            "post_trips": "dodaj putovanje novo putovanje kreiraj trip novi putni nalog",
-            "post_companies": "dodaj kompaniju novu tvrtku kreiraj firmu nova kompanija",
-            "post_equipment": "dodaj opremu novu opremu kreiraj inventar",
-            "post_partners": "dodaj partnera novog dobavljača kreiraj klijenta",
-            "delete_expenses_id": "obriši trošak ukloni izdatak makni stavku troška",
-            "delete_trips_id": "obriši putovanje ukloni trip makni putni nalog",
-            "delete_cases_id": "obriši slučaj ukloni štetu zatvori prijavu",
-            "delete_vehiclecalendar_id": "obriši rezervaciju otkaži booking ukloni rezervaciju",
-            "put_vehicles_id": "ažuriraj vozilo promijeni podatke vozila update auta",
-            "put_expenses_id": "ažuriraj trošak promijeni izdatak update troška",
-            "put_companies_id": "ažuriraj kompaniju promijeni tvrtku update firme",
-        }
-
-        # Check which keywords to return
-        if tool_lower in BASE_LIST_KEYWORDS:
-            return BASE_LIST_KEYWORDS[tool_lower]
-        elif tool_lower in BASE_ID_KEYWORDS:
-            return BASE_ID_KEYWORDS[tool_lower]
-        elif tool_lower in SPECIAL_KEYWORDS:
-            return SPECIAL_KEYWORDS[tool_lower]
-
-        return ""
-
-    def _extract_structural_info(self, tool_id: str) -> str:
-        """
-        Extract structural information from tool_id and convert to Croatian.
-        This helps differentiate similar tools.
-        """
-        # Suffix meanings for structural differentiation (MORE DISTINCT!)
-        SUFFIX_MEANINGS = {
-            "_id_documents_documentId_thumb": "slicica thumbnail preview dokumenta datoteke priloga",
-            "_id_documents_documentId_SetAsDefault": "postavljanje dokumenta kao zadanog default",
-            "_id_documents_documentId": "dohvati jedan konkretni dokument datoteku prilog po njegovom ID-u",
-            "_id_documents": "lista svih dokumenata datoteka priloga prilozen stavci",
-            "_id_metadata": "metapodaci shema struktura polja kolone definicija",
-            "_DeleteByCriteria": "brisanje prema kriterijima filtriranja uvjetno selektivno",
-            "_multipatch": "bulk batch grupno visestruko azuriranje vise stavki odjednom",
-            "_SetAsDefault": "postavljanje kao zadano default",
-            "_GroupBy": "grupiranje podataka po kategoriji agregacija grupa",
-            "_ProjectTo": "projekcija samo odredenih polja select fields",
-            "_Agg": "agregacija suma prosjek minimum maksimum count statistika",
-            "_tree": "hijerarhijska struktura stablo parent child",
-            "_id": "dohvati informacije detalje o jednoj konkretnoj stavci entitetu po ID-u",
-        }
-
-        # Entity names in Croatian (ORDER MATTERS - longer/specific first!)
-        ENTITY_NAMES = {
-            # Person-specific entities (MUST come before "periodicactivities")
-            "personperiodicactivities": "aktivnosti osobe zaposlenika osobne periodicne",
-            "personorgunits": "organizacijske jedinice osobe zaposlenika",
-            "latestpersonperiodicactivities": "najnovije aktivnosti osobe zaposlenika",
-            # Latest entities
-            "latestvehiclecalendar": "najnoviji kalendar vozila",
-            "latestvehiclecontracts": "najnoviji ugovori vozila",
-            "latestperiodicactivities": "najnovije periodicne aktivnosti opcenito",
-            # Standard entities
-            "companies": "kompanija tvrtka firma poduzece",
-            "vehicles": "vozilo automobil auto",
-            "vehicletypes": "tip vrste vozila kategorija",
-            "vehiclecalendar": "kalendar vozila raspored rezervacija",
-            "vehiclecontracts": "ugovori vozila",
-            "persons": "osoba zaposlenik radnik",
-            "teams": "tim grupa ekipa",
-            "cases": "predmet slucaj steta kvar prijava",
-            "expenses": "trosak izdatak racun",
-            "expensetypes": "tip vrste troska kategorija",
-            "mileage": "kilometraza km prijedeni put",
-            "calendar": "kalendar raspored rezervacija",
-            "documents": "dokument prilog datoteka",
-            "equipment": "oprema inventar alat",
-            "equipmenttypes": "tip vrste opreme kategorija",
-            "equipmentcalendar": "kalendar opreme raspored",
-            "partners": "partner dobavljac klijent",
-            "tenants": "najam tenant",
-            "tenantpermissions": "dozvole najma korisnicke dozvole",
-            "orgunits": "organizacijska jedinica odjel sektor",
-            "costcenters": "troskovni centar mjesto troska",
-            "trips": "putovanje trip putni nalog",
-            "triptypes": "tip vrste putovanja kategorija",
-            "roles": "uloga dozvola rola",
-            "periodicactivities": "periodicna aktivnost servis opcenito",
-            "periodicactivitiesschedules": "raspored periodicnih aktivnosti",
-            "schedulingmodels": "model rasporedivanja",
-            "metadata": "metapodaci shema struktura",
-            "settings": "postavke konfiguracija",
-        }
-
-        # HTTP method meanings (VERY DISTINCT between PUT and PATCH!)
-        METHOD_MEANINGS = {
-            "get": "dohvati prikazi pogledaj vrati citaj preuzmi",
-            "post": "dodaj kreiraj napravi unesi stvori zapisi novi nova novo",
-            "put": "potpuno zamijeni sve azuriraj cijeli objekt kompletno update full",
-            "patch": "djelomicno azuriraj samo neka polja parcijalno partial modificiraj",
-            "delete": "obrisi ukloni izbrisi makni trajno",
-        }
-
-        parts = []
-        tool_lower = tool_id.lower()
-
-        # ---
-        # ENTITY FIRST! (repeated 5x to dominate embedding)
-        # This is the MOST IMPORTANT differentiator
-        # ---
+    def _extract_entity_key(self, tool_id: str) -> str:
+        """Extract entity key from tool_id for purpose enrichment."""
         name = re.sub(r'^(get|post|put|patch|delete)_', '', tool_id, flags=re.IGNORECASE)
-        for suffix in SUFFIX_MEANINGS.keys():
-            if name.lower().endswith(suffix.lower()):
-                name = name[:-len(suffix)]
-                break
-        name = re.sub(r'_id$', '', name, flags=re.IGNORECASE)
-
-        # Find entity and ADD IT FIRST (5x repetition for weight!)
-        entity_value = ""
         name_lower = name.lower()
-        for key, value in ENTITY_NAMES.items():
-            if key in name_lower:
-                entity_value = value
-                break
-
-        if entity_value:
-            # Repeat entity 2x (reduced from 5x — entity is same for get_X and get_X_id,
-            # so high repetition provides zero discriminating power between variants)
-            parts.append(entity_value)
-            parts.append(entity_value)
-
-        # Extract suffix meaning (check longest first) — 3x for stronger variant discrimination
-        for suffix, meaning in sorted(SUFFIX_MEANINGS.items(), key=lambda x: len(x[0]), reverse=True):
-            if tool_lower.endswith(suffix.lower()):
-                parts.append(meaning)
-                parts.append(meaning)
-                parts.append(meaning)
-                break
-
-        # Extract HTTP method
-        method = None
-        for m in ["get", "post", "put", "patch", "delete"]:
-            if tool_lower.startswith(f"{m}_"):
-                method = m
-                break
-
-        if method:
-            parts.append(METHOD_MEANINGS.get(method, ""))
-
-        return " ".join(parts)
+        # Match longest entity key first
+        for entity_key in sorted(self._ENTITY_PURPOSE_NOUNS.keys(), key=len, reverse=True):
+            if name_lower.startswith(entity_key):
+                return entity_key
+        # Fallback: use parts[1]
+        parts = tool_id.split("_")
+        if len(parts) >= 2:
+            return parts[1].lower()
+        return ""
 
     def _build_index(self) -> None:
         """Build FAISS index from embeddings."""
@@ -578,74 +537,74 @@ class FAISSVectorStore:
 
         logger.info(f"FAISS index built: {self._index.ntotal} vectors")
 
-    def _detect_entity_from_query(self, query: str) -> Optional[str]:
+    def _compute_entity_centroids(self) -> None:
+        """Compute average embedding per entity for embedding-based entity classification.
+
+        Groups all tool embeddings by entity (extracted from tool_id), computes
+        the centroid (mean), and L2-normalizes it for cosine similarity lookup.
         """
-        Detect entity mentioned in the query for hierarchical filtering.
-        Returns the entity key (e.g., 'companies', 'vehicles') or None.
+        from collections import defaultdict
+
+        entity_vectors: Dict[str, List[np.ndarray]] = defaultdict(list)
+
+        for tool_id, embedding in self._embeddings.items():
+            parts = tool_id.split("_")
+            if len(parts) < 2:
+                continue
+            entity = parts[1].lower()
+            entity_vectors[entity].append(np.array(embedding, dtype=np.float32))
+
+        self._entity_centroids = {}
+        for entity, vectors in entity_vectors.items():
+            centroid = np.mean(vectors, axis=0).reshape(1, -1)
+            faiss.normalize_L2(centroid)
+            self._entity_centroids[entity] = centroid[0]
+
+        logger.info(f"Entity centroids computed: {len(self._entity_centroids)} entities")
+
+    def classify_entity_by_embedding(
+        self, query_embedding: List[float], min_confidence: float = 0.45
+    ) -> Tuple[Optional[str], float]:
+        """Classify entity from query embedding using cosine similarity to entity centroids.
+
+        Args:
+            query_embedding: Raw query embedding from ada-002 (not yet normalized)
+            min_confidence: Minimum cosine similarity to return a classification
+
+        Returns:
+            (entity_key, confidence) or (None, best_score) if below threshold
         """
-        query_lower = query.lower()
+        if not self._entity_centroids:
+            return None, 0.0
 
-        # Entity detection patterns (Croatian keywords -> entity key)
-        # Order matters: LONGER/MORE SPECIFIC patterns MUST come first!
-        ENTITY_PATTERNS = [
-            # LATEST entities MUST come before regular ones
-            (['najnovija aktivnost osobe', 'najnovije aktivnosti osobe', 'latest aktivnost osobe'], 'latestpersonperiodicactivities'),
-            (['najnovija periodična aktivnost', 'najnovije periodične aktivnosti', 'najnovija periodična'], 'latestperiodicactivities'),
-            (['najnoviji kalendar vozila', 'latest kalendar vozila'], 'latestvehiclecalendar'),
-            (['najnoviji ugovor vozila', 'najnoviji ugovori vozila'], 'latestvehiclecontracts'),
-            (['najnoviji kalendar opreme', 'latest kalendar opreme'], 'latestequipmentcalendar'),
-            (['najnovija kilometraža', 'najnoviji izvještaj kilometraže'], 'latestmileagereports'),
+        # Normalize query embedding
+        qv = np.array(query_embedding, dtype=np.float32).reshape(1, -1)
+        faiss.normalize_L2(qv)
+        qv = qv[0]
 
-            # Type entities before base entities
-            (['tip periodične aktivnosti', 'tipovi periodičnih aktivnosti'], 'periodicactivitytypes'),
-            (['tip aktivnosti osobe', 'tipovi aktivnosti osobe'], 'personactivitytypes'),
+        best_entity = None
+        best_score = -1.0
 
-            # Regular compound entities
-            (['aktivnost osobe', 'aktivnosti osobe', 'osobne aktivnosti'], 'personperiodicactivities'),
-            (['periodična aktivnost', 'periodične aktivnosti', 'periodicna aktivnost'], 'periodicactivities'),
-            (['kalendar vozila', 'raspored vozila'], 'vehiclecalendar'),
-            (['kalendar opreme', 'raspored opreme'], 'equipmentcalendar'),
-            (['ugovor vozila', 'ugovori vozila'], 'vehiclecontracts'),
-            (['organizacijska jedinica osobe', 'org jedinica osobe'], 'personorgunits'),
-            (['organizacijska jedinica', 'org. jedinica', 'odjel'], 'orgunits'),
-            (['troškovni centar', 'mjesto troška', 'cost center'], 'costcenters'),
-            (['tip dokumenta', 'tipovi dokumenta', 'vrsta dokumenta'], 'documenttypes'),
-            (['tip troška', 'tipovi troškova', 'vrsta troška'], 'expensetypes'),
-            (['tip vozila', 'tipovi vozila', 'vrsta vozila'], 'vehicletypes'),
-            (['tip opreme', 'tipovi opreme', 'vrsta opreme'], 'equipmenttypes'),
-            (['tip putovanja', 'tipovi putovanja', 'vrsta putovanja'], 'triptypes'),
-            (['model raspoređivanja', 'modeli raspoređivanja'], 'schedulingmodels'),
-            (['raspored periodičnih', 'rasporedi periodičnih'], 'periodicactivitiesschedules'),
-            (['dozvola najma', 'dozvole najma', 'korisničke dozvole'], 'tenantpermissions'),
-            (['član tima', 'članovi tima'], 'teammembers'),
-            (['povijesni zapis vozila', 'povijest vozila'], 'vehicleshistoricalentries'),
-            (['mjesečni trošak vozila'], 'vehiclesmonthlyexpenses'),
-            (['izvještaj o kilometraži', 'kilometraža'], 'mileage'),
+        for entity, centroid in self._entity_centroids.items():
+            score = float(np.dot(qv, centroid))
+            if score > best_score:
+                best_score = score
+                best_entity = entity
 
-            # Simple entities
-            (['kompanij', 'tvrtk', 'firma', 'poduzeć'], 'companies'),
-            (['vozil', 'automobil', 'auto '], 'vehicles'),
-            (['osob', 'zaposlen', 'radnik'], 'persons'),
-            (['tim', 'ekip', 'grup'], 'teams'),
-            (['predmet', 'slučaj', 'šteta', 'kvar', 'prijav'], 'cases'),
-            (['trošak', 'troška', 'izdatak', 'račun'], 'expenses'),
-            (['putovanj', 'putni nalog'], 'trips'),
-            (['oprem', 'inventar'], 'equipment'),
-            (['partner', 'dobavljač', 'klijent'], 'partners'),
-            (['najam', 'tenant'], 'tenants'),
-            (['ulog', 'role', 'rola'], 'roles'),
-            (['oznaka', 'tag'], 'tags'),
-            (['pool'], 'pools'),
-            (['metapodatak', 'metapodaci', 'shema', 'struktura'], 'metadata'),
-            (['nadzorna ploča', 'dashboard'], 'dashboarditems'),
-        ]
+        if best_score >= min_confidence:
+            logger.debug(
+                f"Embedding entity classifier: -> {best_entity} (score={best_score:.3f})"
+            )
+            return best_entity, best_score
 
-        for keywords, entity in ENTITY_PATTERNS:
-            for kw in keywords:
-                if kw in query_lower:
-                    return entity
+        return None, best_score
 
-        return None
+    async def get_query_embedding(self, query: str) -> Optional[List[float]]:
+        """Public wrapper for getting query embedding (for reuse across pipeline stages)."""
+        from services.concept_mapper import get_concept_mapper
+        concept_mapper = get_concept_mapper()
+        expanded_query = concept_mapper.expand_query(query)
+        return await self._get_query_embedding(expanded_query)
 
     async def search(
         self,
@@ -653,7 +612,8 @@ class FAISSVectorStore:
         top_k: int = 10,
         action_filter: Optional[str] = None,
         entity_filter: Optional[str] = None,
-        auto_detect_entity: bool = False  # Disabled by default - causes accuracy drop
+        auto_detect_entity: bool = False,  # Disabled by default - causes accuracy drop
+        query_embedding: Optional[List[float]] = None,  # Pre-computed embedding to avoid double API call
     ) -> List[SearchResult]:
         """
         Search for similar tools using FAISS with optional hierarchical filtering.
@@ -664,6 +624,7 @@ class FAISSVectorStore:
             action_filter: Optional filter by action (GET/POST/PUT/DELETE)
             entity_filter: Optional filter by entity (companies, vehicles, etc.)
             auto_detect_entity: If True, auto-detect entity from query text
+            query_embedding: Optional pre-computed embedding (skips ada-002 call)
 
         Returns:
             List of SearchResult sorted by similarity (highest first)
@@ -695,7 +656,13 @@ class FAISSVectorStore:
                 logger.debug(f"ConceptMapper expanded: '{query}' -> '{expanded_query}'")
 
             # Get query embedding (using expanded query for better matching)
-            query_embedding = await self._get_query_embedding(expanded_query)
+            # Use pre-computed embedding if provided (avoids double API call
+            # when entity classification already computed it)
+            if query_embedding is None:
+                _emb_t0 = time.monotonic()
+                query_embedding = await self._get_query_embedding(expanded_query)
+                if query_embedding is not None:
+                    EMBEDDING_API_DURATION.observe(time.monotonic() - _emb_t0)
             if query_embedding is None:
                 return []
 
@@ -707,8 +674,10 @@ class FAISSVectorStore:
             has_filter = action_filter or effective_entity_filter
             search_k = top_k * 5 if has_filter else top_k
 
-            # FAISS search
+            # FAISS search (timed for Prometheus)
+            t0 = time.monotonic()
             distances, indices = self._index.search(query_vector, min(search_k, len(self._tool_ids)))
+            FAISS_SEARCH_DURATION.observe(time.monotonic() - t0)
 
             # Build results with filtering
             results = []
@@ -727,8 +696,11 @@ class FAISSVectorStore:
                     parts = tool_lower.split('_')
                     tool_entity = parts[1] if len(parts) >= 2 else ''
 
-                    # Check if entity matches (with some flexibility)
-                    if effective_entity_filter not in tool_entity and tool_entity not in effective_entity_filter:
+                    # Check if entity matches (stem-aware for plural/singular)
+                    entity_stem = effective_entity_filter.rstrip('s') if len(effective_entity_filter) > 3 else effective_entity_filter
+                    if not (effective_entity_filter in tool_entity
+                            or tool_entity in effective_entity_filter
+                            or tool_entity.startswith(entity_stem)):
                         continue
 
                 # Apply action filter if specified
@@ -758,36 +730,45 @@ class FAISSVectorStore:
                 if len(results) >= top_k:
                     break
 
-            # If entity filter was too restrictive and we got no results, retry without it
-            if not results and effective_entity_filter and detected_entity:
+            # If entity filter was too restrictive and we got no results, retry without it.
+            # Pass through cached query_embedding to avoid a second ada-002 round-trip.
+            if not results and effective_entity_filter:
                 logger.debug("Entity filter too restrictive, retrying without entity filter")
                 return await self.search(
                     query=query,
                     top_k=top_k,
                     action_filter=action_filter,
                     entity_filter=None,
-                    auto_detect_entity=False
+                    auto_detect_entity=False,
+                    query_embedding=query_embedding,
                 )
 
             span.set_attribute("faiss.result_count", len(results))
             return results
 
     async def _get_query_embedding(self, query: str) -> Optional[List[float]]:
-        """Get embedding for query text."""
+        """Get embedding for query text. One retry on transient failure — ada-002
+        occasionally throws 5xx under load, and a silent [] here kills the entire
+        search for the user."""
         from services.openai_client import get_embedding_client
 
         if self._openai_client is None:
             self._openai_client = get_embedding_client()
 
-        try:
-            response = await self._openai_client.embeddings.create(
-                input=[query[:8000]],
-                model=_get_settings().AZURE_OPENAI_EMBEDDING_DEPLOYMENT
-            )
-            return response.data[0].embedding
-        except Exception as e:
-            logger.warning(f"Failed to get query embedding: {e}")
-            return None
+        deployment = _get_settings().AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+        last_err: Optional[Exception] = None
+        for attempt in (1, 2):
+            try:
+                response = await self._openai_client.embeddings.create(
+                    input=[query[:8000]], model=deployment,
+                )
+                return response.data[0].embedding
+            except Exception as e:
+                last_err = e
+                if attempt == 1:
+                    await asyncio.sleep(0.2)
+        logger.warning(f"Failed to get query embedding after retry: {last_err}")
+        return None
 
     def get_tool_method(self, tool_id: str) -> str:
         """Get HTTP method for a tool."""

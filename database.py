@@ -69,8 +69,8 @@ def create_engine_with_pool(database_url: str) -> AsyncEngine:
     With 100 concurrent users = 100 connections = PostgreSQL crash!
 
     Pool settings from config:
-    - DB_POOL_SIZE: 10 (base connections)
-    - DB_MAX_OVERFLOW: 20 (peak = 30 total max)
+    - DB_POOL_SIZE: 5 (base connections)
+    - DB_MAX_OVERFLOW: 10 (peak = 15 total max)
     - DB_POOL_RECYCLE: 3600 (recycle after 1 hour)
     """
     # Test environment - no pooling needed

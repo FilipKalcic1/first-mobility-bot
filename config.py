@@ -9,7 +9,7 @@ import logging
 from functools import lru_cache
 from typing import List, Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger("configuration")
@@ -33,8 +33,8 @@ class Settings(BaseSettings):
         ...,  # REQUIRED - must be set via environment variable
         description="PostgreSQL connection string (e.g., postgresql+asyncpg://user:pass@host:5432/db)"
     )
-    DB_POOL_SIZE: int = Field(default=20)
-    DB_MAX_OVERFLOW: int = Field(default=40)
+    DB_POOL_SIZE: int = Field(default=5)
+    DB_MAX_OVERFLOW: int = Field(default=10)
     DB_POOL_RECYCLE: int = Field(default=3600)
     
     # ---
@@ -249,6 +249,21 @@ class Settings(BaseSettings):
         if v and not v.startswith(('http://', 'https://')):
             raise ValueError(f"URL must start with http or https: {v}")
         return v.rstrip('/') if v else v
+
+    @model_validator(mode='after')
+    def _require_infobip_secret_when_active(self) -> 'Settings':
+        """
+        If the Infobip/WhatsApp integration is enabled (API key set),
+        INFOBIP_SECRET_KEY is mandatory. Without it, webhook HMAC
+        validation cannot run — fail startup rather than accept
+        unauthenticated callbacks.
+        """
+        if self.INFOBIP_API_KEY and not self.INFOBIP_SECRET_KEY:
+            raise ValueError(
+                "INFOBIP_SECRET_KEY is required when INFOBIP_API_KEY is set. "
+                "Webhook HMAC validation cannot be bypassed."
+            )
+        return self
 
 
 @lru_cache()

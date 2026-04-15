@@ -1,0 +1,945 @@
+{
+  "total": 290,
+  "faiss": {
+    "top1": 49,
+    "top5": 104,
+    "top20": 179
+  },
+  "reranked": {
+    "top1": 39,
+    "top5": 98,
+    "top20": 197
+  },
+  "misses": [
+    {
+      "expected": "delete_Cases_id",
+      "query": "Želim izbrisati određenu stavku na temelju njenog identifikatora.",
+      "rerank_rank": 45,
+      "top3": [
+        "delete_Teams_id",
+        "delete_Companies_id",
+        "delete_PersonOrgUnits_id"
+      ]
+    },
+    {
+      "expected": "delete_EquipmentCalendar_id_documents_documentId",
+      "query": "Molim vas da trajno maknete potvrdu koja se odnosi na ovu stavku iz hodograma.",
+      "rerank_rank": 999,
+      "top3": [
+        "delete_LatestPeriodicActivities_id",
+        "delete_LatestVehicleCalendar",
+        "get_Master"
+      ]
+    },
+    {
+      "expected": "delete_EquipmentTypes_DeleteByCriteria",
+      "query": "Zanima me kako da se oslobodim raznih skupina instrumenta koji ispunjavaju zadan",
+      "rerank_rank": 999,
+      "top3": [
+        "get_Teams_GroupBy",
+        "get_AvailabilityProjection_GroupBy",
+        "get_Pools_Agg"
+      ]
+    },
+    {
+      "expected": "delete_EquipmentTypes_DeleteByCriteria",
+      "query": "Molim te da mi pomogneš s uklanjanjem raznih prosječnih sredstava koja zadovolja",
+      "rerank_rank": 999,
+      "top3": [
+        "delete_DocumentTypes_DeleteByCriteria",
+        "delete_PeriodicActivitiesSchedules_id",
+        "delete_LatestVehicleContracts_DeleteByCriteria"
+      ]
+    },
+    {
+      "expected": "delete_Expenses_id_documents_documentId",
+      "query": "Trebam se osloboditi obrazca koji više nije točan.",
+      "rerank_rank": 999,
+      "top3": [
+        "delete_Trips_id_documents_documentId",
+        "delete_TeamMembers_id_documents_documentId",
+        "delete_VehicleTypes_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "delete_LatestEquipmentCalendar_DeleteByCriteria",
+      "query": "Zamoli asistenta da se uklone unos koji su se posljednje pojavili u hodogramu na",
+      "rerank_rank": 24,
+      "top3": [
+        "delete_LatestPersonPeriodicActivities_DeleteByCriteria",
+        "delete_LatestVehicleCalendar_DeleteByCriteria",
+        "delete_LatestVehicleCalendar"
+      ]
+    },
+    {
+      "expected": "delete_PeriodicActivitiesSchedules_DeleteByCriteria",
+      "query": "Tražim da se eliminiraju svi unosi iz hodograma koji odgovaraju filtrima.",
+      "rerank_rank": 38,
+      "top3": [
+        "get_VehiclesHistoricalEntries_ProjectTo",
+        "delete_LatestEquipmentCalendar_DeleteByCriteria",
+        "get_VehiclesHistoricalEntries"
+      ]
+    },
+    {
+      "expected": "delete_PeriodicActivityTypes_id",
+      "query": "Trebam izbrisati određenu klasifikaciju termina koja više nije potrebna.",
+      "rerank_rank": 70,
+      "top3": [
+        "delete_Trips_id_documents_documentId",
+        "delete_LatestEquipmentCalendar_id",
+        "delete_Tags_id"
+      ]
+    },
+    {
+      "expected": "delete_PersonActivityTypes_id_documents_documentId",
+      "query": "Ljubazno molim da se izbriše zapisnik koji se odnosi na određene poslove.",
+      "rerank_rank": 30,
+      "top3": [
+        "delete_Companies_id_documents_documentId",
+        "delete_PeriodicActivities_id_documents_documentId",
+        "delete_PeriodicActivityTypes_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "delete_PersonPeriodicActivities",
+      "query": "Molim da se uklone svi nevažeći rasporedi koji su ostali u sustavu.",
+      "rerank_rank": 78,
+      "top3": [
+        "delete_SchedulingModels_id",
+        "delete_SchedulingModels",
+        "delete_EquipmentCalendar"
+      ]
+    },
+    {
+      "expected": "delete_PersonTypes",
+      "query": "Molim te da izbrišeš sve navedene tipove članova iz baze podataka.",
+      "rerank_rank": 65,
+      "top3": [
+        "delete_DocumentTypes_DeleteByCriteria",
+        "delete_PersonTypes_id_documents_documentId",
+        "delete_DocumentTypes_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "delete_TenantPermissions_id_documents_documentId",
+      "query": "Molim vas da mi pomognete s uklanjanjem potvrde koja nam više ne treba.",
+      "rerank_rank": 79,
+      "top3": [
+        "delete_TeamMembers_id_documents_documentId",
+        "delete_TenantPermissions",
+        "delete_VehicleTypes_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "get_DashboardItems_id",
+      "query": "Trebam pristupiti jednom resursu unutar prikaza podataka.",
+      "rerank_rank": 999,
+      "top3": [
+        "get_Pools_ProjectTo",
+        "get_Pools_Agg",
+        "get_Pools_GroupBy"
+      ]
+    },
+    {
+      "expected": "get_DocumentTypes_id",
+      "query": "Molim te da prikažeš ispravu prema zadnjem ID-u koji imam.",
+      "rerank_rank": 79,
+      "top3": [
+        "get_LatestPersonPeriodicActivities_id_metadata",
+        "get_LatestPeriodicActivities_id_metadata",
+        "get_LatestMileageReports_id_metadata"
+      ]
+    },
+    {
+      "expected": "get_DocumentTypes_id",
+      "query": "Možeš li mi pokazati spis koji se odnosi na taj broj?",
+      "rerank_rank": 86,
+      "top3": [
+        "get_Lookup_Currencies",
+        "get_MileageReports_id_documents_documentId",
+        "get_MileageReports_id_documents"
+      ]
+    },
+    {
+      "expected": "get_DocumentTypes_id_documents_documentId_thumb",
+      "query": "Zanima me kako izgleda miniatura jednog spisa iz različitih grupa.",
+      "rerank_rank": 22,
+      "top3": [
+        "get_Teams",
+        "get_Master_id",
+        "get_Teams_id"
+      ]
+    },
+    {
+      "expected": "get_DocumentTypes_id_documents_documentId_thumb",
+      "query": "Trebam pregledati minijaturu jednog obrasca iz odabrane kategorije.",
+      "rerank_rank": 25,
+      "top3": [
+        "get_EquipmentTypes_Agg",
+        "delete_DocumentTypes_DeleteByCriteria",
+        "get_VehicleInputHelper_DistinctBrands"
+      ]
+    },
+    {
+      "expected": "get_EquipmentCalendar_id",
+      "query": "Treba mi pregled rezervacijskog plana za ovo vozilo.",
+      "rerank_rank": 51,
+      "top3": [
+        "get_VehiclesAssignmentsOverview_on_GroupBy",
+        "get_VehicleCalendar_id_metadata",
+        "get_VehiclesAssignmentsOverview_on_ProjectTo"
+      ]
+    },
+    {
+      "expected": "get_EquipmentTypes_id_documents_documentId_thumb",
+      "query": "Molim te, daj mi vizualni prikaz akta povezanog s određenim prijevoznim sredstvo",
+      "rerank_rank": 999,
+      "top3": [
+        "get_Cases_id_documents_documentId_thumb",
+        "get_VehicleTypes_id_documents_documentId_thumb",
+        "get_TripTypes_id_documents_documentId_thumb"
+      ]
+    },
+    {
+      "expected": "get_Expenses_Agg",
+      "query": "Zanima me pregled minimalnih i maksimalnih stavki u vezi s iznosima.",
+      "rerank_rank": 31,
+      "top3": [
+        "get_LatestEquipmentCalendar_Agg",
+        "get_MonthlyFuelExpensesAndMileages_Agg",
+        "get_MonthlyMileagesAssigned_Agg"
+      ]
+    },
+    {
+      "expected": "get_Expenses_Agg",
+      "query": "Možeš li mi dati uvid u sve agregirane informacije vezane uz financijske stavke?",
+      "rerank_rank": 60,
+      "top3": [
+        "get_LatestPeriodicActivities_Agg",
+        "get_MonthlyMileagesAssigned_Agg",
+        "get_PersonActivityTypes_Agg"
+      ]
+    },
+    {
+      "expected": "get_Expenses_Agg",
+      "query": "Želim pregledati agregirane podatke o iznosima koji uključuju najniže i najviše ",
+      "rerank_rank": 41,
+      "top3": [
+        "get_Persons_Agg",
+        "get_PeriodicActivityTypes_Agg",
+        "get_SchedulingModels_Agg"
+      ]
+    },
+    {
+      "expected": "get_Expenses_ProjectTo",
+      "query": "Možeš li mi dostaviti informacije o iznosima za taj specifični plan?",
+      "rerank_rank": 31,
+      "top3": [
+        "get_LatestEquipmentCalendar_id_metadata",
+        "put_VehicleCalendar_id_documents_documentId",
+        "get_VehiclesAssignmentsOverview_on_Agg"
+      ]
+    },
+    {
+      "expected": "get_Expenses_ProjectTo",
+      "query": "Trebam pregledati stavke koje se odnose na moj trenutni zadatak.",
+      "rerank_rank": 35,
+      "top3": [
+        "get_PeriodicActivitiesSchedules",
+        "get_Trips",
+        "get_VehiclesAssignmentsOverview_on"
+      ]
+    },
+    {
+      "expected": "get_Expenses_ProjectTo",
+      "query": "Molim te da mi prikažeš sve relevantne stavke za moju aktivnost.",
+      "rerank_rank": 999,
+      "top3": [
+        "get_PeriodicActivitiesSchedules",
+        "get_Lookup_ActivityStatusId",
+        "get_PersonPeriodicActivities"
+      ]
+    },
+    {
+      "expected": "get_LatestMileageReports",
+      "query": "Mogu li dobiti pregled svih najnovijih podataka o potrošnji vozila?",
+      "rerank_rank": 71,
+      "top3": [
+        "get_VehiclesMonthlyExpenses",
+        "get_VehiclesAssignmentsOverview_on_ProjectTo",
+        "get_VehicleCalendar_id_documents"
+      ]
+    },
+    {
+      "expected": "get_LatestMileageReports",
+      "query": "Trebam informacije o svim nedavnim statistikama potrošnje za moj motorni promet.",
+      "rerank_rank": 54,
+      "top3": [
+        "get_VehiclesMonthlyExpenses_GroupBy",
+        "get_VehiclesMonthlyExpenses",
+        "get_VehiclesMonthlyExpenses_ProjectTo"
+      ]
+    },
+    {
+      "expected": "get_LatestMileageReports",
+      "query": "Kako mogu pregledati sve nedavne analize vožnje za svoje prijevozno sredstvo?",
+      "rerank_rank": 39,
+      "top3": [
+        "get_VehiclesAssignmentsOverview_on_GroupBy",
+        "get_VehicleCalendar_id_documents",
+        "get_VehicleCalendar_id_metadata"
+      ]
+    },
+    {
+      "expected": "get_LatestVehicleCalendar",
+      "query": "Molim te da mi prikažeš sve dostupne informacije o najnovijim prijevoznim sredst",
+      "rerank_rank": 38,
+      "top3": [
+        "get_AvailableVehicles",
+        "get_LatestVehicleContracts_GroupBy",
+        "get_LatestVehicleContracts"
+      ]
+    },
+    {
+      "expected": "get_Lookup_EntityTypes",
+      "query": "Možeš li mi dati popis svih vrsta objekata?",
+      "rerank_rank": 999,
+      "top3": [
+        "get_EquipmentTypes",
+        "get_Lookup_CalendarEntryTypes",
+        "get_DocumentTypes"
+      ]
+    },
+    {
+      "expected": "get_Lookup_EntityTypes",
+      "query": "Trebam pregledati sve kategorije subjekata koje su mi na raspolaganju.",
+      "rerank_rank": 999,
+      "top3": [
+        "get_PersonTypes_id_documents_documentId",
+        "get_Lookup_CategoryId",
+        "get_Teams"
+      ]
+    },
+    {
+      "expected": "get_Lookup_EquipmentTypeId",
+      "query": "Zanima me koje su kategorije aparata trenutno u ponudi.",
+      "rerank_rank": 22,
+      "top3": [
+        "get_EquipmentTypes",
+        "get_EquipmentTypes_ProjectTo",
+        "get_AvailableVehicles"
+      ]
+    },
+    {
+      "expected": "get_Lookup_ExpenseStatuses",
+      "query": "Zanima me pregled svih trenutnih stanja financijskih obaveza.",
+      "rerank_rank": 999,
+      "top3": [
+        "delete_PeriodicActivitiesSchedules_id",
+        "delete_PeriodicActivitiesSchedules",
+        "get_PeriodicActivitiesSchedules"
+      ]
+    },
+    {
+      "expected": "get_Lookup_ExpenseStatuses",
+      "query": "Želim provjeriti koje su sve oznake dostupne za financijske stavke.",
+      "rerank_rank": 28,
+      "top3": [
+        "get_Tags",
+        "get_Tags_id",
+        "get_AvailabilityProjection"
+      ]
+    },
+    {
+      "expected": "get_Lookup_PersonActivityCategories",
+      "query": "Zanima me pregled svih vrsta poslova koji se odnose na ljude.",
+      "rerank_rank": 999,
+      "top3": [
+        "get_PersonActivityTypes_id_documents",
+        "get_LatestPersonPeriodicActivities",
+        "get_PersonTypes_id_documents"
+      ]
+    },
+    {
+      "expected": "get_Lookup_PersonActivityCategories",
+      "query": "Možeš li mi pokazati sve klase angažmana za članove?",
+      "rerank_rank": 999,
+      "top3": [
+        "put_TeamMembers_id_documents_documentId",
+        "get_TeamMembers",
+        "get_TeamMembers_id_metadata"
+      ]
+    },
+    {
+      "expected": "get_Lookup_PersonActivityCategories",
+      "query": "Možeš li mi reći sve vrste djelatnosti koje provode pojedinci?",
+      "rerank_rank": 999,
+      "top3": [
+        "get_PersonActivityTypes_ProjectTo",
+        "get_PersonActivityTypes_GroupBy",
+        "put_PersonActivityTypes_id_documents_documentId_SetAsDefault"
+      ]
+    },
+    {
+      "expected": "get_Lookup_PoolId",
+      "query": "Možeš li mi pružiti informacije o identifikatorima i nazivima vodenih objekata?",
+      "rerank_rank": 999,
+      "top3": [
+        "get_Lookup_VehiclePoolId",
+        "get_Pools_id",
+        "get_Lookup_TeamId"
+      ]
+    },
+    {
+      "expected": "get_Lookup_PoolId",
+      "query": "Zanima me popis oznaka i naziva za vodoopskrbne sustave.",
+      "rerank_rank": 999,
+      "top3": [
+        "delete_EquipmentTypes_id",
+        "get_Pools_id",
+        "get_EquipmentTypes_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "get_Lookup_PoolId",
+      "query": "Molim te da mi prikažeš oznake i nazive za vodenim resursima.",
+      "rerank_rank": 999,
+      "top3": [
+        "get_Pools_id",
+        "delete_Pools",
+        "put_Pools_id"
+      ]
+    },
+    {
+      "expected": "get_Lookup_SearchTypes",
+      "query": "Želim provjeriti specifične kategorije upita.",
+      "rerank_rank": 999,
+      "top3": [
+        "get_Lookup_ExpenseCategoryId",
+        "get_Lookup_ExpenseCategories",
+        "get_TripTypes_id"
+      ]
+    },
+    {
+      "expected": "get_Lookup_SearchTypes",
+      "query": "Možeš li mi reći koje su opcije za pretragu?",
+      "rerank_rank": 83,
+      "top3": [
+        "get_Cases_id_documents",
+        "get_Companies",
+        "get_Teams"
+      ]
+    },
+    {
+      "expected": "get_Metadata_ProjectTo",
+      "query": "Želim vidjeti sve relevantne elemente za određeni projekt s pripadajućim detalji",
+      "rerank_rank": 43,
+      "top3": [
+        "get_Vehicles_id_documents_documentId",
+        "get_AvailabilityProjection",
+        "get_Cases_id_documents"
+      ]
+    },
+    {
+      "expected": "get_Metadata_ProjectTo",
+      "query": "Kako mogu pristupiti svim informacijama o projektu i njegovim svojstvima?",
+      "rerank_rank": 36,
+      "top3": [
+        "get_VehiclesAssignmentsOverview_on_ProjectTo",
+        "get_AvailabilityProjection_ProjectTo",
+        "get_VehicleInputHelper_PreviousVehicle_fullModelName"
+      ]
+    },
+    {
+      "expected": "get_Metadata_ProjectTo",
+      "query": "Tražim da se prikažu svi relevantni podaci za projekt zajedno s njihovim karakte",
+      "rerank_rank": 54,
+      "top3": [
+        "get_VehiclesAssignmentsOverview_on_ProjectTo",
+        "get_AvailabilityProjection_ProjectTo",
+        "get_Cases_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "get_Partners_ProjectTo",
+      "query": "Zanima me lista svih suradničkih odnosa i povezanih projekata.",
+      "rerank_rank": 79,
+      "top3": [
+        "get_VehicleContracts_id",
+        "post_Partners_linktenant_partnerId",
+        "get_LatestVehicleContracts_GroupBy"
+      ]
+    },
+    {
+      "expected": "get_Partners_ProjectTo",
+      "query": "Mogu li dobiti sve informacije o suradničkim projektima na temelju postavljenih ",
+      "rerank_rank": 37,
+      "top3": [
+        "get_VehiclesAssignmentsOverview_on_ProjectTo",
+        "get_AvailabilityProjection_GroupBy",
+        "get_Companies_GroupBy"
+      ]
+    },
+    {
+      "expected": "get_Partners_ProjectTo",
+      "query": "Želim pregledati sve aspekte naših zajedničkih projekata sa svim relevantnim pod",
+      "rerank_rank": 42,
+      "top3": [
+        "get_Persons_id_documents",
+        "get_VehiclesAssignmentsOverview_on_ProjectTo",
+        "get_PeriodicActivitiesSchedules"
+      ]
+    },
+    {
+      "expected": "get_Partners_id_documents_documentId",
+      "query": "Molim te da mi prikažeš sadržaj potvrde tog poslovnog subjekta.",
+      "rerank_rank": 43,
+      "top3": [
+        "get_Companies_id_documents_documentId_thumb",
+        "put_Companies_id_documents_documentId",
+        "get_Companies_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "get_PeriodicActivityTypes",
+      "query": "Molim te da prikažeš sve varijante organiziranih događaja u mojem rasporedu.",
+      "rerank_rank": 46,
+      "top3": [
+        "get_PeriodicActivitiesSchedules",
+        "delete_PeriodicActivitiesSchedules",
+        "delete_PeriodicActivitiesSchedules_id"
+      ]
+    },
+    {
+      "expected": "get_PeriodicActivityTypes",
+      "query": "Tražim informacije o svim mogućim tipovima redovitih planova.",
+      "rerank_rank": 24,
+      "top3": [
+        "post_PeriodicActivityTypes_multipatch",
+        "patch_PeriodicActivitiesSchedules_id",
+        "post_PeriodicActivitiesSchedules_multipatch"
+      ]
+    },
+    {
+      "expected": "get_PeriodicActivityTypes_id_documents_documentId",
+      "query": "Želim dobiti pregled svih aktova vezanih uz redovne stavke.",
+      "rerank_rank": 30,
+      "top3": [
+        "get_PeriodicActivitiesSchedules_id_documents",
+        "get_Persons_id_documents",
+        "get_PeriodicActivities_id_documents"
+      ]
+    },
+    {
+      "expected": "get_PeriodicActivityTypes_id_documents_documentId",
+      "query": "Kako mogu pogledati detalje o različitim spisima?",
+      "rerank_rank": 22,
+      "top3": [
+        "get_Master_id",
+        "get_CaseTypes",
+        "get_DocumentTypes_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "get_PeriodicActivityTypes_id_documents_documentId",
+      "query": "Trebam informacije o raznim oblicima dokumenata koji se koriste.",
+      "rerank_rank": 30,
+      "top3": [
+        "get_DocumentTypes_Agg",
+        "get_DocumentTypes_id_documents",
+        "post_DocumentTypes_id_documents"
+      ]
+    },
+    {
+      "expected": "get_PersonActivityTypes_GroupBy",
+      "query": "Treba mi pregled svih članova i njihovih angažmana podijeljenih u razne klase.",
+      "rerank_rank": 999,
+      "top3": [
+        "get_TeamMembers",
+        "get_TeamMembers_id_documents_documentId",
+        "get_TeamMembers_id"
+      ]
+    },
+    {
+      "expected": "get_PersonActivityTypes_GroupBy",
+      "query": "Možeš li mi dati pregled uloga ljudi unutar specifičnih zadataka?",
+      "rerank_rank": 50,
+      "top3": [
+        "get_PersonPeriodicActivities_id_documents_documentId",
+        "get_PersonPeriodicActivities_id_metadata",
+        "get_PersonPeriodicActivities_id_documents_documentId_thumb"
+      ]
+    },
+    {
+      "expected": "get_Teams_GroupBy",
+      "query": "Mogu li dobiti pregled svih timskih sastanaka koje imamo?",
+      "rerank_rank": 48,
+      "top3": [
+        "get_Teams",
+        "get_TeamMembers",
+        "get_Teams_id"
+      ]
+    },
+    {
+      "expected": "get_VehicleCalendar",
+      "query": "Zanima me pregled planova termina za motorna sredstva s opcijom stranice za lakš",
+      "rerank_rank": 65,
+      "top3": [
+        "get_LatestEquipmentCalendar",
+        "put_EquipmentCalendar_id_documents_documentId",
+        "get_EquipmentCalendarOnPersonVehicle_on_ProjectTo"
+      ]
+    },
+    {
+      "expected": "get_VehicleCalendar",
+      "query": "Trebam informacije o planovima termina za limuzine i mogućnost da ih poredam ili",
+      "rerank_rank": 21,
+      "top3": [
+        "get_Vehicles_ProjectTo",
+        "get_Vehicles",
+        "get_VehicleInputHelper_DistinctBrands"
+      ]
+    },
+    {
+      "expected": "get_VehicleContracts_Agg",
+      "query": "Mogu li dobiti sažetak o financijskim uvjetima za moje prijevozno sredstvo?",
+      "rerank_rank": 35,
+      "top3": [
+        "get_VehiclesMonthlyExpenses_Agg",
+        "get_MonthlyFuelExpensesAndMileages",
+        "get_VehiclesHistoricalEntries_Agg"
+      ]
+    },
+    {
+      "expected": "get_VehicleContracts_Agg",
+      "query": "Zanima me ukupna analiza troškova za moj motorni sredstvo.",
+      "rerank_rank": 62,
+      "top3": [
+        "get_VehiclesMonthlyExpenses_GroupBy",
+        "get_VehiclesMonthlyExpenses_Agg",
+        "get_VehiclesMonthlyExpenses_id"
+      ]
+    },
+    {
+      "expected": "patch_ExpenseGroups_id",
+      "query": "Možeš li mi pomoći s izmjenom podataka u vezi s financijskim stavkama?",
+      "rerank_rank": 999,
+      "top3": [
+        "delete_Expenses",
+        "delete_Expenses_id",
+        "patch_Expenses_id"
+      ]
+    },
+    {
+      "expected": "patch_PeriodicActivityTypes_id",
+      "query": "Trebam prilagoditi neke aspekte jedne od klasa redovnih obaveza.",
+      "rerank_rank": 88,
+      "top3": [
+        "delete_PeriodicActivitiesSchedules",
+        "delete_PeriodicActivitiesSchedules_id",
+        "post_PeriodicActivitiesSchedules"
+      ]
+    },
+    {
+      "expected": "patch_Pools_id",
+      "query": "Trebam osvežiti neke aspekte trenutnog spremnika, možeš li mi pomoći?",
+      "rerank_rank": 999,
+      "top3": [
+        "delete_Equipment_id",
+        "get_DashboardItems",
+        "delete_LatestPeriodicActivities"
+      ]
+    },
+    {
+      "expected": "patch_Pools_id",
+      "query": "Zainteresiran sam za izmjenu dijelova podataka vezanih uz moj akumulacijski sust",
+      "rerank_rank": 999,
+      "top3": [
+        "get_Equipment_id_documents_documentId_thumb",
+        "get_Cases_id_documents",
+        "delete_VehiclesHistoricalEntries_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "patch_Pools_id",
+      "query": "Možeš li izvršiti prilagodbu nekih elemenata koji se tiču mog spremišta?",
+      "rerank_rank": 999,
+      "top3": [
+        "get_DashboardItems",
+        "delete_DashboardItems_id",
+        "get_Cases_id_documents"
+      ]
+    },
+    {
+      "expected": "post_Cases_id_documents",
+      "query": "Povezujem dodatne akte s aktivnim spisom.",
+      "rerank_rank": 88,
+      "top3": [
+        "get_LatestPeriodicActivities_id_metadata",
+        "put_PersonPeriodicActivities_id_documents_documentId",
+        "get_LatestPersonPeriodicActivities_id_metadata"
+      ]
+    },
+    {
+      "expected": "post_CostCenters_multipatch",
+      "query": "Zanima me kako mogu prilagoditi više financijskih podjela istovremeno?",
+      "rerank_rank": 999,
+      "top3": [
+        "delete_PeriodicActivitiesSchedules",
+        "delete_Expenses",
+        "post_Expenses_multipatch"
+      ]
+    },
+    {
+      "expected": "post_Equipment_id_documents",
+      "query": "Možeš li mi pomoći da povežem spis s mojim prijevoznim sredstvom?",
+      "rerank_rank": 38,
+      "top3": [
+        "get_Vehicles_id_documents",
+        "get_Vehicles_vehicleId_external_info",
+        "put_Vehicles_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "post_Equipment_id_documents",
+      "query": "Kako mogu unijeti nove akte vezane za svoje dostavno vozilo?",
+      "rerank_rank": 999,
+      "top3": [
+        "get_Vehicles_id_documents",
+        "post_VehicleCalendar_id_documents",
+        "post_VehicleContracts_id_documents"
+      ]
+    },
+    {
+      "expected": "post_Metadata_multipatch",
+      "query": "Kako da istovremeno obradim više informacija o svojstvima?",
+      "rerank_rank": 52,
+      "top3": [
+        "post_Equipment_multipatch",
+        "post_Cases_multipatch",
+        "post_DocumentTypes_multipatch"
+      ]
+    },
+    {
+      "expected": "post_Metadata_multipatch",
+      "query": "Možeš li mi pomoći s istovremenim prilagođavanjem više oznaka?",
+      "rerank_rank": 999,
+      "top3": [
+        "post_VehicleContracts_multipatch",
+        "post_Tags_multipatch",
+        "delete_Tags"
+      ]
+    },
+    {
+      "expected": "post_Metadata_multipatch",
+      "query": "Želim obaviti parcijalno osvježavanje više skupina oznaka odjednom.",
+      "rerank_rank": 999,
+      "top3": [
+        "post_PersonOrgUnits_multipatch",
+        "post_SchedulingModels_multipatch",
+        "post_Teams_multipatch"
+      ]
+    },
+    {
+      "expected": "post_Partners_id_documents",
+      "query": "Kako mogu priložiti zapisnike jednom od naših poslovnih kontakata?",
+      "rerank_rank": 39,
+      "top3": [
+        "get_Companies_id_documents_documentId_thumb",
+        "delete_Companies_id_documents_documentId",
+        "put_Companies_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "post_PersonPeriodicActivities",
+      "query": "Molim te, zabilježi redovnu obavezu za člana.",
+      "rerank_rank": 87,
+      "top3": [
+        "put_TeamMembers_id_documents_documentId",
+        "get_TeamMembers_id_metadata",
+        "get_TeamMembers_id_documents_documentId_thumb"
+      ]
+    },
+    {
+      "expected": "post_PersonTypes_id_documents",
+      "query": "Molim te, pomozi mi s unosom aktiva za definiranu grupu ljudi.",
+      "rerank_rank": 999,
+      "top3": [
+        "get_PersonActivityTypes_GroupBy",
+        "get_LatestPersonPeriodicActivities_GroupBy",
+        "get_PersonActivityTypes_id_metadata"
+      ]
+    },
+    {
+      "expected": "post_SchedulingModels_id_documents",
+      "query": "Zanima me kako unijeti spis za određeno motorno sredstvo.",
+      "rerank_rank": 999,
+      "top3": [
+        "post_EquipmentTypes_id_documents",
+        "post_EquipmentCalendar_id_documents",
+        "delete_EquipmentTypes_id"
+      ]
+    },
+    {
+      "expected": "post_SchedulingModels_id_documents",
+      "query": "Pomozi mi s unosom obrasca vezano za moj raspored.",
+      "rerank_rank": 999,
+      "top3": [
+        "get_PeriodicActivitiesSchedules_id_documents_documentId_thumb",
+        "get_Lookup_CalendarEntryTypes",
+        "get_Trips_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "post_VehicleCalendar_multipatch",
+      "query": "Molim te da ažuriraš određene informacije u planu termina za motorno sredstvo.",
+      "rerank_rank": 76,
+      "top3": [
+        "put_Equipment_id_documents_documentId",
+        "put_VehicleCalendar_id_documents_documentId",
+        "put_EquipmentCalendar_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "post_VehicleContracts",
+      "query": "Možete li mi pomoći u upisu povijesti akvizicije mog motornog sredstva?",
+      "rerank_rank": 22,
+      "top3": [
+        "get_VehicleInputHelper_DistinctBrands",
+        "get_VehiclesHistoricalEntries_id_metadata",
+        "get_EquipmentCalendar_id"
+      ]
+    },
+    {
+      "expected": "post_VehicleContracts",
+      "query": "Molim te, pomozi mi s unosom novog sporazuma za moj limuzinu.",
+      "rerank_rank": 36,
+      "top3": [
+        "get_LatestVehicleContracts_GroupBy",
+        "get_VehicleInputHelper_PreviousVehicle_fullModelName",
+        "get_VehicleInputHelper_DistinctBrands"
+      ]
+    },
+    {
+      "expected": "post_VehicleContracts",
+      "query": "Tražim način za unos novog sporazuma koji se odnosi na limuzinu.",
+      "rerank_rank": 40,
+      "top3": [
+        "get_LatestVehicleContracts_GroupBy",
+        "get_VehicleInputHelper_DistinctBrands",
+        "get_VehicleContracts_id"
+      ]
+    },
+    {
+      "expected": "put_CostCenters_id_documents_documentId_SetAsDefault",
+      "query": "Tražim način da registriram potvrdu kao prioritarnu za ekonomske skupine.",
+      "rerank_rank": 999,
+      "top3": [
+        "put_Teams_id_documents_documentId_SetAsDefault",
+        "get_Companies_id_documents_documentId_thumb",
+        "delete_Teams_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "put_ExpenseTypes_id_documents_documentId",
+      "query": "Želio bih unijeti nove podatke za jedan zapisnik.",
+      "rerank_rank": 999,
+      "top3": [
+        "post_VehiclesHistoricalEntries_id_documents",
+        "post_Cases_id_documents",
+        "post_DocumentTypes_id_documents"
+      ]
+    },
+    {
+      "expected": "put_ExpenseTypes_id_documents_documentId",
+      "query": "Trebam ažurirati podatke vezane uz moj spis.",
+      "rerank_rank": 999,
+      "top3": [
+        "put_EquipmentCalendar_id_documents_documentId",
+        "put_CaseTypes_id_documents_documentId",
+        "put_Cases_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "put_ExpenseTypes_id_documents_documentId",
+      "query": "Želim prilagoditi specificirane podatke za moj akt.",
+      "rerank_rank": 999,
+      "top3": [
+        "put_DocumentTypes_id_documents_documentId",
+        "delete_DocumentTypes_id_documents_documentId",
+        "put_VehicleCalendar_id_documents_documentId"
+      ]
+    },
+    {
+      "expected": "put_PeriodicActivityTypes_id",
+      "query": "Želim ažurirati podatke o redovnom rasporedu.",
+      "rerank_rank": 27,
+      "top3": [
+        "patch_SchedulingModels_id",
+        "patch_PeriodicActivitiesSchedules_id",
+        "post_SchedulingModels_multipatch"
+      ]
+    },
+    {
+      "expected": "put_PeriodicActivityTypes_id",
+      "query": "Tražim da se ažurira informacija o pravilnom planu zadatka.",
+      "rerank_rank": 24,
+      "top3": [
+        "put_Metadata_id_documents_documentId",
+        "put_SchedulingModels_id_documents_documentId",
+        "put_SchedulingModels_id"
+      ]
+    },
+    {
+      "expected": "put_PersonTypes_id_documents_documentId_SetAsDefault",
+      "query": "Molim te, odredi spis kao ključni za odabranu grupu.",
+      "rerank_rank": 31,
+      "top3": [
+        "put_TeamMembers_id_documents_documentId_SetAsDefault",
+        "delete_TeamMembers_id_documents_documentId",
+        "put_Teams_id_documents_documentId_SetAsDefault"
+      ]
+    },
+    {
+      "expected": "put_PersonTypes_id_documents_documentId_SetAsDefault",
+      "query": "Možeš li učiniti da obrazac postane osnovni za neku klasifikaciju?",
+      "rerank_rank": 71,
+      "top3": [
+        "put_Cases_id_documents_documentId_SetAsDefault",
+        "put_ExpenseTypes_id_documents_documentId_SetAsDefault",
+        "put_VehicleCalendar_id_documents_documentId_SetAsDefault"
+      ]
+    },
+    {
+      "expected": "put_SchedulingModels_id_documents_documentId_SetAsDefault",
+      "query": "Trebam odabrati spis koji će biti glavni u mom rasporedu.",
+      "rerank_rank": 25,
+      "top3": [
+        "put_Cases_id_documents_documentId_SetAsDefault",
+        "get_Master_id",
+        "get_PeriodicActivitiesSchedules_id_documents"
+      ]
+    },
+    {
+      "expected": "put_SchedulingModels_id_documents_documentId_SetAsDefault",
+      "query": "Želim definirati potvrdu kao osnovnu za moj hodogram.",
+      "rerank_rank": 44,
+      "top3": [
+        "delete_LatestEquipmentCalendar_id",
+        "get_EquipmentCalendar_id",
+        "put_VehicleCalendar_id_documents_documentId_SetAsDefault"
+      ]
+    },
+    {
+      "expected": "put_VehicleContracts_id_documents_documentId_SetAsDefault",
+      "query": "Želim da moj obrazac bude prioritetan za ovo prijevozno sredstvo.",
+      "rerank_rank": 26,
+      "top3": [
+        "put_VehicleCalendar_id_documents_documentId_SetAsDefault",
+        "delete_VehicleCalendar_id_documents_documentId",
+        "get_VehicleCalendarOn_on_GroupBy"
+      ]
+    }
+  ]
+}

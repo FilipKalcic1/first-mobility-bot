@@ -20,7 +20,7 @@ from services.tool_contracts import (
     DependencySource,
     ToolExecutionContext
 )
-from services.patterns import get_injectable_context
+from services.utils.pattern_registry import get_injectable_context
 from services.context import UserContextManager
 from services.tracing import get_tracer, trace_span
 from services.errors import BotError, ConversationError, ErrorCode

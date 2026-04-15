@@ -121,34 +121,46 @@ class CircuitBreaker:
         async with self._lock:
             circuit = self._get_circuit(endpoint_key)
             circuit.success_count += 1
-            circuit.failure_count = 0  # Reset failure counter
+            circuit.failure_count = 0
             circuit.last_success_time = time.time()
 
-            # Reset half-open in-progress flag
+            # Release the half-open gate so the next probe can run; the
+            # lock above already serializes this with the call-entry check,
+            # so there's no race window for a concurrent sneak-through.
             self._half_open_in_progress[endpoint_key] = False
 
-            # Reset circuit if enough successes
-            if circuit.state == CircuitState.HALF_OPEN:
-                if circuit.success_count >= self.SUCCESS_THRESHOLD_TO_RESET:
-                    circuit.state = CircuitState.CLOSED
-                    circuit.opened_at = None
-                    logger.info(f"Circuit CLOSED: {endpoint_key}")
+            if (
+                circuit.state == CircuitState.HALF_OPEN
+                and circuit.success_count >= self.SUCCESS_THRESHOLD_TO_RESET
+            ):
+                circuit.state = CircuitState.CLOSED
+                circuit.opened_at = None
+                logger.info(f"Circuit CLOSED: {endpoint_key}")
 
     async def _record_failure(self, endpoint_key: str) -> None:
         """Record failed call."""
         async with self._lock:
             circuit = self._get_circuit(endpoint_key)
             circuit.failure_count += 1
-            circuit.success_count = 0  # Reset success counter
+            circuit.success_count = 0
             circuit.last_failure_time = time.time()
 
-            # Reset half-open in-progress flag
-            self._half_open_in_progress[endpoint_key] = False
+            # A failure during the HALF_OPEN probe means the endpoint is still
+            # unhealthy — trip the breaker back to OPEN immediately rather than
+            # waiting for failure_count to hit the threshold a second time.
+            if circuit.state == CircuitState.HALF_OPEN:
+                circuit.state = CircuitState.OPEN
+                circuit.opened_at = time.time()
+                self._half_open_in_progress[endpoint_key] = False
+                logger.warning(
+                    f"🔴 Circuit re-OPEN after HALF_OPEN probe failure: {endpoint_key}"
+                )
+                return
 
-            # Open circuit if threshold reached
             if circuit.failure_count >= self.FAILURE_THRESHOLD:
                 circuit.state = CircuitState.OPEN
                 circuit.opened_at = time.time()
+                self._half_open_in_progress[endpoint_key] = False
                 logger.warning(
                     f"🔴 Circuit OPEN: {endpoint_key} "
                     f"(failures: {circuit.failure_count})"

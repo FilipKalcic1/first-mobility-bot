@@ -65,8 +65,6 @@ def mock_registry():
     registry = MagicMock()
     registry.tools = {}
     registry.get_tool = MagicMock(return_value=None)
-    registry.find_relevant_tools = AsyncMock(return_value=[])
-    registry.load_swagger = AsyncMock()
     return registry
 
 

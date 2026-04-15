@@ -2,10 +2,11 @@
 Token Manager
 
 OAuth2 token management.
-DEPENDS ON: config.py only
+DEPENDS ON: config.py, services/errors.py
 """
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -13,6 +14,7 @@ from typing import Optional
 import httpx
 
 from config import get_settings
+from services.errors import GatewayError, ErrorCode
 
 logger = logging.getLogger(__name__)
 def _get_settings():
@@ -26,11 +28,12 @@ class TokenManager:
     Features:
     - Automatic refresh before expiry
     - Lock to prevent concurrent refreshes
-    - Redis caching for distributed systems
+    - Redis caching for distributed systems (token + expiry stored atomically)
+    - Redis double-check inside lock (prevents thundering herd across pods)
     - Failure cooldown to avoid hammering unreachable auth server
     """
 
-    FAILURE_COOLDOWN_SECONDS = 30  # Don't retry for 30s after a failure
+    FAILURE_COOLDOWN_SECONDS = 15  # Don't retry for 15s after a failure
 
     def __init__(self, redis_client=None) -> None:
         """
@@ -64,47 +67,68 @@ class TokenManager:
             Valid access token
 
         Raises:
-            Exception if unable to obtain token
+            GatewayError if unable to obtain token
         """
         # Check in-memory cache (with 60s buffer)
         buffer = timedelta(seconds=60)
         if self._token and datetime.now(timezone.utc) < self._expires_at - buffer:
             return self._token
 
-        # Try Redis cache
-        if self._redis:
-            try:
-                cached = await self._redis.get(self._cache_key)
-                if cached:
-                    self._token = cached
-                    # Use actual Redis TTL so we don't serve a nearly-expired token.
-                    # We stored the token with TTL = expires_in - 120 (120s safety buffer),
-                    # so remaining TTL accurately reflects how long the token is still usable.
-                    ttl_seconds = await self._redis.ttl(self._cache_key)
-                    if ttl_seconds > 0:
-                        self._expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
-                    else:
-                        # TTL unavailable or already expired — force refresh next call
-                        self._expires_at = datetime.now(timezone.utc) + timedelta(seconds=30)
-                    self._last_failure = None
-                    logger.debug(f"Token loaded from Redis, TTL={ttl_seconds}s")
-                    return self._token
-            except Exception as e:
-                logger.warning(f"Redis cache read failed: {e}")
+        # Try Redis cache (atomic: token + expiry stored together)
+        if await self._try_load_from_redis():
+            return self._token
 
         # Fail fast if auth server was recently unreachable
         if self._last_failure:
             elapsed = (datetime.now(timezone.utc) - self._last_failure).total_seconds()
             if elapsed < self.FAILURE_COOLDOWN_SECONDS:
-                raise Exception(f"Auth server unreachable (cooldown {self.FAILURE_COOLDOWN_SECONDS - elapsed:.0f}s remaining)")
+                raise GatewayError(
+                    ErrorCode.TOKEN_REFRESH_FAILED,
+                    f"Auth server unreachable (cooldown {self.FAILURE_COOLDOWN_SECONDS - elapsed:.0f}s remaining)"
+                )
 
         # Refresh token (with lock)
         async with self._refresh_lock:
-            # Double-check after lock
+            # Double-check in-memory after lock
             if self._token and datetime.now(timezone.utc) < self._expires_at - buffer:
                 return self._token
 
+            # Double-check Redis after lock — another pod may have refreshed
+            if await self._try_load_from_redis():
+                return self._token
+
             return await self._fetch_new_token()
+
+    async def _try_load_from_redis(self) -> bool:
+        """Try to load token from Redis. Returns True if valid token found.
+
+        Token is stored as JSON {"token": "...", "expires_at": <timestamp>}
+        to avoid the GET/TTL race condition (single atomic read).
+        """
+        if not self._redis:
+            return False
+
+        try:
+            cached = await self._redis.get(self._cache_key)
+            if not cached:
+                return False
+
+            cached_str = cached.decode() if isinstance(cached, bytes) else cached
+            data = json.loads(cached_str)
+            expires_at = datetime.fromtimestamp(data["expires_at"], tz=timezone.utc)
+
+            # Only use if not expired (with 60s safety buffer)
+            if datetime.now(timezone.utc) < expires_at - timedelta(seconds=60):
+                self._token = data["token"]
+                self._expires_at = expires_at
+                self._last_failure = None
+                logger.debug(f"Token loaded from Redis, expires_at={expires_at.isoformat()}")
+                return True
+
+            return False
+        except Exception as e:
+            logger.warning(f"Redis cache read failed: {e}")
+            return False
 
     async def _get_http_client(self) -> httpx.AsyncClient:
         """Get or create cached HTTP client for token requests.
@@ -114,7 +138,9 @@ class TokenManager:
         The client is closed on shutdown via close().
         """
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(timeout=5.0)
+            self._http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(15.0, connect=10.0)
+            )
         return self._http_client
 
     async def _fetch_new_token(self) -> str:
@@ -149,9 +175,20 @@ class TokenManager:
             if response.status_code != 200:
                 error_text = response.text[:500]
                 logger.error(f"Token fetch failed: {response.status_code} - {error_text}")
-                raise Exception(f"Auth failed ({response.status_code}): {error_text}")
+                raise GatewayError(
+                    ErrorCode.TOKEN_REFRESH_FAILED,
+                    f"Auth failed ({response.status_code}): {error_text}"
+                )
 
-            data = response.json()
+            try:
+                data = response.json()
+            except (ValueError, json.JSONDecodeError) as e:
+                self._last_failure = datetime.now(timezone.utc)
+                logger.error(f"Auth server returned invalid JSON: {response.text[:200]}")
+                raise GatewayError(
+                    ErrorCode.TOKEN_REFRESH_FAILED,
+                    f"Auth server returned invalid response: {e}"
+                )
 
             self._token = data["access_token"]
             expires_in = int(data.get("expires_in", 3600))
@@ -160,11 +197,15 @@ class TokenManager:
 
             logger.info(f"Token acquired, expires in {expires_in}s")
 
-            # Cache in Redis
+            # Cache in Redis (token + expiry as JSON — atomic read on get_token)
             if self._redis:
                 try:
                     cache_ttl = max(expires_in - 120, 60)
-                    await self._redis.setex(self._cache_key, cache_ttl, self._token)
+                    cache_data = json.dumps({
+                        "token": self._token,
+                        "expires_at": self._expires_at.timestamp()
+                    })
+                    await self._redis.setex(self._cache_key, cache_ttl, cache_data)
                     logger.debug(f"Token cached in Redis, TTL={cache_ttl}")
                 except Exception as e:
                     logger.warning(f"Redis cache write failed: {e}")
@@ -174,11 +215,14 @@ class TokenManager:
         except httpx.TimeoutException:
             self._last_failure = datetime.now(timezone.utc)
             logger.error("Token fetch timeout")
-            raise Exception("Authentication timeout")
+            raise GatewayError(ErrorCode.TIMEOUT, "Authentication timeout")
         except httpx.RequestError as e:
             self._last_failure = datetime.now(timezone.utc)
             logger.error(f"Token fetch network error: {e}")
-            raise Exception(f"Authentication network error: {e}")
+            raise GatewayError(
+                ErrorCode.TOKEN_REFRESH_FAILED,
+                f"Authentication network error: {e}"
+            )
 
     async def invalidate(self) -> None:
         """Invalidate current token (call on 401)."""

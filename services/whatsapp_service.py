@@ -29,7 +29,7 @@ import httpx
 
 from config import get_settings
 from services.errors import ConversationError, GatewayError, ErrorCode, HTTP_STATUS_TO_ERROR_CODE
-from services.patterns import UUID_PATTERN
+from services.utils.pattern_registry import UUID_PATTERN
 from services.retry_utils import calculate_backoff
 from services.tracing import get_tracer, trace_span
 logger = logging.getLogger(__name__)
@@ -41,11 +41,6 @@ def _get_settings():
 # Accepts: +385..., 385..., 00385..., etc.
 PHONE_PATTERN = re.compile(
     r'^(\+)?[0-9]{10,15}$'
-)
-
-# Croatian phone specifically
-CROATIAN_PHONE_PATTERN = re.compile(
-    r'^(\+385|385|00385|0)[1-9][0-9]{7,8}$'
 )
 
 
@@ -247,12 +242,9 @@ class WhatsAppService:
                     logger.info(f"Extracted text from dict key '{key}'")
                     return (value[key], True)
 
-            # Fallback to JSON serialization
-            try:
-                return (json.dumps(value, ensure_ascii=False), True)
-            except Exception as e:
-                logger.warning(f"JSON serialization failed for dict, using str(): {e}")
-                return (str(value), True)
+            # Fallback — truncate to avoid leaking sensitive data
+            logger.warning("TYPE GUARD: Unknown dict structure, returning generic error")
+            return ("Došlo je do greške pri generiranju odgovora. Pokušajte ponovo.", True)
 
         # Handle list
         if isinstance(value, list):
@@ -643,27 +635,30 @@ class WhatsAppService:
 
     async def send_batch(
         self,
-        messages: List[Tuple[str, str]]
+        messages: List[Tuple[str, str]],
+        concurrency: int = 5
     ) -> List[SendResult]:
         """
-        Send multiple messages with rate limiting.
+        Send multiple messages concurrently with rate limiting.
 
         Args:
             messages: List of (to, text) tuples
+            concurrency: Max concurrent sends (default 5)
 
         Returns:
-            List of SendResult
+            List of SendResult (same order as input)
         """
-        results = []
+        semaphore = asyncio.Semaphore(concurrency)
 
-        for to, text in messages:
-            result = await self.send(to, text)
-            results.append(result)
+        async def _send_one(to: str, text: str) -> SendResult:
+            async with semaphore:
+                result = await self.send(to, text)
+                await asyncio.sleep(0.1)  # Rate limit spacing
+                return result
 
-            # Small delay between messages to avoid rate limiting
-            await asyncio.sleep(0.1)
-
-        return results
+        return list(await asyncio.gather(
+            *(_send_one(to, text) for to, text in messages)
+        ))
 
     # ---
     # STATS & HEALTH

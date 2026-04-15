@@ -54,12 +54,37 @@ class UserHandler:
 
         user = await user_service.get_active_identity(phone)
 
-        if user:
-            # Pass user_mapping for dynamic tenant resolution
+        if user and user.api_identity:
+            # User exists with person_id — build full context
             ctx = await user_service.build_context(user.api_identity, phone, user_mapping=user)
             ctx["display_name"] = user.display_name
             ctx["is_new"] = False
             return ctx
+
+        if user and not user.api_identity:
+            # User exists but person_id is missing — try to resolve from API
+            logger.info(f"User {phone[-4:]} exists but has no api_identity — attempting auto-onboard")
+            result = await user_service.try_auto_onboard(phone)
+            if result:
+                # Re-read user — api_identity should be updated now
+                refreshed = await user_service.get_active_identity(phone)
+                if refreshed and refreshed.api_identity:
+                    ctx = await user_service.build_context(refreshed.api_identity, phone, user_mapping=refreshed)
+                    ctx["display_name"] = refreshed.display_name
+                    ctx["is_new"] = False
+                    return ctx
+            # Auto-onboard failed (API down) — user is registered but we can't get their data
+            logger.warning(f"User {phone[-4:]} exists but API unreachable — limited context")
+            tenant_id = await user_service._tenant_service.get_tenant_for_user(phone, user)
+            return {
+                "person_id": None,
+                "phone": phone,
+                "tenant_id": tenant_id,
+                "display_name": user.display_name or "Korisnik",
+                "vehicle": {},
+                "is_new": False,
+                "is_guest": False  # NOT guest — user IS in our DB with consent
+            }
 
         result = await user_service.try_auto_onboard(phone)
 

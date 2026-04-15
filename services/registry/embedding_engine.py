@@ -57,13 +57,10 @@ RECOMMENDED IMPROVEMENTS:
     - Implement MRR/NDCG evaluation on real user queries
 """
 
-import asyncio
 import logging
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-from config import get_settings
-from services.tracing import get_tracer, trace_span
 from services.registry.entity_mappings import (
     PATH_ENTITY_MAP,
     OUTPUT_KEY_MAP,
@@ -77,28 +74,17 @@ from services.tool_contracts import (
 )
 
 logger = logging.getLogger(__name__)
-_tracer = get_tracer("embedding_engine")
-
-
-def _get_settings():
-    """Lazy settings access — avoid module-level parsing before env vars are set."""
-    return get_settings()
 
 
 class EmbeddingEngine:
     """
-    Manages embedding generation for semantic search.
+    Offline build helpers for tool embedding text and dependency graph.
 
-    Responsibilities:
-    - Build embedding text from tool definitions
-    - Generate embeddings via Azure OpenAI
-    - Build dependency graph for chaining
+    Used by scripts/sync_tools.py to regenerate config/processed_tool_registry.json.
+    Runtime embedding generation now lives in services/faiss_vector_store.py.
     """
 
     def __init__(self) -> None:
-        """Initialize embedding engine with shared OpenAI client."""
-        from services.openai_client import get_embedding_client
-        self.openai = get_embedding_client()
         logger.debug("EmbeddingEngine initialized")
 
     def build_embedding_text(
@@ -415,64 +401,6 @@ class EmbeddingEngine:
                         synonyms.append(syn)
 
         return synonyms[:8]  # Limit to 8 synonyms
-
-    async def generate_embeddings(
-        self,
-        tools: Dict[str, UnifiedToolDefinition],
-        existing_embeddings: Dict[str, List[float]]
-    ) -> Dict[str, List[float]]:
-        """
-        Generate embeddings for tools that don't have them.
-
-        Args:
-            tools: Dict of tools by operation_id
-            existing_embeddings: Already generated embeddings
-
-        Returns:
-            Updated embeddings dict
-        """
-        with trace_span(_tracer, "embedding.generate", {
-            "tool_count": len(tools),
-            "existing_count": len(existing_embeddings),
-        }) as span:
-            embeddings = dict(existing_embeddings)
-
-            missing = [
-                op_id for op_id in tools
-                if op_id not in embeddings
-            ]
-            span.set_attribute("embedding.missing_count", len(missing))
-
-            if not missing:
-                logger.info("All embeddings cached")
-                return embeddings
-
-            logger.info(f"Generating {len(missing)} embeddings...")
-
-            for op_id in missing:
-                tool = tools[op_id]
-                text = tool.embedding_text
-
-                embedding = await self._get_embedding(text)
-                if embedding:
-                    embeddings[op_id] = embedding
-
-                await asyncio.sleep(0.05)  # Rate limiting
-
-            logger.info(f"Generated {len(missing)} embeddings")
-            return embeddings
-
-    async def _get_embedding(self, text: str) -> Optional[List[float]]:
-        """Get embedding for text from Azure OpenAI."""
-        try:
-            response = await self.openai.embeddings.create(
-                input=[text[:8000]],
-                model=_get_settings().AZURE_OPENAI_EMBEDDING_DEPLOYMENT
-            )
-            return response.data[0].embedding
-        except Exception as e:
-            logger.warning(f"Embedding error: {e}")
-            return None
 
     def build_dependency_graph(
         self,

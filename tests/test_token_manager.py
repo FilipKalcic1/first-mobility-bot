@@ -1,5 +1,6 @@
 """Tests for TokenManager - OAuth2 token management."""
 
+import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta, timezone
@@ -57,8 +58,11 @@ class TestGetToken:
         assert token == "cached_token"
 
     async def test_loads_from_redis(self, tm, mock_redis):
-        mock_redis.get.return_value = "redis_token"
-        mock_redis.ttl.return_value = 3000  # seconds remaining
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()
+        mock_redis.get.return_value = json.dumps({
+            "token": "redis_token",
+            "expires_at": expires_at
+        })
         token = await tm.get_token()
         assert token == "redis_token"
 

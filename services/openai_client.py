@@ -53,8 +53,7 @@ def get_embedding_client() -> AsyncAzureOpenAI:
 
     Uses the same endpoint/key as chat but separate instance because
     embedding calls have different timeout/retry characteristics.
-    Shared across: faiss_vector_store, intent_classifier,
-    registry/embedding_engine, registry/search_engine.
+    Shared across: faiss_vector_store, intent_classifier.
     """
     global _shared_embedding_client
     if _shared_embedding_client is None:

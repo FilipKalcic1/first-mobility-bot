@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from config import get_settings
 from services.text_normalizer import sanitize_for_llm
+from services.utils.llm_json import parse_llm_json
 
 logger = logging.getLogger(__name__)
 def _get_settings():
@@ -30,7 +31,8 @@ async def rerank_with_llm(
     query: str,
     candidates: List[Dict],  # List of {tool_id, score, description}
     top_k: int = 3,
-    tool_documentation: Optional[Dict] = None
+    tool_documentation: Optional[Dict] = None,
+    cost_tracker=None,
 ) -> List[RerankResult]:
     """
     Use LLM to rerank FAISS candidates and pick the best matches.
@@ -109,16 +111,20 @@ Odgovori SAMO s JSON-om, bez dodatnog teksta."""
             max_tokens=200
         )
 
+        # Persist to Redis via CostTracker
+        if cost_tracker and hasattr(response, 'usage') and response.usage:
+            try:
+                await cost_tracker.record_usage(
+                    response.usage.prompt_tokens,
+                    response.usage.completion_tokens,
+                )
+            except Exception as e:
+                logger.warning(f"CostTracker record failed in reranker: {e}")
+
         response_text = response.choices[0].message.content.strip()
-
-        # Parse JSON response
-        # Remove markdown code blocks if present
-        if response_text.startswith("```"):
-            response_text = response_text.split("```")[1]
-            if response_text.startswith("json"):
-                response_text = response_text[4:]
-
-        result = json.loads(response_text)
+        result = parse_llm_json(response_text)
+        if result is None:
+            raise json.JSONDecodeError("No JSON object found in LLM response", response_text, 0)
 
         best_idx = result.get("best_match", 1) - 1  # Convert to 0-indexed
         confidence = result.get("confidence", 0.5)

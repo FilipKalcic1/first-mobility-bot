@@ -19,6 +19,10 @@ def app():
     def test_endpoint():
         return {"status": "ok"}
 
+    @app.get("/docs")
+    def docs_endpoint():
+        return {"docs": True}
+
     return app
 
 
@@ -53,9 +57,23 @@ class TestSecurityHeaders:
         resp = client.get("/test")
         assert resp.headers["Pragma"] == "no-cache"
 
+    def test_hsts(self, client):
+        resp = client.get("/test")
+        assert resp.headers["Strict-Transport-Security"] == "max-age=31536000"
+
     def test_server_header_removed(self, client):
         resp = client.get("/test")
         assert "server" not in resp.headers
+
+    def test_docs_path_skips_cache_control(self, client):
+        resp = client.get("/docs")
+        assert "Cache-Control" not in resp.headers
+        assert "Pragma" not in resp.headers
+
+    def test_docs_path_has_relaxed_csp(self, client):
+        resp = client.get("/docs")
+        csp = resp.headers["Content-Security-Policy"]
+        assert "cdn.jsdelivr.net" in csp
 
 
 class TestServerHeaderRemoval:

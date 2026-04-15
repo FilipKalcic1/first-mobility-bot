@@ -151,3 +151,39 @@ groups:
         annotations:
           summary: "Container CPU usage >80%"
           description: "Container {{ $labels.name }}: {{ $value | humanizePercentage }}"
+
+  - name: bot_routing
+    rules:
+      # Clarify rate too high — users hitting ambiguous queries
+      - alert: HighClarifyRate
+        expr: |
+          (
+            rate(routing_clarify_total[1h])
+            / on() rate(routing_decisions_total[1h])
+          ) > 0.20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Clarify action rate >20% in the last hour"
+          description: >
+            {{ $value | humanizePercentage }} of routing decisions resulted in
+            clarify actions. Users may be using vocabulary that the entity
+            detector does not recognize. Check /admin/clarify/log for details.
+
+      # Sustained high clarify rate — potential regression
+      - alert: SustainedHighClarifyRate
+        expr: |
+          (
+            rate(routing_clarify_total[6h])
+            / on() rate(routing_decisions_total[6h])
+          ) > 0.15
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Sustained clarify rate >15% over 6 hours"
+          description: >
+            Clarify rate has been above 15% for 30+ minutes over a 6-hour
+            window. This may indicate a regression in entity detection or
+            a shift in user vocabulary. Investigate via /admin/clarify/stats.

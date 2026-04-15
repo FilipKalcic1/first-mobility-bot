@@ -15,30 +15,37 @@ Omogućava:
 - Učenje iz grešaka
 - Statistike za debugging
 
+STORAGE:
+- In-memory dict for fast sync reads (get_score, get_penalty, get_boost)
+- Redis HASH for persistence across pods (shared state in K8s)
+- Async writes to Redis (non-blocking)
+- Graceful fallback to in-memory-only if Redis unavailable
+
 PRIMJER KORIŠTENJA:
-    evaluator = get_tool_evaluator()
+    evaluator = get_tool_evaluator(redis_client=redis)
 
-    # After a successful call
-    evaluator.record_success("get_MasterData", response_time=0.5)
+    # After a successful call (async — writes to Redis)
+    await evaluator.record_success("get_MasterData", response_time_ms=500)
 
-    # After a failed call
-    evaluator.record_failure("get_Vehicles", "Wrong data returned")
+    # After a failed call (async — writes to Redis)
+    await evaluator.record_failure("get_Vehicles", "Wrong data returned")
 
-    # Dohvat score-a za prioritizaciju
+    # Sync reads from in-memory cache (fast, no I/O)
     score = evaluator.get_score("get_MasterData")  # 0.0 - 1.0
 """
 
 import logging
-import json
+import time
 from typing import Dict, Any, Optional
-from pathlib import Path
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import threading
+import json
 
 logger = logging.getLogger(__name__)
 
-EVALUATION_CACHE_FILE = Path.cwd() / ".cache" / "tool_evaluations.json"
+# Redis key prefix for tool metrics
+_REDIS_KEY_PREFIX = "tool_eval:"
+
 
 @dataclass
 class ToolMetrics:
@@ -57,16 +64,16 @@ class ToolMetrics:
     # Error tracking
     error_types: Dict[str, int] = field(default_factory=dict)
     last_error: Optional[str] = None
-    last_error_time: Optional[str] = None
+    last_error_ts: float = 0.0  # POSIX timestamp (monotonic-friendly)
 
     # Performance tracking
     avg_response_time_ms: float = 0.0
     total_response_time_ms: float = 0.0
     timed_calls: int = 0  # Calls that had response_time_ms > 0
 
-    # Timestamps
-    first_call: Optional[str] = None
-    last_call: Optional[str] = None
+    # Timestamps (POSIX float)
+    first_call_ts: float = 0.0
+    last_call_ts: float = 0.0
 
     @property
     def success_rate(self) -> float:
@@ -102,29 +109,41 @@ class ToolMetrics:
         score += self.user_satisfaction * 0.3
 
         # Recency bonus/penalty (10%)
-        if self.last_error_time:
-            try:
-                last_error = datetime.fromisoformat(self.last_error_time.replace('Z', '+00:00'))
-                hours_since_error = (datetime.now(timezone.utc) - last_error).total_seconds() / 3600
+        if self.last_error_ts > 0:
+            hours_since_error = (time.time() - self.last_error_ts) / 3600
 
-                if hours_since_error < 1:
-                    # Recent error - penalty
-                    score += 0.0
-                elif hours_since_error < 24:
-                    # Error within day - small penalty
-                    score += 0.05
-                else:
-                    # Old error - no penalty
-                    score += 0.10
-            except (ValueError, TypeError):
-                score += 0.05  # Default
+            if hours_since_error < 1:
+                score += 0.0
+            elif hours_since_error < 24:
+                score += 0.05
+            else:
+                score += 0.10
         else:
             # No errors ever - bonus
             score += 0.10
 
         return min(1.0, max(0.0, score))
 
+    def to_redis_dict(self) -> Dict[str, str]:
+        """Serialize to flat string dict for Redis HASH."""
+        return {
+            "total_calls": str(self.total_calls),
+            "successful_calls": str(self.successful_calls),
+            "failed_calls": str(self.failed_calls),
+            "positive_feedback": str(self.positive_feedback),
+            "negative_feedback": str(self.negative_feedback),
+            "error_types": json.dumps(self.error_types),
+            "last_error": self.last_error or "",
+            "last_error_ts": str(self.last_error_ts),
+            "avg_response_time_ms": str(self.avg_response_time_ms),
+            "total_response_time_ms": str(self.total_response_time_ms),
+            "timed_calls": str(self.timed_calls),
+            "first_call_ts": str(self.first_call_ts),
+            "last_call_ts": str(self.last_call_ts),
+        }
+
     def to_dict(self) -> Dict:
+        """Serialize for stats/debug output."""
         return {
             "operation_id": self.operation_id,
             "total_calls": self.total_calls,
@@ -134,19 +153,46 @@ class ToolMetrics:
             "negative_feedback": self.negative_feedback,
             "error_types": self.error_types,
             "last_error": self.last_error,
-            "last_error_time": self.last_error_time,
+            "last_error_ts": self.last_error_ts,
             "avg_response_time_ms": self.avg_response_time_ms,
             "total_response_time_ms": self.total_response_time_ms,
             "timed_calls": self.timed_calls,
-            "first_call": self.first_call,
-            "last_call": self.last_call,
+            "first_call_ts": self.first_call_ts,
+            "last_call_ts": self.last_call_ts,
             "success_rate": self.success_rate,
             "user_satisfaction": self.user_satisfaction,
             "overall_score": self.overall_score
         }
 
     @classmethod
+    def from_redis_dict(cls, operation_id: str, data: Dict[str, str]) -> "ToolMetrics":
+        """Deserialize from Redis HASH values."""
+        error_types = {}
+        try:
+            error_types = json.loads(data.get("error_types", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        return cls(
+            operation_id=operation_id,
+            total_calls=int(data.get("total_calls", 0)),
+            successful_calls=int(data.get("successful_calls", 0)),
+            failed_calls=int(data.get("failed_calls", 0)),
+            positive_feedback=int(data.get("positive_feedback", 0)),
+            negative_feedback=int(data.get("negative_feedback", 0)),
+            error_types=error_types,
+            last_error=data.get("last_error") or None,
+            last_error_ts=float(data.get("last_error_ts", 0)),
+            avg_response_time_ms=float(data.get("avg_response_time_ms", 0)),
+            total_response_time_ms=float(data.get("total_response_time_ms", 0)),
+            timed_calls=int(data.get("timed_calls", 0)),
+            first_call_ts=float(data.get("first_call_ts", 0)),
+            last_call_ts=float(data.get("last_call_ts", 0)),
+        )
+
+    @classmethod
     def from_dict(cls, data: Dict) -> "ToolMetrics":
+        """Deserialize from dict (backwards compat for tests)."""
         return cls(
             operation_id=data["operation_id"],
             total_calls=data.get("total_calls", 0),
@@ -156,13 +202,14 @@ class ToolMetrics:
             negative_feedback=data.get("negative_feedback", 0),
             error_types=data.get("error_types", {}),
             last_error=data.get("last_error"),
-            last_error_time=data.get("last_error_time"),
+            last_error_ts=data.get("last_error_ts", 0.0),
             avg_response_time_ms=data.get("avg_response_time_ms", 0.0),
             total_response_time_ms=data.get("total_response_time_ms", 0.0),
             timed_calls=data.get("timed_calls", 0),
-            first_call=data.get("first_call"),
-            last_call=data.get("last_call")
+            first_call_ts=data.get("first_call_ts", 0.0),
+            last_call_ts=data.get("last_call_ts", 0.0),
         )
+
 
 class ToolEvaluator:
     """
@@ -173,47 +220,78 @@ class ToolEvaluator:
     2. Learn from user feedback
     3. Apply penalties for poor performance
     4. Boost well-performing tools
-    5. Persist evaluations across restarts
+    5. Persist evaluations in Redis (shared across pods)
+
+    Architecture:
+    - In-memory dict for fast sync reads (get_score, get_penalty, get_boost)
+    - Redis HASH per tool for persistence (writes are async, non-blocking)
+    - Falls back to in-memory-only when Redis unavailable
     """
 
-    def __init__(self):
+    def __init__(self, redis_client=None):
+        self._lock = threading.Lock()
         self.metrics: Dict[str, ToolMetrics] = {}
-        self._load_from_cache()
+        self._redis = redis_client
 
-    def _load_from_cache(self) -> None:
-        """Load metrics from cache file."""
-        if not EVALUATION_CACHE_FILE.exists():
-            logger.info("No tool evaluations cache found - starting fresh")
+    async def load_from_redis(self) -> None:
+        """Load all metrics from Redis into in-memory cache.
+
+        Call this during app startup after Redis is connected.
+        """
+        if not self._redis:
+            logger.info("ToolEvaluator: No Redis client — in-memory only mode")
             return
 
         try:
-            with open(EVALUATION_CACHE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            # Scan for all tool_eval:* keys
+            cursor = b"0"
+            keys = []
+            while True:
+                cursor, batch = await self._redis.scan(
+                    cursor=cursor, match=f"{_REDIS_KEY_PREFIX}*", count=100
+                )
+                keys.extend(batch)
+                if cursor == b"0" or cursor == 0:
+                    break
 
-            for metric_data in data.get("metrics", []):
-                metric = ToolMetrics.from_dict(metric_data)
-                self.metrics[metric.operation_id] = metric
+            if not keys:
+                logger.info("ToolEvaluator: No metrics in Redis — starting fresh")
+                return
 
-            logger.info(f"Loaded evaluations for {len(self.metrics)} tools")
+            # Load each tool's metrics
+            loaded = 0
+            for key in keys:
+                try:
+                    key_str = key.decode() if isinstance(key, bytes) else key
+                    operation_id = key_str[len(_REDIS_KEY_PREFIX):]
+                    data = await self._redis.hgetall(key)
+                    if data:
+                        # Decode bytes to strings
+                        decoded = {
+                            (k.decode() if isinstance(k, bytes) else k):
+                            (v.decode() if isinstance(v, bytes) else v)
+                            for k, v in data.items()
+                        }
+                        self.metrics[operation_id] = ToolMetrics.from_redis_dict(
+                            operation_id, decoded
+                        )
+                        loaded += 1
+                except Exception as e:
+                    logger.warning(f"ToolEvaluator: Failed to load key {key}: {e}")
+
+            logger.info(f"ToolEvaluator: Loaded {loaded} tool metrics from Redis")
         except Exception as e:
-            logger.warning(f"Failed to load tool evaluations: {e}")
+            logger.warning(f"ToolEvaluator: Redis load failed — in-memory only: {e}")
 
-    def _save_to_cache(self) -> None:
-        """Save metrics to cache file."""
+    async def _persist_to_redis(self, operation_id: str, metrics: ToolMetrics) -> None:
+        """Write metrics to Redis HASH (fire-and-forget safe)."""
+        if not self._redis:
+            return
         try:
-            EVALUATION_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-            data = {
-                "version": "1.0",
-                "saved_at": datetime.now(timezone.utc).isoformat(),
-                "metrics": [m.to_dict() for m in self.metrics.values()]
-            }
-
-            with open(EVALUATION_CACHE_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-
+            key = f"{_REDIS_KEY_PREFIX}{operation_id}"
+            await self._redis.hset(key, mapping=metrics.to_redis_dict())
         except Exception as e:
-            logger.error(f"Failed to save tool evaluations: {e}")
+            logger.warning(f"ToolEvaluator: Redis write failed for {operation_id}: {e}")
 
     def _get_or_create_metrics(self, operation_id: str) -> ToolMetrics:
         """Get or create metrics for a tool."""
@@ -221,7 +299,7 @@ class ToolEvaluator:
             self.metrics[operation_id] = ToolMetrics(operation_id=operation_id)
         return self.metrics[operation_id]
 
-    def record_success(
+    async def record_success(
         self,
         operation_id: str,
         response_time_ms: float = 0.0,
@@ -235,35 +313,36 @@ class ToolEvaluator:
             response_time_ms: Response time in milliseconds
             params_used: Parameters that were used (for learning)
         """
-        metrics = self._get_or_create_metrics(operation_id)
+        with self._lock:
+            metrics = self._get_or_create_metrics(operation_id)
 
-        now = datetime.now(timezone.utc).isoformat()
+            now = time.time()
 
-        metrics.total_calls += 1
-        metrics.successful_calls += 1
-        metrics.last_call = now
+            metrics.total_calls += 1
+            metrics.successful_calls += 1
+            metrics.last_call_ts = now
 
-        if not metrics.first_call:
-            metrics.first_call = now
+            if metrics.first_call_ts == 0:
+                metrics.first_call_ts = now
 
-        # Update response time average (only count calls that provided timing)
-        if response_time_ms > 0:
-            metrics.total_response_time_ms += response_time_ms
-            metrics.timed_calls += 1
-            metrics.avg_response_time_ms = (
-                metrics.total_response_time_ms / metrics.timed_calls
-            )
+            if response_time_ms > 0:
+                metrics.total_response_time_ms += response_time_ms
+                metrics.timed_calls += 1
+                metrics.avg_response_time_ms = (
+                    metrics.total_response_time_ms / metrics.timed_calls
+                )
+
+            should_persist = metrics.total_calls % 10 == 0
 
         logger.debug(
-            f"✅ Recorded success for {operation_id} "
+            f"Recorded success for {operation_id} "
             f"(rate: {metrics.success_rate:.1%}, score: {metrics.overall_score:.2f})"
         )
 
-        # Save periodically (every 10 calls)
-        if metrics.total_calls % 10 == 0:
-            self._save_to_cache()
+        if should_persist:
+            await self._persist_to_redis(operation_id, metrics)
 
-    def record_failure(
+    async def record_failure(
         self,
         operation_id: str,
         error_message: str,
@@ -279,33 +358,32 @@ class ToolEvaluator:
             error_type: Error category (validation, permission, network, etc.)
             params_used: Parameters that were used
         """
-        metrics = self._get_or_create_metrics(operation_id)
+        with self._lock:
+            metrics = self._get_or_create_metrics(operation_id)
 
-        now = datetime.now(timezone.utc).isoformat()
+            now = time.time()
 
-        metrics.total_calls += 1
-        metrics.failed_calls += 1
-        metrics.last_call = now
-        metrics.last_error = error_message[:200]
-        metrics.last_error_time = now
+            metrics.total_calls += 1
+            metrics.failed_calls += 1
+            metrics.last_call_ts = now
+            metrics.last_error = error_message[:200]
+            metrics.last_error_ts = now
 
-        if not metrics.first_call:
-            metrics.first_call = now
+            if metrics.first_call_ts == 0:
+                metrics.first_call_ts = now
 
-        # Track error types
-        if error_type not in metrics.error_types:
-            metrics.error_types[error_type] = 0
-        metrics.error_types[error_type] += 1
+            if error_type not in metrics.error_types:
+                metrics.error_types[error_type] = 0
+            metrics.error_types[error_type] += 1
 
         logger.info(
-            f"❌ Recorded failure for {operation_id}: {error_type} "
+            f"Recorded failure for {operation_id}: {error_type} "
             f"(rate: {metrics.success_rate:.1%}, score: {metrics.overall_score:.2f})"
         )
 
-        # Save on every failure (more important to persist)
-        self._save_to_cache()
+        await self._persist_to_redis(operation_id, metrics)
 
-    def record_user_feedback(
+    async def record_user_feedback(
         self,
         operation_id: str,
         positive: bool,
@@ -321,24 +399,29 @@ class ToolEvaluator:
             positive: True if user accepted result, False if they complained
             feedback_text: Optional user feedback text
         """
-        metrics = self._get_or_create_metrics(operation_id)
+        with self._lock:
+            metrics = self._get_or_create_metrics(operation_id)
+
+            if positive:
+                metrics.positive_feedback += 1
+            else:
+                metrics.negative_feedback += 1
 
         if positive:
-            metrics.positive_feedback += 1
             logger.debug(f"Positive feedback for {operation_id}")
         else:
-            metrics.negative_feedback += 1
             logger.info(
-                f"👎 Negative feedback for {operation_id}: {feedback_text or 'no text'}"
+                f"Negative feedback for {operation_id}: {feedback_text or 'no text'}"
             )
 
-        self._save_to_cache()
+        await self._persist_to_redis(operation_id, metrics)
 
     def get_score(self, operation_id: str) -> float:
         """
         Get overall score for a tool (0.0 - 1.0).
 
         Higher score = better performance.
+        Reads from in-memory cache (sync, fast).
 
         Args:
             operation_id: Tool to score
@@ -351,11 +434,16 @@ class ToolEvaluator:
 
         return self.metrics[operation_id].overall_score
 
+    # Minimum calls before penalty/boost kicks in.
+    # Tools with fewer calls stay neutral to avoid cold-start bias.
+    _MIN_CALLS_FOR_ADJUSTMENT = 5
+
     def get_penalty(self, operation_id: str) -> float:
         """
         Get penalty adjustment for tool score.
 
         Returns negative value to subtract from base similarity score.
+        Tools with fewer than _MIN_CALLS_FOR_ADJUSTMENT calls get 0 penalty.
 
         Args:
             operation_id: Tool to penalize
@@ -363,7 +451,11 @@ class ToolEvaluator:
         Returns:
             Penalty (0.0 to 0.2) to subtract from score
         """
-        score = self.get_score(operation_id)
+        metrics = self.metrics.get(operation_id)
+        if not metrics or metrics.total_calls < self._MIN_CALLS_FOR_ADJUSTMENT:
+            return 0.0  # Neutral for new/unknown tools
+
+        score = metrics.overall_score
 
         # Invert score to get penalty
         # score 1.0 → penalty 0.0
@@ -378,6 +470,7 @@ class ToolEvaluator:
         Get boost adjustment for tool score.
 
         Returns positive value to add to base similarity score.
+        Tools with fewer than _MIN_CALLS_FOR_ADJUSTMENT calls get 0 boost.
 
         Args:
             operation_id: Tool to boost
@@ -385,7 +478,11 @@ class ToolEvaluator:
         Returns:
             Boost (0.0 to 0.1) to add to score
         """
-        score = self.get_score(operation_id)
+        metrics = self.metrics.get(operation_id)
+        if not metrics or metrics.total_calls < self._MIN_CALLS_FOR_ADJUSTMENT:
+            return 0.0  # Neutral for new/unknown tools
+
+        score = metrics.overall_score
 
         # High performers get boost
         # score 1.0 → boost 0.1
@@ -459,18 +556,28 @@ class ToolEvaluator:
             "overall_success_rate": total_success / total_calls if total_calls > 0 else 0,
             "total_failures": total_failures,
             "top_performers": top_5,
-            "worst_performers": bottom_5
+            "worst_performers": bottom_5,
+            "storage": "redis" if self._redis else "in-memory",
         }
+
 
 # Global instance
 _tool_evaluator: Optional[ToolEvaluator] = None
 _singleton_lock = threading.Lock()
 
-def get_tool_evaluator() -> ToolEvaluator:
-    """Get global tool evaluator instance."""
+
+def get_tool_evaluator(redis_client=None) -> ToolEvaluator:
+    """Get global tool evaluator instance.
+
+    Args:
+        redis_client: Optional async Redis client for persistence.
+                      Only used on first call (singleton creation).
+    """
     global _tool_evaluator
     if _tool_evaluator is None:
         with _singleton_lock:
             if _tool_evaluator is None:
-                _tool_evaluator = ToolEvaluator()
+                _tool_evaluator = ToolEvaluator(redis_client=redis_client)
+    elif redis_client and not _tool_evaluator._redis:
+        _tool_evaluator._redis = redis_client
     return _tool_evaluator

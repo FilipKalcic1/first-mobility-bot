@@ -8,11 +8,16 @@ Architecture:
 4. Execute based on decision OR ask clarification
 """
 
+import asyncio
 import json
 import logging
+import os
 import threading
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Tuple, TYPE_CHECKING
+
+import redis as _redis_mod
 
 from config import get_settings
 from services.openai_client import get_openai_client, get_llm_circuit_breaker
@@ -36,6 +41,25 @@ from services.text_normalizer import sanitize_for_llm
 from services.tracing import get_tracer, trace_span
 from services.domain_models import RoutingTrace, RoutingTier
 from services.errors import RoutingError, ErrorCode
+from prometheus_client import Counter as PromCounter, Histogram as PromHistogram
+
+ROUTING_DECISIONS = PromCounter(
+    'routing_decisions_total',
+    'Routing decisions by tier',
+    ['tier'],
+)
+
+CLARIFY_ACTIONS = PromCounter(
+    'routing_clarify_total',
+    'Clarify actions triggered when query is too ambiguous',
+    ['detected_entity'],  # 'none' if no entity detected
+)
+
+CLARIFY_SIMILAR_TOOLS = PromHistogram(
+    'routing_clarify_similar_tools',
+    'Number of similar tools when clarify is triggered',
+    buckets=[0, 2, 5, 10, 20, 50],
+)
 
 if TYPE_CHECKING:
     from services.registry import ToolRegistry
@@ -44,6 +68,37 @@ logger = logging.getLogger(__name__)
 _tracer = get_tracer("unified_router")
 def _get_settings():
     return get_settings()
+
+
+_clarify_redis_client: Optional["_redis_mod.Redis"] = None
+_clarify_redis_lock = threading.Lock()
+
+
+def _get_clarify_redis() -> "_redis_mod.Redis":
+    """Module-level pooled sync Redis client for clarify-log writes.
+
+    Reuses one ConnectionPool across all clarify calls so we don't pay a
+    TCP handshake per ambiguous query.
+    """
+    global _clarify_redis_client
+    if _clarify_redis_client is None:
+        with _clarify_redis_lock:
+            if _clarify_redis_client is None:
+                _clarify_redis_client = _redis_mod.from_url(
+                    os.environ.get("REDIS_URL", "redis://localhost:6379"),
+                    max_connections=4,
+                )
+    return _clarify_redis_client
+
+
+def _push_clarify_log(entry: str) -> None:
+    """Push a clarify-log entry to Redis and trim the list.
+
+    Runs synchronously; callers dispatch via asyncio.to_thread.
+    """
+    client = _get_clarify_redis()
+    client.lpush("clarify:log", entry)
+    client.ltrim("clarify:log", 0, 499)
 
 
 @dataclass
@@ -57,7 +112,8 @@ class RouterDecision:
     clarification: Optional[str] = None  # For clarify action
     reasoning: str = ""
     confidence: float = 0.0
-    ambiguity_detected: bool = False  # Was ambiguity detected?
+    ambiguity_detected: bool = False
+    routing_tier: str = "full_search"  # Which tier handled this query
 
 
 # Single source of truth: tool_routing.py
@@ -77,12 +133,15 @@ class UnifiedRouter:
     not just hardcoded PRIMARY_TOOLS.
     """
 
-    def __init__(self, registry: Optional["ToolRegistry"] = None) -> None:
+    def __init__(self, registry: Optional["ToolRegistry"] = None, cost_tracker=None) -> None:
         """Initialize router with optional tool registry for semantic search."""
         # Shared client: rate limiting + connection pooling across all services
         self.client = get_openai_client()
         self._circuit_breaker = get_llm_circuit_breaker()
         self.model = _get_settings().AZURE_OPENAI_DEPLOYMENT_NAME
+
+        # Redis-backed cost tracking (optional — graceful if None)
+        self._cost_tracker = cost_tracker
 
         # Tool Registry for semantic search (injected)
         self._registry = registry
@@ -139,7 +198,8 @@ class UnifiedRouter:
                 response = await unified.search(query, top_k=top_k)
                 search_span.set_attribute("search.result_count", len(response.results))
                 search_span.set_attribute("search.intent", response.intent.value)
-                search_span.set_attribute("search.query_type", response.query_type.value)
+                if response.detected_entity:
+                    search_span.set_attribute("search.detected_entity", response.detected_entity)
                 if response.results:
                     search_span.set_attribute("search.top_tool", response.results[0].tool_id)
                     search_span.set_attribute("search.top_score", round(response.results[0].score, 3))
@@ -271,6 +331,18 @@ class UnifiedRouter:
                 span.set_attribute(attr_key, attr_val)
             span.set_attribute("routing.action", decision.action)
 
+            # Extended clarify telemetry for production forensics
+            if decision.action == "clarify":
+                span.set_attribute("routing.clarify.clarification", decision.clarification or "")
+                span.set_attribute("routing.clarify.reasoning", decision.reasoning[:200])
+                if trace.get("ambiguity_result"):
+                    _amb = trace["ambiguity_result"]
+                    span.set_attribute("routing.clarify.detected_entity", _amb.detected_entity or "none")
+                    span.set_attribute("routing.clarify.similar_tools_count", len(_amb.similar_tools))
+                    span.set_attribute("routing.clarify.similar_tools", ",".join(_amb.similar_tools[:10]))
+            ROUTING_DECISIONS.labels(tier=routing_trace.tier.value).inc()
+
+            decision.routing_tier = trace.get("tier", RoutingTier.FULL_SEARCH).value
             return decision
 
     async def _route_inner(
@@ -398,93 +470,62 @@ class UnifiedRouter:
                 logger.info("UNIFIED ROUTER: Mediation failed, falling through to full LLM")
 
         # 5. LLM call - for complex queries that Query Router can't handle
-        return await self._llm_route(query, user_context, conversation_state)
+        return await self._llm_route(query, user_context, conversation_state, trace=trace)
 
-    async def _llm_route(
-        self,
-        query: str,
-        user_context: Dict[str, Any],
-        conversation_state: Optional[Dict]
-    ) -> RouterDecision:
-        """Make routing decision using LLM with disambiguation support."""
-
-        # Build context description - use UserContextManager for validated access
-        # Use UserContextManager
-        ctx = UserContextManager(user_context)
-        vehicle = ctx.vehicle
-        vehicle_info = ""
+    @staticmethod
+    def _format_vehicle_info(user_context: Dict[str, Any]) -> str:
+        vehicle = UserContextManager(user_context).vehicle
         if vehicle and vehicle.id:
-            # Use VehicleContext properties
-            name = vehicle.name or "N/A"
-            plate = vehicle.plate or "N/A"
-            vehicle_info = f"Korisnikovo vozilo: {name} ({plate})"
-        else:
-            vehicle_info = "Korisnik NEMA dodijeljeno vozilo"
+            return f"Korisnikovo vozilo: {vehicle.name or 'N/A'} ({vehicle.plate or 'N/A'})"
+        return "Korisnik NEMA dodijeljeno vozilo"
 
-        # Build flow state description
-        flow_info = "Korisnik je u IDLE stanju (novi upit)"
-        if conversation_state:
-            flow = conversation_state.get("flow")
-            state = conversation_state.get("state")
-            missing = conversation_state.get("missing_params", [])
-            tool = conversation_state.get("tool")
-
-            if flow:
-                flow_info = (
-                    f"Korisnik je U TIJEKU flow-a:\n"
-                    f"  - Flow: {flow}\n"
-                    f"  - State: {state}\n"
-                    f"  - Tool: {tool}\n"
-                    f"  - Nedostaju parametri: {missing}"
-                )
-
-        # Get relevant tools WITH ambiguity detection
-        relevant_tools, ambiguity_result = await self._get_relevant_tools_with_ambiguity(
-            query, user_context, top_k=25
+    @staticmethod
+    def _format_flow_info(conversation_state: Optional[Dict]) -> str:
+        if not conversation_state or not conversation_state.get("flow"):
+            return "Korisnik je u IDLE stanju (novi upit)"
+        return (
+            "Korisnik je U TIJEKU flow-a:\n"
+            f"  - Flow: {conversation_state.get('flow')}\n"
+            f"  - State: {conversation_state.get('state')}\n"
+            f"  - Tool: {conversation_state.get('tool')}\n"
+            f"  - Nedostaju parametri: {conversation_state.get('missing_params', [])}"
         )
 
-        # Build tools description grouped by entity family
-        # This helps LLM see related tools together instead of a flat list
-        entity_groups = {}
-        ungrouped = {}
+    @staticmethod
+    def _format_tools_catalog(relevant_tools: Dict[str, str]) -> str:
+        entity_groups: Dict[str, list] = {}
+        ungrouped: Dict[str, str] = {}
         for tool_name, description in relevant_tools.items():
             parts = tool_name.split("_", 2)
             if len(parts) >= 2:
-                entity_key = parts[1]
-                entity_groups.setdefault(entity_key, []).append((tool_name, description))
+                entity_groups.setdefault(parts[1], []).append((tool_name, description))
             else:
                 ungrouped[tool_name] = description
 
-        tools_desc = f"Dostupni alati ({len(relevant_tools)} relevantnih):\n"
-        for entity_key in sorted(entity_groups.keys()):
-            tools = entity_groups[entity_key]
-            tools_desc += f"  === {entity_key} ===\n"
-            for tool_name, description in tools:
+        lines = [f"Dostupni alati ({len(relevant_tools)} relevantnih):"]
+        for entity_key in sorted(entity_groups):
+            lines.append(f"  === {entity_key} ===")
+            for tool_name, description in entity_groups[entity_key]:
                 method_tag = ""
-                for prefix in ["get_", "post_", "put_", "patch_", "delete_"]:
+                for prefix in ("get_", "post_", "put_", "patch_", "delete_"):
                     if tool_name.lower().startswith(prefix):
                         method_tag = f" [{prefix[:-1].upper()}]"
                         break
-                tools_desc += f"    - {tool_name}{method_tag}: {description}\n"
+                lines.append(f"    - {tool_name}{method_tag}: {description}")
         for tool_name, description in ungrouped.items():
-            tools_desc += f"  - {tool_name}: {description}\n"
+            lines.append(f"  - {tool_name}: {description}")
+        return "\n".join(lines) + "\n"
 
-        # Inject detected entity/query type context for LLM
+    @staticmethod
+    def _format_ambiguity_sections(ambiguity_result) -> tuple:
         detected_context = ""
-        if ambiguity_result:
-            from services.entity_detector import detect_entity
-            from services.intent_classifier import classify_query_type_ml
-            det_entity = detect_entity(query)
-            ml_qt = classify_query_type_ml(query)
-            if det_entity or ml_qt.query_type != "UNKNOWN":
-                detected_context = "DETEKTIRANI KONTEKST:\n"
-                if det_entity:
-                    detected_context += f"  - Entitet: {det_entity}\n"
-                if ml_qt.query_type != "UNKNOWN":
-                    detected_context += f"  - Tip upita: {ml_qt.query_type} (confidence: {ml_qt.confidence:.2f})\n"
-                detected_context += "  Koristi ove informacije za odabir pravog alata.\n"
+        if ambiguity_result and ambiguity_result.detected_entity:
+            detected_context = (
+                "DETEKTIRANI KONTEKST:\n"
+                f"  - Entitet: {ambiguity_result.detected_entity}\n"
+                "  Koristi ove informacije za odabir pravog alata.\n"
+            )
 
-        # Build disambiguation hints if ambiguity detected
         disambiguation_section = ""
         if ambiguity_result and ambiguity_result.is_ambiguous:
             disambiguation_section = f"""
@@ -499,9 +540,21 @@ class UnifiedRouter:
         - Ako upit SPOMINJE entitet, odaberi alat za taj entitet
         - Primjer: "prosječna kilometraža" → entitet je vozila → get_Vehicles_Agg ili get_MasterData
         """
+        return detected_context, disambiguation_section
 
-        # Build system prompt with disambiguation support
-        system_prompt = f"""Ti si routing sustav za MobilityOne fleet management bot.
+    def _build_router_system_prompt(
+        self,
+        user_context: Dict[str, Any],
+        conversation_state: Optional[Dict],
+        relevant_tools: Dict[str, str],
+        ambiguity_result,
+    ) -> str:
+        vehicle_info = self._format_vehicle_info(user_context)
+        flow_info = self._format_flow_info(conversation_state)
+        tools_desc = self._format_tools_catalog(relevant_tools)
+        detected_context, disambiguation_section = self._format_ambiguity_sections(ambiguity_result)
+
+        return f"""Ti si routing sustav za MobilityOne fleet management bot.
 
         TVOJ ZADATAK: Odluči što napraviti s korisnikovim upitom.
 
@@ -571,57 +624,159 @@ class UnifiedRouter:
             "confidence": 0.0-1.0
         }}"""
 
-        # Sanitize user query to mitigate prompt injection:
-        # Strip control characters and limit length to prevent token abuse
+    async def _call_router_llm(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        relevant_tools: Dict[str, str],
+        ambiguity_result,
+    ) -> Dict[str, Any]:
+        with trace_span(_tracer, "router.llm_call", {
+            "llm.model": self.model,
+            "llm.temperature": 0.1,
+            "llm.max_tokens": 500,
+            "search.candidates": len(relevant_tools),
+            "ambiguity.detected": ambiguity_result.is_ambiguous if ambiguity_result else False,
+        }) as llm_span:
+            response = await self._circuit_breaker.call(
+                f"llm_router:{self.model}",
+                self.client.chat.completions.create,
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.1,
+                max_tokens=500,
+                response_format={"type": "json_object"},
+            )
+
+            if hasattr(response, "usage") and response.usage:
+                llm_span.set_attribute("llm.prompt_tokens", response.usage.prompt_tokens)
+                llm_span.set_attribute("llm.completion_tokens", response.usage.completion_tokens)
+                llm_span.set_attribute("llm.total_tokens", response.usage.total_tokens)
+
+                if self._cost_tracker:
+                    try:
+                        await self._cost_tracker.record_usage(
+                            response.usage.prompt_tokens,
+                            response.usage.completion_tokens,
+                        )
+                    except Exception as ct_err:
+                        logger.warning(f"CostTracker record failed: {ct_err}")
+
+        return json.loads(response.choices[0].message.content)
+
+    def _validate_tool_selection(
+        self,
+        result: Dict[str, Any],
+        relevant_tools: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """Resolve the LLM-selected tool against the candidate set.
+
+        Returns a *new* dict — never mutates the caller's one. The earlier
+        in-place mutation pattern made it easy to miss a branch and leave
+        ``result["action"]`` stale.
+        """
+        selected_tool = result.get("tool")
+        if not selected_tool or selected_tool in relevant_tools:
+            return result
+
+        lower_index = {t.lower(): t for t in relevant_tools}
+        match = lower_index.get(selected_tool.lower())
+        if match:
+            logger.info(f"LLM tool case-fixed: {selected_tool} → {match}")
+            return {**result, "tool": match}
+
+        if self._registry and self._registry.get_tool(selected_tool):
+            logger.warning(f"LLM selected tool outside candidates: {selected_tool}")
+            return result
+
+        logger.warning(f"LLM hallucinated tool: {selected_tool}")
+        return {
+            **result,
+            "action": "clarify",
+            "tool": None,
+            "clarification": (
+                "Nisam siguran koji alat odgovara vašem upitu. "
+                "Možete li malo preciznije opisati što trebate?"
+            ),
+            "reasoning": f"LLM returned non-existent tool '{selected_tool}'",
+            "confidence": 0.2,
+        }
+
+    async def _handle_clarify_action(
+        self,
+        query: str,
+        result: Dict[str, Any],
+        ambiguity_result,
+    ) -> RouterDecision:
+        clarification_text = result.get("clarification")
+        if not clarification_text and ambiguity_result:
+            clarification_text = ambiguity_result.clarification_question
+
+        entity = (
+            ambiguity_result.detected_entity
+            if ambiguity_result and ambiguity_result.detected_entity
+            else "none"
+        )
+        similar = ambiguity_result.similar_tools if ambiguity_result else []
+        CLARIFY_ACTIONS.labels(detected_entity=entity).inc()
+        CLARIFY_SIMILAR_TOOLS.observe(len(similar))
+
+        try:
+            entry = json.dumps(
+                {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "query": query[:200],
+                    "entity": entity,
+                    "similar_tools": similar[:10],
+                    "clarification": (clarification_text or "")[:200],
+                    "reasoning": result.get("reasoning", "")[:200],
+                    "confidence": float(result.get("confidence", 0.3)),
+                },
+                ensure_ascii=False,
+            )
+            await asyncio.to_thread(_push_clarify_log, entry)
+        except Exception as log_err:
+            logger.debug(f"Clarify log to Redis failed (non-critical): {log_err}")
+
+        return RouterDecision(
+            action="clarify",
+            clarification=clarification_text,
+            reasoning=result.get("reasoning", "Query is ambiguous, need clarification"),
+            confidence=float(result.get("confidence", 0.3)),
+            ambiguity_detected=True,
+        )
+
+    async def _llm_route(
+        self,
+        query: str,
+        user_context: Dict[str, Any],
+        conversation_state: Optional[Dict],
+        trace: Optional[dict] = None,
+    ) -> RouterDecision:
+        """Make routing decision using LLM with disambiguation support."""
+
+        relevant_tools, ambiguity_result = await self._get_relevant_tools_with_ambiguity(
+            query, user_context, top_k=25
+        )
+        if trace is not None:
+            trace["ambiguity_result"] = ambiguity_result
+
+        system_prompt = self._build_router_system_prompt(
+            user_context, conversation_state, relevant_tools, ambiguity_result
+        )
         sanitized_query = sanitize_for_llm(query) if query else ""
         user_prompt = f'Korisnikov upit: "{sanitized_query}"'
 
         try:
-            with trace_span(_tracer, "router.llm_call", {
-                "llm.model": self.model,
-                "llm.temperature": 0.1,
-                "llm.max_tokens": 500,
-                "search.candidates": len(relevant_tools),
-                "ambiguity.detected": ambiguity_result.is_ambiguous if ambiguity_result else False,
-            }) as llm_span:
-                response = await self._circuit_breaker.call(
-                    f"llm_router:{self.model}",
-                    self.client.chat.completions.create,
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=0.1,
-                    max_tokens=500,
-                    response_format={"type": "json_object"}
-                )
-
-                # Record token usage
-                if hasattr(response, 'usage') and response.usage:
-                    llm_span.set_attribute("llm.prompt_tokens", response.usage.prompt_tokens)
-                    llm_span.set_attribute("llm.completion_tokens", response.usage.completion_tokens)
-                    llm_span.set_attribute("llm.total_tokens", response.usage.total_tokens)
-
-            result_text = response.choices[0].message.content
-            result = json.loads(result_text)
-
-            # Validate LLM's selected tool exists
-            selected_tool = result.get("tool")
-            if selected_tool and selected_tool not in relevant_tools:
-                # Try case-insensitive match
-                match = next((t for t in relevant_tools if t.lower() == selected_tool.lower()), None)
-                if match:
-                    logger.info(f"LLM tool case-fixed: {selected_tool} → {match}")
-                    result["tool"] = match
-                elif self._registry and self._registry.get_tool(selected_tool):
-                    logger.warning(f"LLM selected tool outside candidates: {selected_tool}")
-                else:
-                    logger.warning(f"LLM hallucinated tool: {selected_tool}, using top candidate")
-                    result["tool"] = next(iter(relevant_tools))
+            result = await self._call_router_llm(
+                system_prompt, user_prompt, relevant_tools, ambiguity_result
+            )
+            result = self._validate_tool_selection(result, relevant_tools)
 
             action = result.get("action", "simple_api")
-
             logger.info(
                 f"UNIFIED ROUTER: '{query[:30]}...' → "
                 f"action={action}, tool={result.get('tool')}, "
@@ -629,30 +784,20 @@ class UnifiedRouter:
                 f"ambiguous={ambiguity_result.is_ambiguous if ambiguity_result else False}"
             )
 
-            # CRITICAL FIX: Prevent exit_flow when not in a flow
             if action == "exit_flow" and not conversation_state:
                 logger.warning(
                     f"LLM returned exit_flow but no active flow - "
-                    f"converting to simple_api. Query: '{query[:40]}...'"
+                    f"converting to direct_response. Query: '{query[:40]}...'"
                 )
-                action = "simple_api"
-                if not result.get("tool"):
-                    result["tool"] = "get_MasterData"
-
-            # Handle clarify action
-            if action == "clarify":
-                clarification_text = result.get("clarification")
-                if not clarification_text and ambiguity_result:
-                    # Use detector's clarification question as fallback
-                    clarification_text = ambiguity_result.clarification_question
-
                 return RouterDecision(
-                    action="clarify",
-                    clarification=clarification_text,
-                    reasoning=result.get("reasoning", "Query is ambiguous, need clarification"),
-                    confidence=float(result.get("confidence", 0.3)),
-                    ambiguity_detected=True
+                    action="direct_response",
+                    response="Razumijem. Kako vam mogu pomoći?",
+                    reasoning="LLM returned exit_flow but no active flow",
+                    confidence=0.8,
                 )
+
+            if action == "clarify":
+                return await self._handle_clarify_action(query, result, ambiguity_result)
 
             return RouterDecision(
                 action=action,
@@ -662,7 +807,7 @@ class UnifiedRouter:
                 response=result.get("response"),
                 reasoning=result.get("reasoning", ""),
                 confidence=float(result.get("confidence", 0.5)),
-                ambiguity_detected=ambiguity_result.is_ambiguous if ambiguity_result else False
+                ambiguity_detected=ambiguity_result.is_ambiguous if ambiguity_result else False,
             )
 
         except CircuitOpenError as e:
@@ -729,11 +874,12 @@ class UnifiedRouter:
                 "cp.set_size": cp_size,
                 "cp.candidates": len(candidates),
                 "cp.labels": ", ".join(prediction_set.labels[:5]),
-            }) as med_span:
+            }):
                 rerank_results = await rerank_with_llm(
                     query=query,
                     candidates=candidates,
                     top_k=1,
+                    cost_tracker=self._cost_tracker,
                 )
             if rerank_results:
                 winner = rerank_results[0]
@@ -784,14 +930,14 @@ class UnifiedRouter:
         return RouterDecision(
             action="direct_response",
             response=(
-                "Nisam siguran sto trazite. Mozete pitati za:\n"
+                "Nisam siguran što tražite. Možete pitati za:\n"
                 "* Rezervaciju vozila\n"
-                "* Kilometrazu\n"
-                "* Prijavu stete\n"
+                "* Kilometražu\n"
+                "* Prijavu štete\n"
                 "* Informacije o vozilu\n"
-                "* Troskove\n"
+                "* Troškove\n"
                 "* Putovanja\n\n"
-                "Mozete li pojasniti sto tocno trebate?"
+                "Možete li pojasniti što točno trebate?"
             ),
             reasoning="Ultimate fallback: No match found, asking user to clarify",
             confidence=0.1
@@ -890,17 +1036,17 @@ class UnifiedRouter:
 
 # Singleton
 _router: Optional[UnifiedRouter] = None
-_router_lock = threading.Lock()
+_router_lock = asyncio.Lock()
 
 
-async def get_unified_router() -> UnifiedRouter:
+async def get_unified_router(cost_tracker=None) -> UnifiedRouter:
     """Get or create singleton router instance."""
     global _router
     if _router is not None:
         return _router
-    with _router_lock:
+    async with _router_lock:
         if _router is None:
-            router = UnifiedRouter()
+            router = UnifiedRouter(cost_tracker=cost_tracker)
             await router.initialize()
             _router = router
     return _router

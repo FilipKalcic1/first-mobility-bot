@@ -51,14 +51,14 @@ services:
 
   # --- PgBouncer (Connection Pooling) ---
   pgbouncer:
-    image: edoburu/pgbouncer:1.23.0
+    image: edoburu/pgbouncer:latest
     container_name: mobility_pgbouncer
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://appuser:${DB_PASSWORD:-super_tajna_lozinka}@postgres:5432/mobility_db
       POOL_MODE: transaction
-      MAX_CLIENT_CONN: 200
-      DEFAULT_POOL_SIZE: 25
+      MAX_CLIENT_CONN: 50
+      DEFAULT_POOL_SIZE: 10
       MIN_POOL_SIZE: 5
       RESERVE_POOL_SIZE: 10
       RESERVE_POOL_TIMEOUT: 3
@@ -90,7 +90,7 @@ services:
     image: redis:7-alpine
     container_name: mobility_redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy volatile-lru
+    command: redis-server --appendonly yes --maxmemory 64mb --maxmemory-policy volatile-lru
     volumes:
       - redis_data:/data
     healthcheck:
@@ -161,8 +161,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2.0'
-          memory: 2G
+          cpus: '0.5'
+          memory: 512M
 
   # --- Worker (Background Tasks) ---
   worker:
@@ -199,8 +199,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 1G
+          cpus: '0.5'
+          memory: 512M
 
   # --- Admin API (INTERNAL ONLY - Network Isolated!) ---
   admin-api:

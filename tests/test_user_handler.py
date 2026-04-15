@@ -83,6 +83,58 @@ class TestIdentifyUser:
             assert result["display_name"] == "Korisnik"
 
     @pytest.mark.asyncio
+    async def test_user_exists_without_api_identity_triggers_auto_onboard(self, handler):
+        """When user exists in DB but has no api_identity, system should auto-onboard from API."""
+        user_no_id = MagicMock()
+        user_no_id.api_identity = None
+        user_no_id.display_name = "Filip"
+        user_no_id.tenant_id = "tenant-123"
+
+        user_with_id = MagicMock()
+        user_with_id.api_identity = "real-person-id-from-api"
+        user_with_id.display_name = "Filip"
+        user_with_id.tenant_id = "tenant-123"
+
+        with patch("services.engine.user_handler.UserService") as MockUS:
+            svc = MagicMock()
+            # First call returns user without api_identity, second returns updated user
+            svc.get_active_identity = AsyncMock(side_effect=[user_no_id, user_with_id])
+            svc.try_auto_onboard = AsyncMock(return_value=("Filip", {}))
+            svc.build_context = AsyncMock(return_value={"person_id": "real-person-id-from-api"})
+            MockUS.return_value = svc
+
+            result = await handler.identify_user("+385991234567")
+            # Should have called auto-onboard
+            svc.try_auto_onboard.assert_called_once()
+            assert result is not None
+            assert result["is_new"] is False
+
+    @pytest.mark.asyncio
+    async def test_user_exists_without_api_identity_api_down_returns_limited_context(self, handler):
+        """When user exists but API is unreachable, return limited context (not guest)."""
+        user_no_id = MagicMock()
+        user_no_id.api_identity = None
+        user_no_id.display_name = "Filip"
+        user_no_id.tenant_id = "tenant-123"
+
+        mock_tenant_svc = MagicMock()
+        mock_tenant_svc.get_tenant_for_user = AsyncMock(return_value="tenant-123")
+
+        with patch("services.engine.user_handler.UserService") as MockUS:
+            svc = MagicMock()
+            svc.get_active_identity = AsyncMock(return_value=user_no_id)
+            svc.try_auto_onboard = AsyncMock(return_value=None)  # API down
+            svc._tenant_service = mock_tenant_svc
+            MockUS.return_value = svc
+
+            result = await handler.identify_user("+385991234567")
+            assert result is not None
+            assert result["is_guest"] is False  # NOT guest — has DB record
+            assert result["person_id"] is None  # Can't resolve without API
+            assert result["display_name"] == "Filip"
+            assert result["tenant_id"] == "tenant-123"
+
+    @pytest.mark.asyncio
     async def test_auto_onboard_second_lookup_fails_returns_fallback_context(self, handler):
         """When auto-onboard succeeds but second lookup fails, returns API-based context (not guest)."""
         with patch("services.engine.user_handler.UserService") as MockUS:

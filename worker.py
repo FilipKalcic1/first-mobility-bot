@@ -63,8 +63,8 @@ from services.tracing import get_tracer, trace_span
 settings = get_settings()
 _tracer = get_tracer("worker")
 
-MAX_CONCURRENT = 10             # 0.5 CPU (CFS 50ms/100ms): 20 tasks causes >25% throttling.
-                                # 10 concurrent keeps scheduler healthy. KEDA scales pods instead.
+MAX_CONCURRENT = 5              # 0.5 CPU single-server: 5 concurrent keeps memory low.
+                                # Bottleneck is LLM RTT (4s), not concurrency. KEDA scales pods if needed.
 MESSAGE_LOCK_TTL = 300          # 5 min - enough for longest LLM calls
 
 # Lua script for atomic lock release: only delete if caller still holds it
@@ -359,7 +359,7 @@ class Worker:
                 settings.REDIS_URL,
                 encoding="utf-8",
                 decode_responses=True,
-                max_connections=20,  # Worker: stream + outbound + locks + state. 20 for 10 concurrent tasks.
+                max_connections=10,  # Worker: stream + outbound + locks + state. 10 for 5 concurrent tasks.
                 socket_keepalive=True,
                 health_check_interval=30
             )
@@ -441,7 +441,7 @@ class Worker:
         log("info", "init_services_started")
 
         from services.api_gateway import APIGateway
-        from services.tool_registry import ToolRegistry
+        from services.registry import ToolRegistry
         from services.queue_service import QueueService
         from services.cache_service import CacheService
         from services.context_service import ContextService
@@ -507,29 +507,7 @@ class Worker:
         except Exception as e:
             log("warn", "rag_scheduler_init_failed", {"error": str(e)})
 
-        # Initialize ML models (train if missing)
-        try:
-            from services.intent_classifier import IntentClassifier, get_query_type_classifier_ml
-            from pathlib import Path
-
-            model_dir = Path("/app/models/intent")
-            tfidf_model = model_dir / "tfidf_lr_model.pkl"
-
-            if not tfidf_model.exists():
-                log("info", "intent_model_training")
-                model_dir.mkdir(parents=True, exist_ok=True)
-                clf = IntentClassifier(algorithm="tfidf_lr")
-                metrics = clf.train()
-                log("info", "intent_model_trained", {"accuracy": f"{metrics.get('accuracy', 0):.1%}"})
-            else:
-                log("info", "intent_model_found")
-
-            # Initialize query type classifier
-            query_clf = get_query_type_classifier_ml()
-            log("info", "query_type_classifier_ready")
-
-        except Exception as e:
-            log("warn", "ml_model_init_failed", {"error": str(e)})
+        # ML warm-up removed in Phase D (ML cull).
 
     async def _create_consumer_group(self):
         try:
@@ -864,6 +842,20 @@ class Worker:
         text = data.get("text", "")
         message_id = data.get("message_id", "")
         request_id = data.get("request_id", "")  # Propagated from webhook
+        # Option C: webhook resolved phone→tenant via YAML map. Worker writes
+        # it to a per-session Redis key BEFORE engine runs so V6.2 precedence
+        # in api_gateway picks it up via user_context["tenant_id"].
+        tenant_id = data.get("tenant_id", "")
+        if tenant_id and sender:
+            try:
+                await self.redis.set(
+                    f"session:{sender}:tenant_id", tenant_id, ex=3600
+                )
+            except Exception as redis_err:
+                log("warn", "tenant_session_write_failed", {
+                    "sender": sender[-4:] if sender else "",
+                    "error": str(redis_err),
+                })
 
         _span_attrs = {
             "message.id": message_id[:20] if message_id else "",
@@ -911,7 +903,7 @@ class Worker:
             })
             response = (
                 "Trenutno mogu obraditi samo tekstualne poruke. "
-                "Molimo posaljite svoju poruku kao tekst."
+                "Molimo pošaljite svoju poruku kao tekst."
             )
             await self._enqueue_outbound(sender, response)
             self._messages_processed += 1
@@ -953,7 +945,7 @@ class Worker:
             try:
               # Timeout protection: prevent stuck LLM calls from blocking all slots
               response = await asyncio.wait_for(
-                  self._process_message(sender, text, message_id),
+                  self._process_message(sender, text, message_id, tenant_id=tenant_id),
                   timeout=90.0
               )
 
@@ -1019,12 +1011,20 @@ class Worker:
                   "request_id": request_id,
               })
 
-    async def _process_message(self, sender: str, text: str, message_id: str) -> Optional[str]:
+    async def _process_message(
+        self,
+        sender: str,
+        text: str,
+        message_id: str,
+        tenant_id: str = "",
+    ) -> Optional[str]:
         """Process message through MessageEngine with per-request db session."""
 
         async with AsyncSessionLocal() as db:
             try:
-                response = await self._message_engine.process(sender, text, message_id, db_session=db)
+                response = await self._message_engine.process(
+                    sender, text, message_id, db_session=db, tenant_id=tenant_id
+                )
 
                 log("debug", "response_generated", {
                     "length": len(response) if response else 0,

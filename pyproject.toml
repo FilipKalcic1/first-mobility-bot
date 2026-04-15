@@ -87,7 +87,6 @@ omit = [
     # whatsapp_service.py removed from omit — now covered by test_whatsapp_service.py
     "services/queue_service.py",
     "services/message_engine.py",
-    "services/query_type_classifier.py",
 ]
 
 [tool.coverage.report]

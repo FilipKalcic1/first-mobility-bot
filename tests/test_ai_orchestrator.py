@@ -1052,13 +1052,13 @@ class TestEdgeCases:
         assert result["type"] == "text"
         assert result["usage"] is None
 
-    @pytest.mark.xfail(reason="Known bug: len(None) crash in _count_tokens when message content is None")
     def test_count_tokens_message_with_none_content(self):
         """Message with None content doesn't crash token counting."""
         orch = _make_orchestrator()
         orch.tokenizer = None
         messages = [{"role": "assistant", "content": None}]
-        orch._count_tokens(messages)  # Should crash with TypeError
+        result = orch._count_tokens(messages)
+        assert result >= 0
 
     @pytest.mark.asyncio
     async def test_analyze_multiple_tool_calls_picks_first(self):

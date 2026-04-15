@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional, Tuple, Dict, Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -219,6 +219,8 @@ class UserService:
                         person = items[0]
                         person_id = person.get("Id")
                         display_name = person.get("DisplayName", "Korisnik")
+                        # CRITICAL: Extract tenant from API — this is the user's REAL company tenant
+                        api_tenant_id = person.get("TenantId")
 
                         # Validate phone matches
                         api_phone = str(person.get("Phone") or person.get("Mobile") or "")
@@ -228,8 +230,12 @@ class UserService:
                             )
                             continue
 
-                        logger.info(f"User found: {display_name}")
-                        await self._upsert_mapping(phone, person_id, display_name)
+                        logger.info(
+                            f"User found: {display_name}, "
+                            f"person_id={person_id[:8] if person_id else 'N/A'}..., "
+                            f"tenant_id={api_tenant_id or 'N/A'}"
+                        )
+                        await self._upsert_mapping(phone, person_id, display_name, tenant_id=api_tenant_id)
                         vehicle_info = await self._get_vehicle_info(person_id)
                         span.set_attribute("result.found", True)
                         span.set_attribute("result.display_name", display_name)
@@ -386,16 +392,18 @@ class UserService:
             logger.warning(f"Vehicle info failed: {e}")
             return {}
 
-    async def _upsert_mapping(self, phone: str, person_id: str, name: str) -> None:
+    async def _upsert_mapping(self, phone: str, person_id: str, name: str, tenant_id: str = None) -> None:
         """
-        Save user mapping to database with dynamic tenant resolution.
+        Save user mapping to database with API-discovered tenant.
 
         MULTI-TENANCY:
-        - Resolves tenant from phone prefix rules
-        - Stores tenant_id in UserMapping for future use
+        - Uses tenant_id from Persons API response (TenantId field) — primary source
+        - Falls back to default tenant if API didn't return TenantId
         """
-        # Resolve tenant dynamically from phone
-        tenant_id = self._tenant_service.resolve_tenant_from_phone(phone)
+        # Use API-discovered tenant, fall back to default
+        if not tenant_id:
+            tenant_id = self._tenant_service.get_default_tenant()
+            logger.warning(f"No TenantId from API for {phone[-4:]} — using default: {tenant_id}")
 
         try:
             now = datetime.now(timezone.utc)
@@ -478,7 +486,7 @@ class UserService:
         }
         logger.info(f"BUILD_CONTEXT: Created context with keys: {list(context.keys())}, tenant={tenant_id}")
 
-        if not self.gateway:
+        if not self.gateway or not person_id:
             return context
 
         try:
@@ -563,18 +571,22 @@ class UserService:
         if old_user and old_user.api_identity:
             await self.invalidate_context_cache(old_user.api_identity)
 
-        # Delete existing mapping to force fresh lookup
+        # Clear stale api_identity so try_auto_onboard fetches fresh data
+        # NOTE: We do NOT delete the row — that would lose gdpr_consent_given
         try:
-            from sqlalchemy import delete
-            stmt = delete(UserMapping).where(UserMapping.phone_number == phone)
+            stmt = (
+                update(UserMapping)
+                .where(UserMapping.phone_number == phone)
+                .values(api_identity=None, updated_at=datetime.now(timezone.utc))
+            )
             await self.db.execute(stmt)
             await self.db.commit()
-            logger.info(f"Deleted old mapping for {phone[-4:]}")
+            logger.info(f"Cleared api_identity for {phone[-4:]} (force refresh)")
         except Exception as e:
-            logger.warning(f"Could not delete old mapping: {e}")
+            logger.warning(f"Could not clear api_identity: {e}")
             await self.db.rollback()
 
-        # Now do fresh onboard
+        # Fresh lookup from API — _upsert_mapping will UPDATE the existing row
         return await self.try_auto_onboard(phone)
 
     async def verify_user_identity(self, phone: str) -> Dict[str, Any]:

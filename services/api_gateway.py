@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Any, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -107,8 +107,8 @@ class APIGateway:
         self.token_manager = TokenManager(redis_client)
 
         self.client = httpx.AsyncClient(
-            timeout=httpx.Timeout(self.DEFAULT_TIMEOUT, connect=3.0),
-            limits=httpx.Limits(max_keepalive_connections=40, max_connections=100),
+            timeout=httpx.Timeout(self.DEFAULT_TIMEOUT, connect=10.0),
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
             follow_redirects=True
         )
 
@@ -126,7 +126,8 @@ class APIGateway:
         body: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
         tenant_id: Optional[str] = None,
-        max_retries: Optional[int] = None
+        max_retries: Optional[int] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> APIResponse:
         """
         Execute HTTP request.
@@ -137,8 +138,11 @@ class APIGateway:
             params: Query parameters
             body: Request body
             headers: Additional headers
-            tenant_id: Override tenant ID
+            tenant_id: Override tenant ID (explicit override, highest priority)
             max_retries: Override retry count
+            context: Session context. If it carries "TenantId" and neither
+                `tenant_id` nor `headers['x-tenant']` are set, the context value
+                wins over the env-var default.
 
         Returns:
             APIResponse
@@ -147,7 +151,7 @@ class APIGateway:
             "http.method": method.value,
             "http.path": path,
         }):
-            return await self._execute_inner(method, path, params, body, headers, tenant_id, max_retries)
+            return await self._execute_inner(method, path, params, body, headers, tenant_id, max_retries, context)
 
     async def _execute_inner(
         self,
@@ -157,7 +161,8 @@ class APIGateway:
         body: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
         tenant_id: Optional[str] = None,
-        max_retries: Optional[int] = None
+        max_retries: Optional[int] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> APIResponse:
         """Inner implementation of execute, wrapped by tracing."""
         # Ensure params is a dict
@@ -174,7 +179,36 @@ class APIGateway:
                 logger.debug("Default 'Rows=100' added for GET request.")
 
         url = self._build_url(path, params)
-        effective_tenant = tenant_id or self.tenant_id
+        ctx_tenant = None
+        if context:
+            ctx_tenant = context.get("TenantId") or context.get("tenant_id")
+        # STRICT TENANT ISOLATION (V6.2):
+        # The .env MOBILITY_TENANT_ID is the dev-test tenant only. Falling back
+        # to it for an arbitrary user would route their data into the wrong
+        # tenant (cross-tenant write). In production, every call MUST carry an
+        # explicit tenant sourced from the user's authenticated session (the
+        # value get_Persons wrote into context). If neither an explicit
+        # `tenant_id` override nor a session `context.TenantId` is present,
+        # we refuse the call.
+        effective_tenant = tenant_id or ctx_tenant
+        if not effective_tenant:
+            err = StructuredGatewayError(
+                ErrorCode.MISSING_TENANT_CONTEXT,
+                "Missing Tenant Context: refusing call without session TenantId.",
+                metadata={"path": path, "method": method.value},
+            )
+            logger.error(f"{err}")
+            return APIResponse(
+                success=False,
+                status_code=0,
+                data=None,
+                error_message=(
+                    "Missing Tenant Context: session has no TenantId. "
+                    "Bootstrap (get_Persons) must populate it before any "
+                    "tenant-scoped call."
+                ),
+                error_code=ErrorCode.MISSING_TENANT_CONTEXT.value,
+            )
         retries = max_retries if max_retries is not None else self.DEFAULT_MAX_RETRIES
 
         # Circuit breaker: fail fast if API has been consistently failing.
@@ -207,7 +241,7 @@ class APIGateway:
                 request_headers = {
                     "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",
-                    "Accept": "application/json",
+                    "Accept": "text/plain, application/json",
                 }
 
                 # CRITICAL: x-tenant header
@@ -350,6 +384,13 @@ class APIGateway:
 
         return await handler()
 
+    def _get_base_parsed(self):
+        parsed = getattr(self, "_base_parsed", None)
+        if parsed is None:
+            parsed = urlparse(self.base_url)
+            self._base_parsed = parsed
+        return parsed
+
     def _build_url(self, path: str, params: Optional[Dict[str, Any]]) -> str:
         """
         Build URL with smart detection.
@@ -357,19 +398,45 @@ class APIGateway:
         CRITICAL FIX: If path is already a complete URL (starts with http),
         don't prepend base_url - just use it as-is.
         """
-        # If path is already a complete URL, validate it matches our base domain
+        # If path is already a complete URL, validate it matches our base domain.
+        # SSRF hardening: compare on .netloc (host[:port]) and enforce scheme/userinfo.
+        # Relying on .hostname alone lets attackers smuggle other hosts via userinfo,
+        # e.g. https://api.example.com@evil.com/ parses .hostname == "evil.com"
+        # but accepts the URL because the attacker crafted it to look legitimate.
         if path.startswith("http://") or path.startswith("https://"):
-            from urllib.parse import urlparse
-            base_host = urlparse(self.base_url).hostname
-            path_host = urlparse(path).hostname
-            if path_host != base_host:
+            base = self._get_base_parsed()
+            target = urlparse(path)
+
+            # Reject any URL carrying userinfo (user:pass@host) — always an SSRF
+            # smuggling attempt against a plain-host allowlist.
+            if target.username or target.password:
                 err = StructuredGatewayError(
                     ErrorCode.SSRF_BLOCKED,
-                    f"SSRF blocked: {path} does not match base domain {base_host}",
-                    metadata={"path_host": path_host, "base_host": base_host},
+                    f"SSRF blocked: userinfo present in URL ({path})",
+                    metadata={"path_host": target.hostname, "base_host": base.hostname},
                 )
                 logger.warning(f"{err}")
-                raise ValueError(f"URL host mismatch: expected {base_host}")
+                raise ValueError("URL userinfo not allowed")
+
+            # Scheme must match (no http→https downgrade or vice versa).
+            if target.scheme != base.scheme:
+                err = StructuredGatewayError(
+                    ErrorCode.SSRF_BLOCKED,
+                    f"SSRF blocked: scheme mismatch ({target.scheme} vs {base.scheme})",
+                    metadata={"path_scheme": target.scheme, "base_scheme": base.scheme},
+                )
+                logger.warning(f"{err}")
+                raise ValueError("URL scheme mismatch")
+
+            # netloc comparison (host[:port]) — case-insensitive per RFC 3986.
+            if (target.netloc or "").lower() != (base.netloc or "").lower():
+                err = StructuredGatewayError(
+                    ErrorCode.SSRF_BLOCKED,
+                    f"SSRF blocked: {path} does not match base netloc {base.netloc}",
+                    metadata={"path_netloc": target.netloc, "base_netloc": base.netloc},
+                )
+                logger.warning(f"{err}")
+                raise ValueError(f"URL host mismatch: expected {base.netloc}")
             url = path
         else:
             # Relative path - prepend base_url
@@ -382,12 +449,14 @@ class APIGateway:
             if clean:
                 parts = []
                 for k, v in clean.items():
+                    encoded_key = quote(str(k), safe='')
                     if k == "Filter":
                         # Don't encode '=' as '%3D' because the API rejects it
-                        # safe='=' keeps the equals sign unencoded
-                        parts.append(f"{k}={quote(str(v), safe='=')}")
+                        # safe='=' keeps the equals sign unencoded in the value
+                        encoded_val = quote(str(v), safe='=')
                     else:
-                        parts.append(f"{k}={quote(str(v), safe='')}")
+                        encoded_val = quote(str(v), safe='')
+                    parts.append(f"{encoded_key}={encoded_val}")
                 url = f"{url}?{'&'.join(parts)}"
         return url
 

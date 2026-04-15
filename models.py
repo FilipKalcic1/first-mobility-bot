@@ -35,7 +35,7 @@ class UserMapping(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     phone_number = Column(String(20), unique=True, nullable=False, index=True)
-    api_identity = Column(String(100), nullable=False, index=True)
+    api_identity = Column(String(100), nullable=True, index=True)
     display_name = Column(String(200), nullable=True)
     tenant_id = Column(String(100), nullable=True, index=True)
     is_active = Column(Boolean, default=True)

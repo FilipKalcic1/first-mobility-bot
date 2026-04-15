@@ -42,7 +42,9 @@ CURATED_STEMS: Dict[str, List[str]] = {
     "schedulingmodels": ["model raspored", "modeli raspored", "raspored model", "model raspoređ", "modeli raspoređ"],
     "mileagereports": ["kilometraz", "kilometraž", "izvjest km", "izvješt km", "km izvjest", "km izvješt", "prijedeni put", "prijeđeni put"],
     "costcenters": ["troskovn", "troškovn", "centar troska", "centar troška", "cost center", "mjesto troska", "mjesto troška"],
-    "personperiodicactivities": ["aktivnosti osobe", "aktivnosti zaposlenika"],
+    "personactivitycategories": ["kategorije aktivnosti", "kategorija aktivnost", "nadskup aktivnost"],
+    "personactivitytypes": ["tipovi aktivnosti", "vrste aktivnosti", "tip aktivnost", "vrsta aktivnost"],
+    "personperiodicactivities": ["periodicke aktivnosti", "periodičke aktivnosti", "aktivnosti osobe", "aktivnosti zaposlenika"],
     "personorgunits": ["org jedinice osobe", "odjeli zaposlenika"],
     "tenantpermissions": ["dozvole tenanta", "korisnicke dozvole", "korisničke dozvole"],
     "teammembers": ["clanovi tima", "članovi tima", "zaposlenici u timu"],
@@ -65,13 +67,88 @@ CURATED_STEMS: Dict[str, List[str]] = {
     "pools": ["pool", "bazen vozil"],
     "tenants": ["tenant", "najmoprimc"],
     "documents": ["dokument", "prilog", "datoteka", "pdf"],
-    "metadata": ["metapodac", "struktur", "shema", "polja"],
+    "metadata": ["metapoda", "metapodat", "metadata", "struktur entitet", "shema entitet", "definicij polj", "field defin"],
+    "lookup": ["sifrarnik", "šifrarnik", "dropdown", "izbornik", "skraceni popis", "skraćeni popis"],
 }
 
 # Minimum stem length to avoid false positives
 _MIN_STEM_LEN = 4
 
-# Words that are too generic to be useful as stems (would match everything)
+# Full Croatian words that must NEVER become auto-stems.
+# These would substring-match nearly every query and corrupt entity detection.
+# Includes: pronouns, modals, auxiliaries, generic verbs, generic nouns, adverbs.
+_CROATIAN_STOPWORDS = {
+    # Pronouns
+    "koji", "koja", "koje", "kojim", "kojih", "kojima",
+    "jedan", "jedna", "jedno", "jednog", "jednu", "jedne",
+    "koliko", "koliki", "kolika",
+    "sve", "svi", "sva", "svih", "svim", "svima",
+    "moj", "moja", "moje", "moji", "mojih", "mojim",
+    "ovaj", "ova", "ovo", "onaj", "ona", "ono", "taj", "ta", "to",
+    "neki", "neka", "neko", "nekog", "nekoliko",
+    "isti", "ista", "isto",
+    # Modal/auxiliary verbs and forms
+    "zelim", "zelis", "zeli", "zelite", "zelio",
+    "trebam", "trebas", "treba", "trebate", "trebao",
+    "moram", "moras", "mora", "morate", "morao",
+    "mogu", "mozes", "moze", "mozete", "mogao",
+    "imam", "imas", "ima", "imate", "imao",
+    "biti", "budem", "bude", "bili", "bila", "bilo",
+    # Generic action verbs (present in most tool synonyms)
+    "obris", "obrisi", "obrisati", "brisa", "brisati",
+    "azuri", "azurir", "azuriraj", "azurirati",
+    "promi", "promijen", "promijeni", "promijeniti",
+    "izmij", "izmijen", "izmijeni", "izmijeniti",
+    "dodaj", "dodati", "dodavanje",
+    "kreir", "kreiraj", "kreirati", "kreiranje",
+    "napra", "napravi", "napraviti",
+    "pokaz", "pokazi", "pokazati",
+    "prika", "prikaz", "prikazi", "prikazati", "prikazivanje",
+    "dohva", "dohvat", "dohvati", "dohvatiti", "dohvacanje",
+    "makni", "maknuti", "micanj",
+    "ukloni", "ukloniti", "uklanjanj",
+    "updat", "update", "updat e",
+    "unesi", "unesti",
+    "upisi", "upisati",
+    "daj", "daje", "daju", "dati",
+    "zatra", "zatrazi",
+    "proja", "pronad", "pronaci",
+    "provj", "provje", "provjeri",
+    # Generic nouns that appear in many tool synonyms
+    "lista", "liste", "listu", "listi",
+    "popis", "popisu", "popisa",
+    "polja", "polje", "poljima",
+    "info", "inform", "informacij",
+    "poda", "podat", "podatak", "podaci", "podatke",
+    "stav", "stavk", "stavka", "stavke", "stavki",
+    "detal", "detalj", "detalji",
+    "speci", "specif", "specifi", "specifican",
+    "novi", "nova", "novo", "novog", "nove",
+    "stari", "stara", "staro",
+    "kojeg",
+    "preg", "pregl", "pregle", "pregled", "pregledaj", "preglednik",
+    "spis", "spisa", "spisu",
+    "akt", "akta", "aktu",
+    "zapis", "zapisa",
+    # Adverbs/prepositions
+    "prema", "preko", "ispod", "iznad", "unutar",
+    "kada", "kada ", "kako", "gdje", "zasto",
+    "samo", "vise", "manje", "najvi", "najma",
+    "kriter", "kriteriju", "kriterijima",
+    "tipov", "tipa", "tipu",
+    "vrsta", "vrste", "vrsti",
+    "grupa", "grupe", "grupi",
+    "kateg", "kategorij",
+    # Generic tech terms
+    "id", "id-u", "po id",
+    "api", "endpoint", "tool",
+    "bulk", "batch",
+    "helpe", "helper", "input",
+    "po i",
+}
+
+# Stems (first 5 chars) that are too generic. Kept for backward compat; the
+# _CROATIAN_STOPWORDS above is the primary filter.
 _STOP_STEMS = {
     "dohv", "prik", "poka", "obri", "dodaj", "krei", "azur",
     "novi", "nova", "novo", "po i", "spec", "konk", "deta",
@@ -80,29 +157,57 @@ _STOP_STEMS = {
 }
 
 
+def _is_stopword(word: str) -> bool:
+    """Check if a Croatian word is a generic stopword that must not become a stem."""
+    wl = word.lower()
+    if wl in _CROATIAN_STOPWORDS:
+        return True
+    # Also check all prefixes of the word against stopwords
+    # (handles declensions like "koji"/"kojeg"/"kojim" — if prefix is a stopword, skip)
+    for length in (4, 5, 6):
+        prefix = wl[:length]
+        if prefix in _CROATIAN_STOPWORDS or prefix in _STOP_STEMS:
+            return True
+    return False
+
+
 def _generate_stems_from_synonym(synonym: str) -> List[str]:
     """
     Generate substring stems from a synonym.
 
-    Strategy: take the first N characters (4-6) of each word as a stem.
-    This handles Croatian declensions by matching word prefixes.
+    Strategy: only emit multi-word phrase stems AND single nouns that survive
+    a strict Croatian stopword filter. Avoids generating stems from generic
+    verbs/pronouns/modals that would false-positive on nearly every query.
     """
     stems = []
     syn_norm = _normalize(synonym)
 
-    # Single-word stem: first 4-5 chars
+    # Single-word stem: only if the word is NOT a stopword and not a stopword
+    # prefix. Croatian declensions handled by prefix matching in _is_stopword.
     words = syn_norm.split()
     for word in words:
-        if len(word) >= _MIN_STEM_LEN:
-            stem = word[:min(len(word), 5)]
-            if stem not in _STOP_STEMS:
-                stems.append(stem)
+        if len(word) < _MIN_STEM_LEN:
+            continue
+        if _is_stopword(word):
+            continue
+        stem = word[:min(len(word), 5)]
+        # Double-check the truncated stem isn't a stop-stem or stopword
+        if stem in _STOP_STEMS or stem in _CROATIAN_STOPWORDS:
+            continue
+        stems.append(stem)
 
-    # Multi-word stem: use the full normalized synonym if 2+ words and short enough
+    # Multi-word stem: use the full normalized synonym if 2+ words and short enough.
+    # Multi-word phrases are specific ("leasing vozila", "centar troska") and safe.
     if len(words) >= 2 and len(syn_norm) <= 25:
         stems.append(syn_norm)
 
     return stems
+
+
+def _phrase_starts_with_stopword(phrase: str) -> bool:
+    """True if phrase's first word is a Croatian stopword."""
+    first = phrase.split(" ", 1)[0] if phrase else ""
+    return _is_stopword(first) if first else True
 
 
 def build_auto_stems(tool_docs: dict) -> Dict[str, List[str]]:
@@ -111,6 +216,12 @@ def build_auto_stems(tool_docs: dict) -> Dict[str, List[str]]:
 
     Parses tool_id to extract entity, then collects stems from synonyms_hr.
     Only adds entities NOT already in CURATED_STEMS.
+
+    Auto-stems are restricted to MULTI-WORD phrase stems only. Single-word
+    stems for auto entities are unsafe because we can't manually validate
+    distinctiveness — a single Croatian word can false-positive on many
+    unrelated queries (e.g., "pomoc", "unos", "trosk"). Legitimate
+    single-word entities (vozil, oprem, trosk, etc.) are in CURATED_STEMS.
     """
     entity_stems: Dict[str, set] = {}
 
@@ -129,9 +240,15 @@ def build_auto_stems(tool_docs: dict) -> Dict[str, List[str]]:
         for syn in synonyms:
             if len(syn) < 3:
                 continue
-            # Skip action verbs that appear in synonyms
             syn_stripped = syn.strip()
             for stem in _generate_stems_from_synonym(syn_stripped):
+                # Auto-path: keep only multi-word phrase stems that don't
+                # start with a Croatian stopword. Single-word stems are
+                # filtered out (see docstring).
+                if " " not in stem:
+                    continue
+                if _phrase_starts_with_stopword(stem):
+                    continue
                 entity_stems.setdefault(entity, set()).add(stem)
 
     # Convert to sorted lists and filter out overly short stems
@@ -155,7 +272,7 @@ def load_auto_stems(tool_docs: Optional[dict] = None):
     Load auto-generated stems from tool_documentation.json.
     Called during application startup when tool docs are available.
     """
-    global ENTITY_STEMS, _auto_stems_loaded
+    global _auto_stems_loaded
 
     if _auto_stems_loaded:
         return
@@ -183,6 +300,22 @@ def load_auto_stems(tool_docs: Optional[dict] = None):
         )
 
 
+_NORMALIZED_STEMS_CACHE: Dict[str, List[str]] = {}
+_NORMALIZED_STEMS_FINGERPRINT: tuple = ()
+
+
+def _get_normalized_stems() -> Dict[str, List[str]]:
+    global _NORMALIZED_STEMS_FINGERPRINT, _NORMALIZED_STEMS_CACHE
+    fp = tuple((k, len(v)) for k, v in ENTITY_STEMS.items())
+    if fp != _NORMALIZED_STEMS_FINGERPRINT:
+        _NORMALIZED_STEMS_CACHE = {
+            entity: [_normalize(s) for s in stems]
+            for entity, stems in ENTITY_STEMS.items()
+        }
+        _NORMALIZED_STEMS_FINGERPRINT = fp
+    return _NORMALIZED_STEMS_CACHE
+
+
 def detect_entity(query: str) -> Optional[str]:
     """
     Detect which entity a query refers to.
@@ -193,10 +326,8 @@ def detect_entity(query: str) -> Optional[str]:
     More specific entities are checked first (e.g., 'vehicletypes' before 'vehicles').
     """
     query_norm = _normalize(query)
-
-    for entity, stems in ENTITY_STEMS.items():
-        for stem in stems:
-            stem_norm = _normalize(stem)
+    for entity, stems_norm in _get_normalized_stems().items():
+        for stem_norm in stems_norm:
             if stem_norm in query_norm:
                 return entity
 

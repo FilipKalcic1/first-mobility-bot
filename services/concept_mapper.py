@@ -188,9 +188,72 @@ class ConceptMapper:
         "masovno": ["multipatch", "bulk", "grupno ažuriranje"],
         # Thumbnail
         "thumbnail": ["thumb", "sličica", "preview"],
+        "slicica": ["thumb", "thumbnail", "preview"],
+        "preview": ["thumb", "thumbnail", "sličica"],
         # Tree
         "stablo": ["tree", "hijerarhija", "struktura"],
         "hijerarhija": ["tree", "stablo", "struktura"],
+
+        # Entity synonyms — legitimate Croatian vocabulary for fleet management concepts
+        # Vehicle-related
+        "motorno sredstvo": ["vozilo", "vehicle", "oprema", "equipment"],
+        "prijevozno sredstvo": ["vozilo", "vehicle", "oprema", "equipment"],
+        "prijevozno": ["vozilo", "vehicle"],
+        "motorno": ["vozilo", "vehicle", "oprema", "equipment"],
+        # Equipment-related
+        "mehanicka jedinica": ["oprema", "equipment", "uređaj"],
+        "mehanicke jedinice": ["oprema", "equipment", "uređaji"],
+        "sredstvo": ["oprema", "equipment", "inventar"],
+        "inventar": ["oprema", "equipment", "sredstva"],
+        "instrument": ["oprema", "equipment", "alat", "uređaj"],
+        "instrumenti": ["oprema", "equipment", "alati"],
+        # Document synonyms
+        "spis": ["dokument", "document", "datoteka", "prilog"],
+        "isprava": ["dokument", "document", "certifikat"],
+        "ispravu": ["dokument", "document", "certifikat"],
+        "akt": ["dokument", "document", "spis"],
+        "zapisnik": ["dokument", "document", "prilog"],
+        "obrazac": ["dokument", "document", "formular"],
+        "potvrda": ["dokument", "document", "certifikat"],
+        # Calendar/schedule synonyms
+        "hodogram": ["kalendar", "raspored", "calendar", "schedule"],
+        "plan termina": ["kalendar", "raspored", "calendar", "schedule"],
+        "agenda": ["raspored", "schedule", "periodicactivities"],
+        "program": ["raspored", "schedule", "periodicactivities"],
+        # Organization synonyms
+        "upravna cjelina": ["organizacijska jedinica", "orgUnit", "odjel"],
+        "upravne cjeline": ["organizacijske jedinice", "orgUnit", "odjeli"],
+        "administrativni segment": ["organizacijska jedinica", "orgUnit", "odjel"],
+        "radna skupina": ["tim", "team", "ekipa", "grupa"],
+        "radne skupine": ["timovi", "teams", "ekipe", "grupe"],
+        # Financial synonyms
+        "financijski zapis": ["trošak", "expense", "izdatak"],
+        "financijske stavke": ["troškovi", "expenses", "izdaci"],
+        "potrosnja": ["trošak", "expense", "izdatak"],
+        # Case synonyms
+        "predmet": ["slučaj", "case", "stavka"],
+        "stavka": ["slučaj", "case", "predmet", "item"],
+        # Contract synonyms
+        "akvizicija": ["ugovor", "contract", "leasing", "nabava"],
+        "obveza": ["ugovor", "contract", "leasing"],
+        "financijske obveze": ["ugovori", "contracts", "leasing"],
+        # Activity synonyms
+        "redovni posao": ["periodična aktivnost", "periodicactivities", "servis"],
+        "redovni poslovi": ["periodične aktivnosti", "periodicactivities", "servisi"],
+        "obaveza": ["aktivnost", "periodicactivities", "zadatak"],
+        # Scheduling
+        "model rasporedivanja": ["schedulingmodels", "raspored", "scheduling"],
+        "model raspoređivanja": ["schedulingmodels", "raspored", "scheduling"],
+        # Reference data
+        "sifrarnik": ["lookup", "referentni podaci", "katalog"],
+        "referentni podaci": ["lookup", "šifrarnik", "katalog"],
+        # Metadata
+        "karakteristike": ["metapodaci", "metadata", "polja", "atributi"],
+        "atributi": ["metapodaci", "metadata", "polja", "karakteristike"],
+        # Type/Category words
+        "kategorija": ["tip", "vrsta", "type", "category"],
+        "klasa": ["tip", "vrsta", "type", "category", "class"],
+        "razred": ["tip", "vrsta", "type", "category"],
     }
 
     # Phrase patterns that should trigger concept expansion (pre-compiled)

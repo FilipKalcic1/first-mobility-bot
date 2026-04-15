@@ -14,7 +14,7 @@ async def create_redis_client(settings) -> aioredis.Redis:
         settings.REDIS_URL,
         encoding="utf-8",
         decode_responses=True,
-        max_connections=10,  # API pod: healthcheck + registry + context — 10 is sufficient at 0.5 CPU
+        max_connections=5,  # API pod: healthcheck + registry + context — 5 sufficient for single-server
         socket_keepalive=True,
         health_check_interval=30,
     )

@@ -35,41 +35,6 @@ GENERIC_SUFFIX_PATTERNS = [
     "_multipatch",    # Bulk update
 ]
 
-# Entity extraction patterns (Croatian)
-ENTITY_KEYWORDS = {
-    "vozil": "Vehicles",
-    "vozila": "Vehicles",
-    "auto": "Vehicles",
-    "flot": "Vehicles",
-    "kompanij": "Companies",
-    "tvrtk": "Companies",
-    "firm": "Companies",
-    "osob": "Persons",
-    "korisnik": "Persons",
-    "zaposlenik": "Persons",
-    "trošk": "Expenses",
-    "troska": "Expenses",
-    "izdatak": "Expenses",
-    "račun": "Expenses",
-    "putovanj": "Trips",
-    "trip": "Trips",
-    "vožnj": "Trips",
-    "slučaj": "Cases",
-    "šteta": "Cases",
-    "kvar": "Cases",
-    "incident": "Cases",
-    "oprem": "Equipment",
-    "rezervacij": "VehicleCalendar",
-    "booking": "VehicleCalendar",
-    "kilometr": "MileageReports",
-    "dokument": "Documents",
-    "partner": "Partners",
-    "tim": "Teams",
-    "org": "OrgUnits",
-    "centar troška": "CostCenters",
-    "troškovn": "CostCenters",
-}
-
 # Clarification questions for ambiguous suffixes
 CLARIFICATION_QUESTIONS = {
     "_Agg": "Za koju vrstu podataka želite izračunati statistiku? (npr. vozila, troškovi, putovanja)",
@@ -286,60 +251,6 @@ class AmbiguityDetector:
             hints.append(f"MOGUĆI ENTITETI: {', '.join(sorted(entities_from_tools))}")
 
         return "\n".join(h for h in hints if h)
-
-    def get_best_tool_for_entity(
-        self,
-        entity: str,
-        suffix: str,
-        similar_tools: List[str]
-    ) -> Optional[str]:
-        """
-        Get the best tool for a detected entity and suffix.
-
-        Used when entity is clear but multiple tools exist.
-        """
-        entity_lower = entity.lower()
-
-        for tool in similar_tools:
-            tool_lower = tool.lower()
-            # Check if tool contains the entity name
-            if entity_lower in tool_lower:
-                return tool
-
-        return None
-
-    def needs_clarification(
-        self,
-        ambiguity_result: AmbiguityResult,
-        llm_confidence: float
-    ) -> bool:
-        """
-        Determine if we need to ask user for clarification.
-
-        Args:
-            ambiguity_result: Result from detect_ambiguity
-            llm_confidence: LLM's confidence in its tool selection
-
-        Returns:
-            True if user clarification is needed
-        """
-        if not ambiguity_result.is_ambiguous:
-            return False
-
-        # If we detected an entity, no clarification needed
-        if ambiguity_result.detected_entity:
-            return False
-
-        # If LLM is confident, no clarification needed
-        if llm_confidence >= 0.7:
-            return False
-
-        # If many similar tools with low score variance, need clarification
-        if (len(ambiguity_result.similar_tools) >= 5 and
-            ambiguity_result.score_variance < 0.1):
-            return True
-
-        return False
 
 # Singleton instance
 _detector: Optional[AmbiguityDetector] = None

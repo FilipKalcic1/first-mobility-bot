@@ -1,50 +1,25 @@
-"""
-Unified Search - Single entry point for all tool discovery.
+"""Unified Search — single entry point for all tool discovery."""
 
-Consolidates all search paths into one consistent interface:
-1. ACTION INTENT GATE (detect GET/POST/PUT/DELETE from query)
-2. QUERY TYPE CLASSIFIER (detect suffix type: _id, _documents, _metadata, etc.)
-3. FAISS semantic search with intent filter
-4. Category boost (from tool_categories.json)
-5. Documentation boost (from tool_documentation.json)
-6. Query type boost (preferred suffixes get priority)
-
-This replaces multiple inconsistent routing paths with a single,
-well-tested search pipeline.
-"""
-
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Any, TYPE_CHECKING
-import threading
 
 from tool_routing import PRIMARY_ACTION_TOOLS as _PRIMARY_ACTION_TOOLS
 
-# ML-based intent detection
-from services.intent_classifier import (
-    detect_action_intent,
-    ActionIntent,
-    classify_query_type_ml,
-    normalize_diacritics,
-)
+from services.types.action_intent import detect_action_intent, ActionIntent
+from services.text_normalizer import normalize_diacritics
 from services.faiss_vector_store import get_faiss_store, SearchResult
 from services.entity_detector import detect_entity, detect_possessive, detect_user_profile_query
-from services.query_type_classifier import (
-    get_query_type_classifier,
-    QueryType,
-    QueryTypeResult
-)
+from services.types.query_type import QueryType
 from services.dynamic_threshold import (
-    get_engine as _get_engine, DecisionEngine, ClassificationSignal, NO_SIGNAL,
+    get_engine as _get_engine, DecisionEngine,
 )
 
-# Decomposed search modules (v12.0)
 from services.search.config import (
     VERB_METHOD_MAP as _VERB_METHOD_MAP,
-    ID_INDICATORS as _ID_INDICATORS,
-    CRITERIA_INDICATORS as _CRITERIA_INDICATORS,
     METHOD_VERBS as _METHOD_VERBS,
     SUFFIX_DESCRIPTIONS as _SUFFIX_DESCRIPTIONS,
     BM25_WEIGHT as _BM25_WEIGHT,
@@ -71,7 +46,7 @@ class UnifiedSearchResult:
     method: str   # HTTP method
     description: str  # Tool description
     origin_guide: Dict[str, str] = field(default_factory=dict)  # Parameter origin guide
-    boosts_applied: list = field(default_factory=list)  # Debug: (name, multiplier, score_after) tuples
+    boosts_applied: list = field(default_factory=list)  # Debug: (name, additive_delta, score_after) tuples
     base_score: float = 0.0  # Debug: score before boosts
 
 
@@ -81,46 +56,28 @@ class UnifiedSearchResponse:
     results: List[UnifiedSearchResult]
     intent: ActionIntent
     intent_confidence: float
-    query_type: QueryType  # NEW: Detected query type
-    query_type_confidence: float  # NEW: Query type confidence
     query: str
     total_candidates: int  # Before filtering
+    detected_entity: Optional[str] = None  # Surfaced so callers don't re-run detect_entity
 
 
-# Specialized query types that need wider FAISS pool
-_SPECIALIZED_QUERY_TYPES = frozenset({
-    QueryType.AGGREGATION, QueryType.TREE, QueryType.BULK_UPDATE,
-    QueryType.PROJECTION, QueryType.DOCUMENTS, QueryType.METADATA,
-})
+# FAISS candidate pool sizing
+_POOL_SIZE_MIN = 80           # Floor for regular queries
+_POOL_SIZE_MULT = 3           # top_k × this, clamped by MIN
 
+# Exact-match injection score — must exceed any possible FAISS+boost total.
+_EXACT_MATCH_SCORE = 15.0
 
 class UnifiedSearch:
-    """
-    Single interface for tool discovery.
-
-    All routing paths should use this class for consistent results.
-
-    V2.0 Architecture:
-    1. ACTION INTENT GATE (detect GET/POST/PUT/DELETE from query)
-    2. QUERY TYPE CLASSIFIER (detect suffix: _id, _documents, _metadata, etc.)
-    3. FAISS semantic search with intent filter
-    4. Category boosting (from tool_categories.json)
-    5. Documentation boosting (from tool_documentation.json)
-    6. Query type boosting (preferred suffixes get priority)
-
-    REMOVED: training_queries.json boosting (unreliable)
-
-    v12.0: Boost constants and entity keywords extracted to services/search/config.py.
-    Boost logic extracted to services/search/boost_engine.py.
-    """
+    """Single interface for tool discovery."""
 
     def __init__(self, registry: Optional["ToolRegistry"] = None) -> None:
         """Initialize unified search."""
         self._registry = registry
         self._tool_documentation: Optional[Dict] = None
         self._tool_categories: Optional[Dict] = None
-        self._query_type_classifier = get_query_type_classifier()
         self._initialized = False
+        self._init_lock = asyncio.Lock()
 
     def set_registry(self, registry: "ToolRegistry") -> None:
         """Set tool registry (allows late binding)."""
@@ -131,78 +88,81 @@ class UnifiedSearch:
         if self._initialized:
             return
 
-        config_dir = Path(__file__).parent.parent / "config"
+        async with self._init_lock:
+            # Double-check after acquiring lock (another coroutine may have finished init)
+            if self._initialized:
+                return
 
-        # Load tool documentation — shared cache (single source of truth)
-        from services.schema_sanitizer import get_tool_documentation
-        self._tool_documentation = get_tool_documentation()
-        if self._tool_documentation:
-            logger.info(f"UnifiedSearch v2.0: Loaded {len(self._tool_documentation)} tool docs (shared cache)")
+            config_dir = Path(__file__).parent.parent / "config"
 
-        # Load tool categories
-        try:
-            cat_path = config_dir / "tool_categories.json"
-            if cat_path.exists():
+            # Load tool documentation — shared cache (single source of truth)
+            from services.schema_sanitizer import get_tool_documentation
+            self._tool_documentation = get_tool_documentation()
+            if self._tool_documentation:
+                logger.info(f"Loaded {len(self._tool_documentation)} tool docs")
+
+            # Load tool categories
+            try:
+                cat_path = config_dir / "tool_categories.json"
                 with open(cat_path, 'r', encoding='utf-8') as f:
                     self._tool_categories = json.load(f)
-                logger.info("UnifiedSearch v2.0: Loaded tool categories")
-        except Exception as e:
-            err = SearchError(ErrorCode.TOOL_DOCS_NOT_LOADED, f"Failed to load tool categories: {e}")
-            logger.warning(str(err))
-            self._tool_categories = {}
+                logger.info("Loaded tool categories")
+            except FileNotFoundError:
+                self._tool_categories = {}
+            except Exception as e:
+                err = SearchError(ErrorCode.TOOL_DOCS_NOT_LOADED, f"Failed to load tool categories: {e}")
+                logger.warning(str(err))
+                self._tool_categories = {}
 
-        # NOTE: training_queries.json is NO LONGER USED
-        # It was unreliable and caused confusion in tool selection
+            # Pre-compute duplicate purposes for entity-specific description generation
+            self._duplicate_purposes: set = set()
+            if self._tool_documentation:
+                from collections import Counter
+                purpose_counts = Counter(
+                    doc.get("purpose", "").strip()
+                    for doc in self._tool_documentation.values()
+                    if doc.get("purpose", "").strip()
+                )
+                self._duplicate_purposes = {p for p, c in purpose_counts.items() if c > 1}
+                if self._duplicate_purposes:
+                    logger.info(f"Detected {len(self._duplicate_purposes)} duplicate purposes across tools")
 
-        # Pre-compute duplicate purposes for entity-specific description generation
-        self._duplicate_purposes: set = set()
-        if self._tool_documentation:
-            from collections import Counter
-            purpose_counts = Counter(
-                doc.get("purpose", "").strip()
-                for doc in self._tool_documentation.values()
-                if doc.get("purpose", "").strip()
-            )
-            self._duplicate_purposes = {p for p, c in purpose_counts.items() if c > 1}
-            if self._duplicate_purposes:
-                logger.info(f"Detected {len(self._duplicate_purposes)} duplicate purposes across tools")
+            # Pre-compute exact match lookup: normalized_query → tool_id (O(1) per search)
+            self._exact_match_index: Dict[str, str] = {}
+            if self._tool_documentation:
+                for tool_id, doc in self._tool_documentation.items():
+                    for example in doc.get("example_queries_hr", []):
+                        # Normalize diacritics to match search path normalization
+                        key = normalize_diacritics(example.lower().strip().rstrip('.'))
+                        # First tool wins for duplicate queries
+                        if key not in self._exact_match_index:
+                            self._exact_match_index[key] = tool_id
+                if self._exact_match_index:
+                    logger.info(f"Built exact match index: {len(self._exact_match_index)} entries")
 
-        # Pre-compute exact match lookup: normalized_query → tool_id (O(1) per search)
-        self._exact_match_index: Dict[str, str] = {}
-        if self._tool_documentation:
-            for tool_id, doc in self._tool_documentation.items():
-                for example in doc.get("example_queries_hr", []):
-                    # Normalize diacritics to match search path normalization
-                    key = normalize_diacritics(example.lower().strip().rstrip('.'))
-                    # First tool wins for duplicate queries
-                    if key not in self._exact_match_index:
-                        self._exact_match_index[key] = tool_id
-            if self._exact_match_index:
-                logger.info(f"Built exact match index: {len(self._exact_match_index)} entries")
+            # Load auto-generated entity stems from tool_documentation.json
+            if self._tool_documentation:
+                from services.entity_detector import load_auto_stems
+                load_auto_stems(self._tool_documentation)
 
-        # Load auto-generated entity stems from tool_documentation.json
-        if self._tool_documentation:
-            from services.entity_detector import load_auto_stems
-            load_auto_stems(self._tool_documentation)
+            # Build Tool Family Index from registry
+            if self._registry:
+                from services.tool_family_index import get_family_index
+                family_index = get_family_index()
+                # registry.tools is a dict keyed by tool_id
+                tool_ids = list(self._registry.tools.keys()) if isinstance(self._registry.tools, dict) else [t.tool_id for t in self._registry.tools if hasattr(t, 'tool_id')]
+                if tool_ids:
+                    family_index.build(tool_ids)
 
-        # Build Tool Family Index from registry
-        if self._registry:
-            from services.tool_family_index import get_family_index
-            family_index = get_family_index()
-            # registry.tools is a dict keyed by tool_id
-            tool_ids = list(self._registry.tools.keys()) if isinstance(self._registry.tools, dict) else [t.tool_id for t in self._registry.tools if hasattr(t, 'tool_id')]
-            if tool_ids:
-                family_index.build(tool_ids)
+            # Build BM25 index from tool documentation
+            if self._tool_documentation:
+                from services.bm25_index import get_bm25_index
+                self._bm25_index = get_bm25_index()
+                self._bm25_index.build(self._tool_documentation)
+            else:
+                self._bm25_index = None
 
-        # Build BM25 index from tool documentation
-        if self._tool_documentation:
-            from services.bm25_index import get_bm25_index
-            self._bm25_index = get_bm25_index()
-            self._bm25_index.build(self._tool_documentation)
-        else:
-            self._bm25_index = None
-
-        self._initialized = True
+            self._initialized = True
 
     async def search(
         self,
@@ -227,7 +187,7 @@ class UnifiedSearch:
             "search.top_k": top_k,
             "query.preview": query[:80],
         }) as span:
-            # Step 1: ACTION INTENT DETECTION (v16.0: less aggressive filtering)
+            # Step 1: ACTION INTENT DETECTION
             intent_result = detect_action_intent(query)
 
             # Only filter by intent if confidence is very high
@@ -242,26 +202,10 @@ class UnifiedSearch:
                 else None  # Don't filter - show all tools, let LLM decide
             )
 
-            # Step 2: QUERY TYPE CLASSIFICATION
-            # Use ML-based classifier (replaces 91 regex patterns)
-            ml_query_type = classify_query_type_ml(query)
-            _qt_signal = ml_query_type.signal  # Full distribution signal
-
-            # Convert ML result to QueryTypeResult for backwards compatibility
-            query_type_result = QueryTypeResult(
-                query_type=QueryType[ml_query_type.query_type] if ml_query_type.query_type in QueryType.__members__ else QueryType.UNKNOWN,
-                confidence=ml_query_type.confidence,
-                matched_pattern="ML",  # No regex pattern - using ML
-                preferred_suffixes=ml_query_type.preferred_suffixes,
-                excluded_suffixes=ml_query_type.excluded_suffixes,
-                signal=ml_query_type.signal,
-            )
-
+            # Step 2: QUERY TYPE — ML classifier removed (Zlatni Put v1). LLM decides downstream.
             logger.info(
-                f"UnifiedSearch v16.0: Intent={intent_result.intent.value} "
+                f"Intent={intent_result.intent.value} "
                 f"(conf={intent_result.confidence:.2f}), "
-                f"QueryType={query_type_result.query_type.value} [ML] "
-                f"(conf={query_type_result.confidence:.2f}), "
                 f"ActionFilter={'YES: ' + action_filter if action_filter else 'NO - LLM decides'}"
             )
 
@@ -285,7 +229,7 @@ class UnifiedSearch:
             # SHORT QUERY OVERRIDE + MUTATION CORRECTION
             query_lower = query.lower()
             query_lower_norm = normalize_diacritics(query_lower)
-            effective_query_type = query_type_result.query_type
+            effective_query_type = QueryType.UNKNOWN
 
             # Verb-based method detection — more reliable than ML for common Croatian verbs
             detected_method = None
@@ -295,39 +239,19 @@ class UnifiedSearch:
                     break
 
             is_mutation = (
-                (intent_result.intent in (ActionIntent.DELETE, ActionIntent.UPDATE, ActionIntent.PATCH, ActionIntent.CREATE)
+                (intent_result.intent in (ActionIntent.DELETE, ActionIntent.UPDATE, ActionIntent.CREATE)
                  and not _engine.decide(_intent_signal, DecisionEngine.MUTATION).is_defer)
                 or (detected_method in ("delete", "put", "patch", "post"))
             )
 
-            # Override 1: bare entity names (1-2 words) without ID indicators → LIST
-            # Only for GET queries. "auto" → LIST, but "obriši trošak" stays SINGLE_ENTITY.
-            # Exception: possessive queries ("moj auto") stay SINGLE_ENTITY.
-            if (effective_query_type == QueryType.SINGLE_ENTITY
-                    and len(query.split()) <= 2
-                    and not _engine.decide(_qt_signal, DecisionEngine.INTENT_FILTER).is_accept
-                    and not any(ind in query_lower_norm for ind in _ID_INDICATORS)
-                    and not is_mutation
-                    and not is_possessive):
+            # Entity + no-mutation → LIST. "radnik" → persons+LIST → get_Persons.
+            # Mutations (delete/post/put) keep UNKNOWN so TFI skips (mutation routing
+            # picks the id/criteria variant via method-qualified family).
+            if detected_entity and not is_mutation:
                 effective_query_type = QueryType.LIST
 
-            # Override 0: Entity detected + UNKNOWN → LIST
-            # "radnik" has entity=persons but queryType=UNKNOWN → default to LIST
-            if detected_entity and effective_query_type == QueryType.UNKNOWN and not is_mutation:
-                effective_query_type = QueryType.LIST
-
-            # Override 1a: Possessive + LIST → SINGLE_ENTITY
-            # "koji je moj auto?" should be SINGLE_ENTITY, not LIST
-            # D5 fix: require minimum confidence to avoid flipping on random guesses
-            if (is_possessive
-                    and effective_query_type == QueryType.LIST
-                    and not _engine.decide(_qt_signal, DecisionEngine.POSSESSIVE).is_defer):
-                effective_query_type = QueryType.SINGLE_ENTITY
-
-            # Override 2: DELETE_CRITERIA → SINGLE_ENTITY when no criteria words present
-            # "obriši trošak" = single delete, "obriši sve troškove za 2023" = criteria delete
-            if (effective_query_type == QueryType.DELETE_CRITERIA
-                    and not any(ind in query_lower_norm for ind in _CRITERIA_INDICATORS)):
+            # Possessive ("moj auto") → SINGLE_ENTITY, not LIST.
+            if is_possessive and effective_query_type == QueryType.LIST:
                 effective_query_type = QueryType.SINGLE_ENTITY
 
             # Step 2.7c: USER PROFILE FLAG (defence-in-depth for ML fallback)
@@ -336,11 +260,22 @@ class UnifiedSearch:
             # Step 2.8: TFI HARD OVERRIDE — deterministic path (~70% of queries)
             # When entity + queryType are both known, skip FAISS entirely.
             # Return the whole entity family so LLM has context for final pick.
+            # NOTE: Only fires for substring-detected entities (high confidence).
             from services.tool_family_index import get_family_index
             family_index = get_family_index()
             tfi_override_result = None
 
-            if detected_entity and effective_query_type != QueryType.UNKNOWN:
+            # Bypass TFI when query carries analytical/structural intent
+            # (agg/groupby/projectto/lookup/thumb/setasdefault/multipatch) — TFI would
+            # collapse these to plain-list tools and hide the correct variant.
+            from services.search.config import SUFFIX_INTENT_BOOST as _SIB, LOOKUP_INTENT_BOOST as _LIB
+            _suffix_intent_hit = any(
+                s in query_lower_norm
+                for _stems, _ in _SIB.values()
+                for s in _stems
+            ) or any(s in query_lower_norm for s in _LIB[0])
+
+            if detected_entity and effective_query_type != QueryType.UNKNOWN and not _suffix_intent_hit:
                 # Prefer verb-detected method over ML intent (more reliable for Croatian)
                 tfi_method = detected_method or (
                     intent_result.intent.value.lower()
@@ -348,23 +283,14 @@ class UnifiedSearch:
                     and not _engine.decide(_intent_signal, DecisionEngine.MUTATION).is_defer
                     else None
                 )
-                # Aggregation sub-variant: "agregiraj" → agg, "grupiraj" → groupby
-                tfi_variant = None
-                if effective_query_type == QueryType.AGGREGATION:
-                    if any(w in query_lower_norm for w in ["agregir", "agregiraj", "agregac"]):
-                        tfi_variant = "agg"
-                    elif any(w in query_lower_norm for w in ["grupir", "grupiraj"]):
-                        tfi_variant = "groupby"
-
                 tfi_tool = family_index.resolve(
                     detected_entity, effective_query_type,
-                    method=tfi_method, variant_override=tfi_variant
+                    method=tfi_method,
                 )
                 family_tools = family_index.get_family_tools(detected_entity)
 
                 if tfi_tool and family_tools:
                     # Build results from entire family, TFI match gets highest score
-                    from services.faiss_vector_store import SearchResult
                     family_results = []
                     seen_tools = set()
 
@@ -396,15 +322,16 @@ class UnifiedSearch:
                             parts = exact_match_tool.split("_")
                             family_results.append(SearchResult(
                                 tool_id=exact_match_tool,
-                                score=15.0,
+                                score=_EXACT_MATCH_SCORE,
                                 method=parts[0].upper() if parts else "GET"
                             ))
                         else:
                             for r in family_results:
                                 if r.tool_id == exact_match_tool:
-                                    r.score = 15.0
+                                    r.score = _EXACT_MATCH_SCORE
 
                     family_results.sort(key=lambda r: r.score, reverse=True)
+
                     tfi_override_result = family_results
                     logger.info(
                         f"UnifiedSearch TFI OVERRIDE: entity={detected_entity}, "
@@ -427,20 +354,21 @@ class UnifiedSearch:
                         results=[],
                         intent=intent_result.intent,
                         intent_confidence=intent_result.confidence,
-                        query_type=query_type_result.query_type,
-                        query_type_confidence=query_type_result.confidence,
                         query=query,
-                        total_candidates=0
+                        total_candidates=0,
+                        detected_entity=detected_entity,
                     )
 
-                # Dynamic pool sizing (v4.0): specialized suffixes need wider pool
-                pool_size = 120 if query_type_result.query_type in _SPECIALIZED_QUERY_TYPES else max(top_k * 3, 80)
+                # Specialized-suffix pool-widening was gated on the removed ML classifier.
+                pool_size = max(top_k * _POOL_SIZE_MULT, _POOL_SIZE_MIN)
 
+                # Search 1: BASE query (always)
                 faiss_results = await faiss_store.search(
                     query=query,
                     top_k=pool_size,
                     action_filter=action_filter,
-                    auto_detect_entity=True
+                    entity_filter=detected_entity,
+                    auto_detect_entity=False,  # Entity already detected above
                 )
 
                 total_candidates = len(faiss_results)
@@ -451,59 +379,65 @@ class UnifiedSearch:
                     results=[],
                     intent=intent_result.intent,
                     intent_confidence=intent_result.confidence,
-                    query_type=query_type_result.query_type,
-                    query_type_confidence=query_type_result.confidence,
                     query=query,
-                    total_candidates=0
-                )
-
-            # Step 4: Apply boosts (only for FAISS path, TFI path already scored)
-            if tfi_override_result is None:
-                boosted_results = self._apply_boosts(
-                    query, faiss_results, query_type_result,
+                    total_candidates=0,
                     detected_entity=detected_entity,
-                    effective_query_type=effective_query_type,
-                    is_possessive=is_possessive,
-                    qt_signal=_qt_signal,
                 )
 
-                # Step 4.3: BM25 HYBRID BOOST
-                # Add BM25 exact-term matching scores to complement FAISS semantic scores
-                if self._bm25_index and self._bm25_index.is_built:
-                    bm25_tool_ids = [r.tool_id for r in boosted_results]
-                    bm25_scores = self._bm25_index.get_scores_batch(query, bm25_tool_ids)
-                    if bm25_scores:
-                        # Normalize BM25 scores to [0, 1] range
-                        max_bm25 = max(bm25_scores.values()) if bm25_scores else 1.0
-                        for r in boosted_results:
-                            bm25_raw = bm25_scores.get(r.tool_id, 0.0)
-                            if bm25_raw > 0:
-                                bm25_normalized = bm25_raw / max_bm25
-                                bm25_boost = _BM25_WEIGHT * bm25_normalized
-                                r.score += bm25_boost
+            # Step 4: Apply boosts (FAISS path only; TFI path is already scored)
+            # Boosts + BM25 are entity-gated: without a detected entity they inject
+            # noise (raw FAISS beats boosted FAISS on ambiguous queries).
+            if tfi_override_result is None:
+                if detected_entity:
+                    # Guard the entire boost+BM25 stage so any bug falls back to
+                    # raw FAISS ordering rather than failing the whole search.
+                    try:
+                        boosted_results = self._apply_boosts(
+                            query, faiss_results,
+                            detected_entity=detected_entity,
+                            effective_query_type=effective_query_type,
+                            is_possessive=is_possessive,
+                            detected_method=detected_method,
+                        )
+
+                        if self._bm25_index and self._bm25_index.is_built:
+                            bm25_tool_ids = [r.tool_id for r in boosted_results]
+                            bm25_scores = self._bm25_index.get_scores_batch(query, bm25_tool_ids)
+                            if bm25_scores:
+                                max_bm25 = max(bm25_scores.values()) or 1.0
+                                for r in boosted_results:
+                                    bm25_raw = bm25_scores.get(r.tool_id, 0.0)
+                                    if bm25_raw > 0:
+                                        r.score += _BM25_WEIGHT * (bm25_raw / max_bm25)
+                    except Exception as e:
+                        logger.warning(f"Boost pipeline failed (FAISS results unaffected): {e}")
+                        boosted_results = faiss_results
+                else:
+                    # No entity: trust raw FAISS ranking
+                    boosted_results = faiss_results
 
                 # Step 4.5: EXACT MATCH INJECTION
                 if exact_match_tool:
                     found = False
                     for result in boosted_results:
                         if result.tool_id == exact_match_tool:
-                            result.score = 15.0
+                            result.score = _EXACT_MATCH_SCORE
                             found = True
                             break
                     if not found:
-                        from services.faiss_vector_store import SearchResult
                         boosted_results.insert(0, SearchResult(
                             tool_id=exact_match_tool,
-                            score=15.0,
+                            score=_EXACT_MATCH_SCORE,
                             method="GET"
                         ))
             else:
                 boosted_results = faiss_results
 
+            # Step 4.6: LLM ENTITY BOOST — disabled. Reserved for future LLM query expansion (v2).
+
             # Step 4.7: USER PROFILE INJECTION (D1 fix)
             # Inject profile tools so LLM fallback has the right candidates.
             if is_user_profile and not is_mutation:
-                from services.faiss_vector_store import SearchResult as _SR
                 _profile_tools = [
                     ("get_PersonData_personIdOrEmail", 2.0),
                     ("get_Persons_id", 1.5),
@@ -511,10 +445,50 @@ class UnifiedSearch:
                 for pt_id, pt_score in _profile_tools:
                     if self._registry and self._registry.get_tool(pt_id):
                         if not any(r.tool_id == pt_id for r in boosted_results):
-                            boosted_results.append(_SR(tool_id=pt_id, score=pt_score, method="GET"))
+                            boosted_results.append(SearchResult(tool_id=pt_id, score=pt_score, method="GET"))
 
             # Step 5: Sort by final score (boost system already applied entity/suffix boosts)
             boosted_results.sort(key=lambda r: r.score, reverse=True)
+
+            # Step 5.5: LLM RERANK for fully ambiguous queries
+            # When NO entity was detected (not even by LLM), the top-20 contains
+            # tools from random entities with near-identical scores.
+            # One LLM call to reorder top-10 significantly improves Top-1 accuracy.
+            if not detected_entity:
+                try:
+                    from services.llm_reranker import rerank_with_llm
+                    candidates = []
+                    for r in boosted_results[:20]:
+                        doc = (self._tool_documentation or {}).get(r.tool_id, {})
+                        desc = doc.get('purpose', '')
+                        entity_desc = self._build_entity_description(r.tool_id, r.method)
+                        if entity_desc:
+                            desc = f"{entity_desc}. {desc}"
+                        candidates.append({
+                            'tool_id': r.tool_id,
+                            'score': r.score,
+                            'description': desc,
+                        })
+                    reranked = await rerank_with_llm(
+                        query=query,
+                        candidates=candidates,
+                        top_k=20,
+                        tool_documentation=self._tool_documentation,
+                    )
+                    if reranked and reranked[0].tool_id:
+                        reranked_ids = [r.tool_id for r in reranked]
+                        id_to_result = {r.tool_id: r for r in boosted_results}
+                        new_results = []
+                        for rid in reranked_ids:
+                            if rid in id_to_result:
+                                new_results.append(id_to_result[rid])
+                        for r in boosted_results:
+                            if r.tool_id not in reranked_ids:
+                                new_results.append(r)
+                        boosted_results = new_results
+                        logger.info(f"UnifiedSearch: LLM rerank -> top={reranked[0].tool_id}")
+                except Exception as e:
+                    logger.warning(f"UnifiedSearch: LLM rerank failed (using FAISS order): {e}")
 
             # Step 6: Convert to final format
             final_results = []
@@ -551,8 +525,8 @@ class UnifiedSearch:
                 ))
 
             logger.info(
-                f"UnifiedSearch v2.0: Query '{query[:30]}...' -> "
-                f"{len(final_results)} results (top: {final_results[0].tool_id if final_results else 'none'})"
+                f"Query '{query[:30]}...' -> {len(final_results)} results "
+                f"(top: {final_results[0].tool_id if final_results else 'none'})"
             )
 
             span.set_attribute("search.intent", intent_result.intent.value)
@@ -562,10 +536,9 @@ class UnifiedSearch:
                 results=final_results,
                 intent=intent_result.intent,
                 intent_confidence=intent_result.confidence,
-                query_type=query_type_result.query_type,
-                query_type_confidence=query_type_result.confidence,
                 query=query,
-                total_candidates=total_candidates
+                total_candidates=total_candidates,
+                detected_entity=detected_entity,
             )
 
     # Single source of truth: config/tool_routing.py
@@ -575,26 +548,17 @@ class UnifiedSearch:
         self,
         query: str,
         results: List[SearchResult],
-        query_type_result: QueryTypeResult,
         detected_entity: Optional[str] = None,
         effective_query_type: Optional[QueryType] = None,
         is_possessive: bool = False,
-        qt_signal: ClassificationSignal = NO_SIGNAL,
+        detected_method: Optional[str] = None,
     ) -> List[SearchResult]:
-        """Apply ADDITIVE boosts to FAISS results (v4.0).
-
-        Delegates to services.search.boost_engine.apply_boosts().
-        """
+        """Apply additive boosts to FAISS results via boost_engine.apply_boosts()."""
         from services.tool_family_index import get_family_index
 
-        # Resolve Tool Family Index match for boost engine
         family_match_tool = None
-        if detected_entity and (effective_query_type or query_type_result.query_type) != QueryType.UNKNOWN:
-            family_index = get_family_index()
-            family_match_tool = family_index.resolve(
-                detected_entity,
-                effective_query_type or query_type_result.query_type,
-            )
+        if detected_entity and effective_query_type and effective_query_type != QueryType.UNKNOWN:
+            family_match_tool = get_family_index().resolve(detected_entity, effective_query_type)
 
         ctx = BoostContext(
             tool_documentation=self._tool_documentation or {},
@@ -603,12 +567,12 @@ class UnifiedSearch:
         )
 
         return _apply_boosts_fn(
-            query, results, query_type_result, ctx,
+            query, results, ctx,
             detected_entity=detected_entity,
             effective_query_type=effective_query_type,
             is_possessive=is_possessive,
-            qt_signal=qt_signal,
             family_match_tool=family_match_tool,
+            detected_method=detected_method,
         )
 
     def _build_entity_description(self, tool_id: str, method: str) -> str:
@@ -642,23 +606,23 @@ class UnifiedSearch:
             "faiss_stats": faiss_store.get_stats() if faiss_store else {},
             "tool_docs_loaded": len(self._tool_documentation) if self._tool_documentation else 0,
             "categories_loaded": bool(self._tool_categories),
-            "query_type_classifier": "enabled",
-            # NOTE: training_examples no longer used in v2.0
+            "query_type_classifier": "disabled_zlatni_put_v1",
         }
 
 
-# Singleton instance
+# Singleton instance — constructed synchronously under the GIL from the
+# single asyncio event loop. No threading lock needed: the system is
+# purely async and this sync function runs without awaits between the
+# None check and the assignment. Actual initialization work is gated
+# by `UnifiedSearch._init_lock` (asyncio.Lock) in `initialize()`.
 _unified_search: Optional[UnifiedSearch] = None
-_singleton_lock = threading.Lock()
 
 
 def get_unified_search() -> UnifiedSearch:
     """Get singleton UnifiedSearch instance."""
     global _unified_search
     if _unified_search is None:
-        with _singleton_lock:
-            if _unified_search is None:
-                _unified_search = UnifiedSearch()
+        _unified_search = UnifiedSearch()
     return _unified_search
 
 

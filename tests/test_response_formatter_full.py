@@ -112,11 +112,11 @@ class TestFormatResultMethod:
         output = formatter.format_result(result, tool=tool)
         assert "Test" in output
 
-    def test_user_query_stored(self, formatter):
-        """Line 128: User query is stored."""
+    def test_user_query_accepted(self, formatter):
+        """user_query parameter is accepted without error."""
         result = {"success": True, "data": {"Name": "Test"}}
-        formatter.format_result(result, user_query="show vehicles")
-        assert formatter._current_query == "show vehicles"
+        output = formatter.format_result(result, user_query="show vehicles")
+        assert "Test" in output
 
 
 # ============================================================================

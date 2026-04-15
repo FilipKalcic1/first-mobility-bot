@@ -138,19 +138,23 @@ class TestContextServiceValidation:
         mock_redis = AsyncMock()
         return ContextService(redis_client=mock_redis)
 
-    def test_validate_empty_user_id(self):
+    def test_validate_empty_user_id_raises(self):
+        from services.errors import ConversationError
         svc = self._make_service()
-        assert svc._validate_user_id("") is False
-        assert svc._validate_user_id(None) is False
+        with pytest.raises(ConversationError):
+            svc._validate_user_id("")
+        with pytest.raises(ConversationError):
+            svc._validate_user_id(None)
 
     def test_validate_phone_number(self):
         svc = self._make_service()
         assert svc._validate_user_id("+385912345678") is True
 
-    def test_validate_uuid_warns(self):
+    def test_validate_uuid_raises(self):
+        from services.errors import ConversationError
         svc = self._make_service()
-        # UUID is allowed but should be flagged
-        assert svc._validate_user_id("12345678-1234-1234-1234-123456789abc") is True
+        with pytest.raises(ConversationError):
+            svc._validate_user_id("12345678-1234-1234-1234-123456789abc")
 
     def test_key_generation(self):
         svc = self._make_service()

@@ -748,7 +748,8 @@ class GDPRMaskingService:
                         entry_str = entry if isinstance(entry, str) else entry.decode("utf-8")
                         if any(phone in entry_str for phone in phone_variants):
                             to_remove.append(entry)
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(f"GDPR: Failed to decode DLQ entry during erasure: {e}")
                         continue
 
                 for entry in to_remove:
@@ -917,7 +918,8 @@ class GDPRMaskingService:
                                     redis_state[key] = _json.loads(val_str)
                                 except (ValueError, TypeError):
                                     redis_state[key] = val_str
-                        except Exception:
+                        except Exception as e:
+                            logger.warning(f"GDPR: Failed to read Redis key during export: {e}")
                             continue
 
                 if redis_state:

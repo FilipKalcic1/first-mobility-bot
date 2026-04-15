@@ -173,7 +173,6 @@ _NOOP_TRACER = _NoOpTracer()
 
 async def shutdown_tracing():
     """Shutdown the tracer provider (call on app shutdown)."""
-    global _tracer_provider
     if _tracer_provider:
         try:
             _tracer_provider.shutdown()

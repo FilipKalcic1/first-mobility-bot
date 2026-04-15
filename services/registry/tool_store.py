@@ -26,7 +26,6 @@ class ToolStore:
     def __init__(self) -> None:
         """Initialize empty store."""
         self.tools: Dict[str, UnifiedToolDefinition] = {}
-        self.embeddings: Dict[str, List[float]] = {}
         self.dependency_graph: Dict[str, DependencyGraph] = {}
 
         # Categorization sets
@@ -69,25 +68,6 @@ class ToolStore:
         """Get total number of tools."""
         return len(self.tools)
 
-    def add_embedding(self, operation_id: str, embedding: List[float]) -> None:
-        """Add embedding for a tool."""
-        self.embeddings[operation_id] = embedding
-
-    def get_embedding(self, operation_id: str) -> Optional[List[float]]:
-        """Get embedding for a tool."""
-        return self.embeddings.get(operation_id)
-
-    def has_embedding(self, operation_id: str) -> bool:
-        """Check if embedding exists for tool."""
-        return operation_id in self.embeddings
-
-    def get_missing_embeddings(self) -> List[str]:
-        """Get list of tools without embeddings."""
-        return [
-            op_id for op_id in self.tools
-            if op_id not in self.embeddings
-        ]
-
     def add_dependency(self, dep: DependencyGraph) -> None:
         """Add dependency graph entry."""
         self.dependency_graph[dep.tool_id] = dep
@@ -99,7 +79,6 @@ class ToolStore:
     def clear(self) -> None:
         """Clear all stored data."""
         self.tools.clear()
-        self.embeddings.clear()
         self.dependency_graph.clear()
         self.retrieval_tools.clear()
         self.mutation_tools.clear()
@@ -111,6 +90,5 @@ class ToolStore:
             "total_tools": len(self.tools),
             "retrieval_tools": len(self.retrieval_tools),
             "mutation_tools": len(self.mutation_tools),
-            "embeddings": len(self.embeddings),
             "dependencies": len(self.dependency_graph)
         }

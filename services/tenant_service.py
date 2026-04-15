@@ -4,15 +4,15 @@ Tenant Service - Dynamic multi-tenant routing.
 Manages tenant identification and routing for multi-tenant deployments.
 
 ARCHITECTURE:
-- Each user (phone number) is associated with a tenant
+- Each user (phone number) is associated with a tenant (company)
 - Tenant determines which API instance/data partition to use
-- Default tenant from ENV is used for new users
-- Admin can reassign users to different tenants
+- Tenant ID is DISCOVERED from MobilityOne Persons API response (TenantId field)
+- Default tenant from ENV is used ONLY for the initial API lookup
+- Once discovered, tenant is stored per-user in UserMapping.tenant_id
 
 TENANT RESOLUTION ORDER:
-1. UserMapping.tenant_id (if user exists in DB)
-2. Phone prefix rules (configurable)
-3. Default tenant from settings (fallback)
+1. UserMapping.tenant_id (if user exists in DB) -> highest priority
+2. Default tenant from settings (for initial API bootstrap only)
 
 KUBERNETES MULTI-TENANT:
 - All tenants share same database (filtered by tenant_id)
@@ -44,26 +44,15 @@ class TenantConfig:
     rate_limit: int = 20  # Requests per minute
     is_active: bool = True
 
-# Phone prefix to tenant mapping
-# Format: regex pattern -> tenant_id
-# This can be moved to database/config file for production
-PHONE_PREFIX_RULES: Dict[str, str] = {
-    r"^\+?385": "tenant-hr",      # Croatia
-    r"^\+?386": "tenant-si",      # Slovenia
-    r"^\+?387": "tenant-ba",      # Bosnia
-    r"^\+?381": "tenant-rs",      # Serbia
-    r"^\+?43": "tenant-at",       # Austria
-    r"^\+?49": "tenant-de",       # Germany
-}
 
 class TenantService:
     """
     Manages tenant identification and routing.
 
     Features:
-    - Phone-based tenant resolution
-    - Configurable prefix rules
-    - Default tenant fallback
+    - API-discovered tenant resolution (from Persons API TenantId field)
+    - Per-user tenant storage in DB
+    - Default tenant fallback for bootstrap
     - Tenant validation
     """
 
@@ -79,40 +68,19 @@ class TenantService:
         self.redis = redis_client
         self.default_tenant = _get_settings().MOBILITY_TENANT_ID
 
-        # Compile regex patterns once
-        self._compiled_rules = [
-            (re.compile(pattern), tenant_id)
-            for pattern, tenant_id in PHONE_PREFIX_RULES.items()
-        ]
+        logger.info(f"TenantService initialized: default={self.default_tenant}")
 
-        logger.info(f"TenantService initialized: default={self.default_tenant}, rules={len(self._compiled_rules)}")
-
-    def resolve_tenant_from_phone(self, phone: str) -> str:
+    def get_default_tenant(self) -> str:
         """
-        Resolve tenant ID from phone number using prefix rules.
+        Get default tenant ID (from env).
 
-        Args:
-            phone: Phone number (with or without +)
+        Used ONLY for the initial Persons API call when we don't yet know
+        which company a user belongs to. Once discovered, the user's actual
+        tenant is stored in UserMapping.tenant_id.
 
         Returns:
-            Tenant ID or default tenant
+            Default tenant ID from settings
         """
-        if not phone:
-            return self.default_tenant
-
-        # Normalize phone number
-        normalized = phone.strip()
-        if not normalized.startswith("+"):
-            normalized = "+" + normalized
-
-        # Check prefix rules
-        for pattern, tenant_id in self._compiled_rules:
-            if pattern.match(normalized):
-                logger.debug(f"Phone {phone[-4:]}... matched rule -> {tenant_id}")
-                return tenant_id
-
-        # No rule matched - use default
-        logger.debug(f"Phone {phone[-4:]}... no rule match -> default {self.default_tenant}")
         return self.default_tenant
 
     async def get_tenant_for_user(
@@ -124,9 +92,9 @@ class TenantService:
         Get tenant ID for a user.
 
         Resolution order:
-        1. UserMapping.tenant_id (if provided and set)
-        2. Phone prefix rules
-        3. Default tenant
+        1. UserMapping.tenant_id (if provided and set) — discovered from API
+        2. Redis cache
+        3. Default tenant (fallback for bootstrap)
 
         Args:
             phone: User phone number
@@ -135,7 +103,7 @@ class TenantService:
         Returns:
             Tenant ID
         """
-        # 1. Check UserMapping first (highest priority)
+        # 1. Check UserMapping first (highest priority — API-discovered tenant)
         if user_mapping and hasattr(user_mapping, 'tenant_id') and user_mapping.tenant_id:
             logger.debug(f"Using tenant from UserMapping: {user_mapping.tenant_id}")
             return user_mapping.tenant_id
@@ -151,17 +119,9 @@ class TenantService:
             except Exception as e:
                 logger.warning(f"Redis cache read failed: {e}")
 
-        # 3. Resolve from phone prefix
-        tenant_id = self.resolve_tenant_from_phone(phone)
-
-        # 4. Cache the result
-        if self.redis:
-            try:
-                await self.redis.set(f"tenant:{phone}", tenant_id, ex=3600)  # 1 hour TTL
-            except Exception as e:
-                logger.warning(f"Redis cache write failed: {e}")
-
-        return tenant_id
+        # 3. Default tenant (bootstrap — will be replaced when Persons API returns real TenantId)
+        logger.debug(f"Using default tenant for {phone[-4:]}...: {self.default_tenant}")
+        return self.default_tenant
 
     async def update_user_tenant(
         self,
@@ -170,7 +130,7 @@ class TenantService:
         admin_id: Optional[str] = None
     ) -> bool:
         """
-        Update tenant for a user (admin operation).
+        Update tenant for a user (admin operation or API discovery).
 
         Args:
             phone: User phone number
@@ -217,7 +177,7 @@ class TenantService:
         if not tenant_id:
             return False
 
-        # Basic validation - alphanumeric with hyphens, 3-50 chars
+        # Basic validation - alphanumeric with hyphens, 3-50 chars (UUIDs are 36 chars)
         if not re.match(r'^[a-zA-Z0-9\-]{3,50}$', tenant_id):
             err = ConversationError(ErrorCode.TENANT_MISMATCH, f"Invalid tenant ID format: {tenant_id}")
             logger.warning(str(err))
@@ -234,8 +194,7 @@ class TenantService:
         """
         return {
             "default_tenant": self.default_tenant,
-            "prefix_rules_count": len(self._compiled_rules),
-            "rules": list(PHONE_PREFIX_RULES.keys())
+            "resolution": "API-discovered (Persons API TenantId field)"
         }
 
 # Singleton instance

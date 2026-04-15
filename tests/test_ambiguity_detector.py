@@ -7,7 +7,6 @@ from services.ambiguity_detector import (
     AmbiguityDetector,
     AmbiguityResult,
     GENERIC_SUFFIX_PATTERNS,
-    ENTITY_KEYWORDS,
     CLARIFICATION_QUESTIONS,
 )
 
@@ -156,57 +155,9 @@ class TestBuildDisambiguationHint:
         assert "MOGUĆI ENTITETI" in hint
 
 
-class TestGetBestToolForEntity:
-    def test_finds_matching_tool(self, detector):
-        tools = ["get_Vehicles_Agg", "get_Trips_Agg", "get_Expenses_Agg"]
-        result = detector.get_best_tool_for_entity("Vehicles", "_Agg", tools)
-        assert result == "get_Vehicles_Agg"
-
-    def test_no_match(self, detector):
-        tools = ["get_Vehicles_Agg", "get_Trips_Agg"]
-        result = detector.get_best_tool_for_entity("Cases", "_Agg", tools)
-        assert result is None
-
-
-class TestNeedsClarification:
-    def test_not_ambiguous(self, detector):
-        result = AmbiguityResult(is_ambiguous=False)
-        assert detector.needs_clarification(result, 0.5) is False
-
-    def test_entity_detected_no_clarification(self, detector):
-        result = AmbiguityResult(
-            is_ambiguous=True,
-            detected_entity="Vehicles"
-        )
-        assert detector.needs_clarification(result, 0.3) is False
-
-    def test_llm_confident_no_clarification(self, detector):
-        result = AmbiguityResult(is_ambiguous=True)
-        assert detector.needs_clarification(result, 0.8) is False
-
-    def test_many_similar_low_variance_needs_clarification(self, detector):
-        result = AmbiguityResult(
-            is_ambiguous=True,
-            similar_tools=["a", "b", "c", "d", "e"],
-            score_variance=0.05
-        )
-        assert detector.needs_clarification(result, 0.3) is True
-
-    def test_few_similar_no_clarification(self, detector):
-        result = AmbiguityResult(
-            is_ambiguous=True,
-            similar_tools=["a", "b"],
-            score_variance=0.05
-        )
-        assert detector.needs_clarification(result, 0.3) is False
-
-
 class TestConstants:
     def test_generic_suffix_patterns_non_empty(self):
         assert len(GENERIC_SUFFIX_PATTERNS) > 0
-
-    def test_entity_keywords_non_empty(self):
-        assert len(ENTITY_KEYWORDS) > 0
 
     def test_clarification_questions_for_each_suffix(self):
         for suffix in GENERIC_SUFFIX_PATTERNS:

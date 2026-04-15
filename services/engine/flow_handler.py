@@ -14,12 +14,10 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional, Union
 
-from services.booking_contracts import AssigneeType, EntryType
 from services.error_translator import get_error_translator
 from services.confirmation_dialog import get_confirmation_dialog
 from services.context import get_multiple_missing_prompts
 from services.text_normalizer import clean_european_number
-from services.context.user_context_manager import UserContextManager
 from services.errors import ConversationError, ErrorCode
 from services.tracing import get_tracer, trace_span
 from services.engine.confirmation_handler import (
@@ -149,7 +147,7 @@ class FlowHandler:
                 "success": False,
                 "data": {"error": result.error_message},
                 "ai_feedback": result.ai_feedback or "Availability check failed",
-                "final_response": f"Greška: {result.error_message}"
+                "final_response": "Došlo je do greške pri dohvatu podataka. Pokušajte ponovo."
             }
 
         # Extract items

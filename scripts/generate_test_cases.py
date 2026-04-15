@@ -381,7 +381,7 @@ async def do_search(search, query, top_k=5):
 
 async def test():
     from config import get_settings
-    from services.tool_registry import ToolRegistry
+    from services.registry import ToolRegistry
     from services.unified_search import UnifiedSearch
 
     settings = get_settings()

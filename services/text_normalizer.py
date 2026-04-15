@@ -69,6 +69,13 @@ SYNONYM_MAP: Final[Dict[str, str]] = {
     'ostetiti': 'ostetio',
 }
 
+# Pre-compiled synonym pattern with word boundaries — handles punctuation correctly.
+# Sorted longest-first so "automobili" matches before "auto".
+_SYNONYM_PATTERN: Final = re.compile(
+    r'\b(' + '|'.join(re.escape(k) for k in sorted(SYNONYM_MAP, key=len, reverse=True)) + r')\b',
+    flags=re.IGNORECASE
+)
+
 
 # ---------------------------------------------------------------------------
 # Croatian stopwords — single source of truth (union of all 3 prior sets)
@@ -226,15 +233,17 @@ def normalize_diacritics(text: str) -> str:
 def normalize_synonyms(text: str) -> str:
     """Replace common synonyms with canonical forms.
 
+    Uses word-boundary regex so punctuation adjacent to words
+    (e.g. ``"auto."`` or ``"auta,""``) is handled correctly.
+
     >>> normalize_synonyms("prikaži mi sva auta")
     'prikaži mi sva vozila'
+    >>> normalize_synonyms("trebam auto.")
+    'trebam vozilo.'
     """
-    words = text.split()
-    result = []
-    for word in words:
-        canonical = SYNONYM_MAP.get(word.lower())
-        result.append(canonical if canonical is not None else word)
-    return ' '.join(result)
+    return _SYNONYM_PATTERN.sub(
+        lambda m: SYNONYM_MAP[m.group(1).lower()], text
+    )
 
 
 def normalize_query(text: str) -> str:
@@ -255,15 +264,27 @@ def normalize_query(text: str) -> str:
     return text
 
 
+_LLM_CONTROL_RE = re.compile(
+    r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]'  # ASCII/Latin-1 control chars
+    r'|[\u200b-\u200f\u2028-\u202f\ufeff]'        # Zero-width, directional overrides, BOM
+)
+
+
 def sanitize_for_llm(text: str, max_len: int = 500) -> str:
     """Sanitize user input before embedding in LLM prompts.
 
-    Truncates to max_len, replaces control chars and double quotes
-    to prevent prompt-injection-style formatting issues.
+    Truncates to max_len, strips control/invisible chars, replaces
+    brackets and double quotes to prevent injection-style formatting issues.
     """
     if not text:
         return ""
-    return text[:max_len].replace("\r", " ").replace("\n", " ").replace('"', "'")
+    text = text[:max_len]
+    text = _LLM_CONTROL_RE.sub('', text)
+    text = text.replace("\r", " ").replace("\n", " ")
+    text = text.replace('"', "'")
+    text = text.replace("{", "(").replace("}", ")")
+    text = text.replace("[", "(").replace("]", ")")
+    return text.strip()
 
 
 # Pre-compiled pattern for European number format cleaning

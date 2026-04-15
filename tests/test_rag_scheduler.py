@@ -606,14 +606,14 @@ class TestSingletonHelpers:
     @pytest.mark.asyncio
     async def test_get_and_reset(self):
         import services.rag_scheduler as mod
-        mod.reset_rag_scheduler()
+        await mod.reset_rag_scheduler()
         redis = _redis()
         with patch("config.get_settings", return_value=_mock_settings):
             s1 = await mod.get_rag_scheduler(redis)
             s2 = await mod.get_rag_scheduler(redis)
             assert s1 is s2
-        mod.reset_rag_scheduler()
+        await mod.reset_rag_scheduler()
         with patch("config.get_settings", return_value=_mock_settings):
             s3 = await mod.get_rag_scheduler(redis)
             assert s3 is not s1
-        mod.reset_rag_scheduler()
+        await mod.reset_rag_scheduler()

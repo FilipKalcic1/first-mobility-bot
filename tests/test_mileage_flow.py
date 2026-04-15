@@ -144,7 +144,7 @@ async def test_mileage_flow():
     from config import get_settings
     import redis.asyncio as aioredis
     from services.api_gateway import APIGateway, HttpMethod
-    from services.tool_registry import ToolRegistry
+    from services.registry import ToolRegistry
     from services.tool_executor import ToolExecutor
     from services.ai_orchestrator import AIOrchestrator
     from services.response_formatter import ResponseFormatter

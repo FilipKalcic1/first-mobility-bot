@@ -29,7 +29,7 @@ import re
 from typing import Dict, Any, Optional, List, Tuple
 from services.errors import RoutingError, ErrorCode
 
-from services.patterns import PatternRegistry, ValuePattern
+from services.utils.pattern_registry import PatternRegistry, ValuePattern
 from services.context import UserContextManager
 from services.tracing import get_tracer, trace_span
 
@@ -468,6 +468,173 @@ class DependencyResolver:
         """Clear resolution cache."""
         self._resolution_cache.clear()
         logger.info("Resolution cache cleared")
+
+    # ---
+    # ALIAS-AWARE GRAPH WALK (V6)
+    # ---
+
+    @staticmethod
+    def _ci_get(d: Dict[str, Any], key: str) -> Optional[Any]:
+        if key in d and d[key] not in (None, ""):
+            return d[key]
+        kl = key.lower()
+        for k, v in d.items():
+            if k.lower() == kl and v not in (None, ""):
+                return v
+        return None
+
+    @staticmethod
+    def _flatten_response(data: Any) -> Optional[Dict[str, Any]]:
+        if isinstance(data, dict):
+            for wrapper in ("Data", "data", "Items", "items", "Results", "results"):
+                if wrapper in data:
+                    nested = data[wrapper]
+                    if isinstance(nested, list) and nested:
+                        return nested[0] if isinstance(nested[0], dict) else None
+                    if isinstance(nested, dict):
+                        return nested
+            return data
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        return None
+
+    @classmethod
+    def apply_output_aliases(cls, tool: Any, response_data: Any) -> Dict[str, Any]:
+        """
+        Project an API response into a flat dict with semantic aliases applied.
+        Originals are preserved so consumers reading the raw key still work.
+        """
+        flat = cls._flatten_response(response_data) or {}
+        aliased: Dict[str, Any] = dict(flat)
+        aliases = getattr(tool, "output_key_aliases", None) or {}
+        for src, dst in aliases.items():
+            val = cls._ci_get(flat, src)
+            if val is not None:
+                aliased[dst] = val
+        return aliased
+
+    @classmethod
+    def seed_context_from_response(cls, tool: Any, response_data: Any, context: Dict[str, Any]) -> None:
+        """Merge aliased response into the session context (in place)."""
+        for k, v in cls.apply_output_aliases(tool, response_data).items():
+            if v is not None:
+                context[k] = v
+
+    def _alias_expanded_outputs(self, tool: Any) -> List[str]:
+        keys = list(getattr(tool, "output_keys", []) or [])
+        aliases = getattr(tool, "output_key_aliases", None) or {}
+        keys.extend(aliases.values())
+        return keys
+
+    def _find_provider_for(self, needed_key: str) -> Optional[Any]:
+        nl = needed_key.lower()
+        all_tools = self.registry.get_all_tools() if hasattr(self.registry, "get_all_tools") else {}
+        for tool in all_tools.values():
+            if not getattr(tool, "is_retrieval", False):
+                continue
+            for out in self._alias_expanded_outputs(tool):
+                if out.lower() == nl:
+                    return tool
+        return None
+
+    @staticmethod
+    def _render_filter_template(template: str, context: Dict[str, Any]) -> Optional[str]:
+        try:
+            ci = {k.lower(): v for k, v in context.items()}
+            filled: Dict[str, Any] = {}
+            import string
+            for _, field_name, _, _ in string.Formatter().parse(template):
+                if not field_name:
+                    continue
+                val = context.get(field_name) or ci.get(field_name.lower())
+                if val is None:
+                    return None
+                filled[field_name] = val
+            return template.format(**filled)
+        except Exception:
+            return None
+
+    async def prepare_params_for_tool(
+        self,
+        target_tool: Any,
+        context: Dict[str, Any],
+        executor: Any,
+        user_input: Optional[Dict[str, Any]] = None,
+        _depth: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        Walks the dependency graph to populate every required param of `target_tool`.
+
+        - For `dependency_source=context` params, looks up the value in `context`
+          (case-insensitive, alias-aware). If missing, finds a provider via
+          `_alias_expanded_outputs`, recursively resolves IT, executes it through
+          `executor(operation_id, params) -> response_data`, then seeds the
+          response (with aliases applied) back into `context`.
+        - For `dependency_source=user_input` params, pulls from `user_input`.
+        - For `Filter` params with `filter_template`, renders the template
+          against `context` (e.g. 'Phone(=){phone}').
+        """
+        if _depth > 6:
+            raise RuntimeError("prepare_params_for_tool: max graph depth exceeded")
+
+        user_input = user_input or {}
+        params: Dict[str, Any] = {}
+
+        for pname, pdef in target_tool.parameters.items():
+            dep_src = getattr(pdef, "dependency_source", None)
+            dep_val = getattr(dep_src, "value", dep_src)
+
+            if dep_val == "context":
+                ckey = getattr(pdef, "context_key", None) or pname
+                value = self._ci_get(context, pname) or self._ci_get(context, ckey)
+
+                template = getattr(pdef, "filter_template", None)
+                if template:
+                    rendered = self._render_filter_template(template, context)
+                    if rendered is not None:
+                        params[pname] = rendered
+                        continue
+
+                if value is None:
+                    needed = pname if pname.lower() not in ("id", "filter") else ckey
+                    provider = self._find_provider_for(needed)
+                    if provider is None and ckey:
+                        provider = self._find_provider_for(ckey)
+                    if provider is None:
+                        if getattr(pdef, "required", False):
+                            raise RuntimeError(
+                                f"prepare_params_for_tool: no provider for '{needed}' "
+                                f"(needed by {target_tool.operation_id}.{pname})"
+                            )
+                        continue
+
+                    sub_params = await self.prepare_params_for_tool(
+                        provider, context, executor, user_input, _depth + 1
+                    )
+                    response = await executor(provider.operation_id, sub_params)
+                    self.seed_context_from_response(provider, response, context)
+                    value = self._ci_get(context, pname) or self._ci_get(context, ckey)
+
+                if value is not None:
+                    params[pname] = value
+                elif getattr(pdef, "required", False):
+                    raise RuntimeError(
+                        f"prepare_params_for_tool: could not resolve required '{pname}' "
+                        f"for {target_tool.operation_id}"
+                    )
+
+            elif dep_val == "user_input":
+                if pname in user_input:
+                    params[pname] = user_input[pname]
+                elif getattr(pdef, "default_value", None) is not None:
+                    params[pname] = pdef.default_value
+                elif getattr(pdef, "required", False):
+                    raise RuntimeError(
+                        f"prepare_params_for_tool: missing required user_input '{pname}' "
+                        f"for {target_tool.operation_id}"
+                    )
+
+        return params
 
     # ---
     # ENTITY RESOLUTION

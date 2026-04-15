@@ -94,10 +94,11 @@ def mock_redis():
 @pytest.fixture
 def user_service(mock_db, mock_gateway, mock_cache, mock_redis):
     """Build UserService with all mocks injected."""
-    with patch("services.user_service.get_tenant_service") as mock_ts_factory:
+    with patch("services.user_service.get_tenant_service") as mock_ts_factory, \
+         patch("services.user_service._get_settings", return_value=_mock_settings):
         tenant_svc = MagicMock()
-        tenant_svc.resolve_tenant_from_phone = MagicMock(return_value="tenant-hr")
-        tenant_svc.get_tenant_for_user = AsyncMock(return_value="tenant-hr")
+        tenant_svc.get_default_tenant = MagicMock(return_value="tenant-default")
+        tenant_svc.get_tenant_for_user = AsyncMock(return_value="tenant-default")
         mock_ts_factory.return_value = tenant_svc
 
         svc = UserService(
@@ -115,8 +116,8 @@ def user_service_no_gateway(mock_db, mock_cache, mock_redis):
     """UserService without gateway -- simulates missing external API."""
     with patch("services.user_service.get_tenant_service") as mock_ts_factory:
         tenant_svc = MagicMock()
-        tenant_svc.resolve_tenant_from_phone = MagicMock(return_value="tenant-hr")
-        tenant_svc.get_tenant_for_user = AsyncMock(return_value="tenant-hr")
+        tenant_svc.get_default_tenant = MagicMock(return_value="tenant-default")
+        tenant_svc.get_tenant_for_user = AsyncMock(return_value="tenant-default")
         mock_ts_factory.return_value = tenant_svc
 
         svc = UserService(
@@ -369,7 +370,7 @@ class TestBuildContext:
 
         assert ctx["person_id"] == "person-123"
         assert ctx["phone"] == "+385991234567"
-        assert ctx["tenant_id"] == "tenant-hr"
+        assert ctx["tenant_id"] == "tenant-default"
         assert ctx["vehicle"] == {}
 
     @pytest.mark.asyncio
@@ -656,7 +657,6 @@ class TestPhoneVariations:
 class TestUserServiceInit:
     """Test constructor and attribute defaults."""
 
-    @pytest.mark.skip(reason="Module-level settings patch race condition in full suite")
     def test_default_tenant_from_settings(self, user_service):
         assert user_service.default_tenant_id == "test-tenant-default"
 

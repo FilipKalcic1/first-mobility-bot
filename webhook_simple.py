@@ -43,6 +43,14 @@ import logging
 
 from config import get_settings
 from services.tracing import get_tracer, trace_span
+from services.tenant_resolver import resolve_tenant_for_phone
+
+# Refusal sent to unknown phone numbers. Single source of truth so the e2e
+# test can assert on it without duplicating the string.
+TENANT_REFUSAL_TEXT_HR = (
+    "Vaš broj nije registriran u MobilityOne sustavu. "
+    "Kontaktirajte vašeg administratora za pristup."
+)
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -89,30 +97,28 @@ def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> boo
     """
     Verify Infobip webhook signature using HMAC-SHA256.
 
-    Args:
-        payload: Raw request body bytes
-        signature: Signature from X-Hub-Signature-256 header
-        secret: INFOBIP_SECRET_KEY from environment
-
-    Returns:
-        True if signature is valid, False otherwise
+    Fails closed: any missing input (secret, signature) returns False.
+    Never bypasses verification — INFOBIP_SECRET_KEY must be configured
+    whenever the webhook endpoint is reachable.
     """
     if not secret:
-        logger.warning("INFOBIP_SECRET_KEY not configured, skipping signature validation")
-        return True
-
-    if not signature:
-        logger.warning("No signature header in webhook request")
+        logger.error(
+            "INFOBIP_SECRET_KEY missing — rejecting webhook. "
+            "Set the secret in environment to enable WhatsApp webhook processing."
+        )
         return False
 
-    # Infobip uses sha256=<hex_digest> format
+    if not signature:
+        logger.warning("No signature header in webhook request — rejecting")
+        return False
+
     if signature.startswith("sha256="):
         signature = signature[7:]
 
     expected = hmac.new(
         secret.encode('utf-8'),
         payload,
-        hashlib.sha256
+        hashlib.sha256,
     ).hexdigest()
 
     return hmac.compare_digest(expected.lower(), signature.lower())
@@ -224,7 +230,7 @@ async def get_redis():
             settings.REDIS_URL,
             encoding="utf-8",
             decode_responses=True,
-            max_connections=10,  # Webhook only pushes to stream — 10 is plenty at 0.5 CPU
+            max_connections=5,  # Webhook only pushes to stream — 5 sufficient for single-server
             socket_keepalive=True,
             health_check_interval=30
         )
@@ -309,7 +315,6 @@ async def whatsapp_webhook(request: Request):
     6. Push to Redis STREAM: "whatsapp_stream_inbound"
     7. Worker picks up from stream via consumer group
     """
-    global _redis_client
     _stats["total_received"] += 1
 
     # Extract request_id from middleware for end-to-end tracing
@@ -399,6 +404,31 @@ async def _process_webhook(request: Request, request_id: str, span) -> dict:
                 _diag_log("no_sender", {"keys": list(result.keys()), "message_id": message_id})
                 continue
 
+            # ── Option C: edge tenant resolution (V6.2 strict isolation) ──
+            # Look up TenantId from phone BEFORE any API call. Unknown phones
+            # are refused at the edge — no env fallback, no Redis stream push,
+            # no worker work. Saves resources and forecloses cross-tenant bleed.
+            tenant_id = await resolve_tenant_for_phone(sender)
+            if not tenant_id:
+                logger.warning(
+                    f"TENANT_REFUSED unknown phone ***{sender[-4:]} — refusing at edge"
+                )
+                _diag_log("tenant_refused", {"sender_suffix": sender[-4:]})
+                refusal_payload = json.dumps({
+                    "to": sender,
+                    "text": TENANT_REFUSAL_TEXT_HR,
+                    "idempotency_key": (
+                        f"{sender}:tenant_refused:"
+                        f"{hashlib.md5(message_id.encode() if message_id else sender.encode(), usedforsecurity=False).hexdigest()[:12]}"
+                    ),
+                })
+                try:
+                    redis = await get_redis()
+                    await redis.rpush("whatsapp_outbound", refusal_payload)
+                except (ConnectionError, TimeoutError, OSError, RedisConnectionError, RedisError) as redis_err:
+                    logger.error(f"Tenant refusal enqueue failed: {redis_err}")
+                continue
+
             # Extract text using robust multi-format parser
             text, msg_type = extract_text_and_type(result)
 
@@ -417,6 +447,7 @@ async def _process_webhook(request: Request, request_id: str, span) -> dict:
                     "message_id": message_id,
                     "original_type": msg_type,
                     "request_id": request_id,
+                    "tenant_id": tenant_id,
                 }
 
                 for redis_attempt in range(3):
@@ -443,6 +474,7 @@ async def _process_webhook(request: Request, request_id: str, span) -> dict:
                 "text": text,
                 "message_id": message_id,
                 "request_id": request_id,
+                "tenant_id": tenant_id,
             }
 
             # Push with retry (max 3 attempts with exponential backoff)
@@ -594,10 +626,10 @@ async def webhook_debug(request: Request):
             expected_tokens.add(env_token)
 
     token_bytes = (token or "").encode()
-    valid = any(
-        hmac.compare_digest(token_bytes, stored.encode())
-        for stored in expected_tokens
-    )
+    valid = False
+    for stored in expected_tokens:
+        if hmac.compare_digest(token_bytes, stored.encode()):
+            valid = True  # No break — iterate all tokens for constant-time
     if not expected_tokens or not valid:
         raise HTTPException(status_code=404, detail="Not found")
 

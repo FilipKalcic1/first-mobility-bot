@@ -32,7 +32,6 @@ import logging
 import time
 import json
 import hashlib
-import threading
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, Callable, Awaitable
 from dataclasses import dataclass, asdict
@@ -499,16 +498,20 @@ class RAGScheduler:
 
         finally:
             self._refresh_in_progress = False
-            # Atomic lock release via Lua (prevents TOCTOU race)
+            # Atomic lock release via Lua (prevents TOCTOU race).
+            # Shield ensures the release completes even if the parent task
+            # was cancelled (e.g. force_refresh timeout). Without shield,
+            # CancelledError propagates through the await and the lock
+            # stays stranded until TTL expires (600s).
             try:
                 from services.retry_utils import ATOMIC_LOCK_RELEASE_LUA
-                await self.redis.eval(
+                await asyncio.shield(self.redis.eval(
                     ATOMIC_LOCK_RELEASE_LUA,
                     1,
                     self.REDIS_KEY_LOCK,
                     lock_value,
-                )
-            except Exception as e:
+                ))
+            except (Exception, asyncio.CancelledError) as e:
                 logger.warning(f"Failed to release lock: {e}")
 
     async def _default_refresh(self) -> Dict:
@@ -708,33 +711,33 @@ class RAGScheduler:
         }
 
 
-# Global scheduler instance
+# Global scheduler instance — all access serialized via the module-level
+# asyncio.Lock (see `_singleton_lock` above). The whole system is async, so
+# we never mix threading locks on this state.
 _scheduler: Optional[RAGScheduler] = None
-_scheduler_sync_lock = threading.Lock()
 
 
 async def get_rag_scheduler(
     redis_client,
     on_refresh_callback: Callable[[], Awaitable[Dict]] = None
 ) -> RAGScheduler:
-    """Get or create RAG scheduler singleton (thread-safe async)."""
+    """Get or create RAG scheduler singleton (async-safe)."""
     global _scheduler
 
     if _scheduler is not None:
         return _scheduler
 
     async with _get_singleton_lock():
-        # Double-check after acquiring lock
         if _scheduler is None:
             _scheduler = RAGScheduler(
                 redis_client,
-                on_refresh_callback=on_refresh_callback
+                on_refresh_callback=on_refresh_callback,
             )
         return _scheduler
 
 
-def reset_rag_scheduler() -> None:
-    """Reset the singleton (for testing)."""
+async def reset_rag_scheduler() -> None:
+    """Reset the singleton (for testing). Async to share the singleton lock."""
     global _scheduler
-    with _scheduler_sync_lock:
+    async with _get_singleton_lock():
         _scheduler = None
