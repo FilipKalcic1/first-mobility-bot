@@ -24,7 +24,16 @@ python main.py                            # API on :8000
 python worker.py                          # worker consumes stream
 ```
 
-Tests: `pytest tests/ --ignore=tests/benchmarks` — **2134 passing, 15 skipped, 0 failed, 0 errors** on a clean tree. The 15 skipped are live-API integration smoke tests gated behind `RUN_INTEGRATION_TESTS=1` (booking/mileage/case flows, webhook signature probes, graceful-shutdown) which require real Redis + DB + Infobip + Azure OpenAI.
+Tests: `pytest tests/ --ignore=tests/benchmarks` — **2134 passing, 15 skipped, 0 failed, 0 errors**. Run has been validated both against mocks AND against a real Postgres (at head) + real Redis stack. The 15 skipped are live-API smoke tests gated behind `RUN_INTEGRATION_TESTS=1` (booking/mileage/case flows + webhook signature probes + graceful-shutdown) which require network reach to the MobilityOne dev API; they were not executed here because that host is not reachable from this sandbox.
+
+Benchmark (against Azure OpenAI `m1-ai-dev`, both paraphrase seeds):
+
+| Seed | Recalib Top-5 | Top-20 |
+| ---- | ------------- | ------ |
+| 42   | 71.3%         | 82.3%  |
+| 1337 | 76.8%         | 82.6%  |
+
+Both seeds pass baseline (≥69%); fixes did not regress retrieval.
 
 ## Operating playbook
 
