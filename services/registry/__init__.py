@@ -196,6 +196,10 @@ class ToolRegistry:
     def get_tool(self, operation_id: str) -> Optional[UnifiedToolDefinition]:
         return self._store.get_tool(operation_id)
 
+    def resolve_tool_id(self, operation_id: str) -> Optional[str]:
+        """O(1) case-insensitive operation_id resolution."""
+        return self._store.resolve_tool_id(operation_id)
+
     def list_tools(self) -> List[str]:
         return self._store.list_tools()
 

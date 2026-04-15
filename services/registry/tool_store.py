@@ -32,6 +32,10 @@ class ToolStore:
         self.retrieval_tools: Set[str] = set()
         self.mutation_tools: Set[str] = set()
 
+        # Case-folded index → canonical operation_id, for O(1) case-insensitive
+        # lookup without scanning 950+ tools on every router validation.
+        self._lower_index: Dict[str, str] = {}
+
         logger.debug("ToolStore initialized")
 
     def add_tool(self, tool: UnifiedToolDefinition) -> None:
@@ -42,6 +46,7 @@ class ToolStore:
             tool: UnifiedToolDefinition to add
         """
         self.tools[tool.operation_id] = tool
+        self._lower_index[tool.operation_id.lower()] = tool.operation_id
 
         if tool.is_retrieval:
             self.retrieval_tools.add(tool.operation_id)
@@ -49,8 +54,14 @@ class ToolStore:
             self.mutation_tools.add(tool.operation_id)
 
     def get_tool(self, operation_id: str) -> Optional[UnifiedToolDefinition]:
-        """Get tool by operation ID."""
+        """Get tool by operation ID (exact match)."""
         return self.tools.get(operation_id)
+
+    def resolve_tool_id(self, operation_id: str) -> Optional[str]:
+        """Return canonical operation_id for an exact or case-folded match."""
+        if operation_id in self.tools:
+            return operation_id
+        return self._lower_index.get(operation_id.lower())
 
     def has_tool(self, operation_id: str) -> bool:
         """Check if tool exists."""
@@ -82,6 +93,7 @@ class ToolStore:
         self.dependency_graph.clear()
         self.retrieval_tools.clear()
         self.mutation_tools.clear()
+        self._lower_index.clear()
         logger.debug("ToolStore cleared")
 
     def get_stats(self) -> Dict[str, int]:

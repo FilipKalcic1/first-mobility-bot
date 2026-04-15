@@ -699,9 +699,14 @@ class UnifiedRouter:
             logger.info(f"LLM tool case-fixed: {selected_tool} → {match}")
             return {**result, "tool": match}
 
-        if self._registry and self._registry.get_tool(selected_tool):
-            logger.warning(f"LLM selected tool outside candidates: {selected_tool}")
-            return result
+        # O(1) case-folded resolution against the full 950+ tool registry —
+        # avoids scanning every tool when the LLM returns a valid but
+        # out-of-candidate-pool operation_id with altered casing.
+        if self._registry:
+            canonical = self._registry.resolve_tool_id(selected_tool)
+            if canonical:
+                logger.warning(f"LLM selected tool outside candidates: {canonical}")
+                return {**result, "tool": canonical}
 
         logger.warning(f"LLM hallucinated tool: {selected_tool}")
         return {
