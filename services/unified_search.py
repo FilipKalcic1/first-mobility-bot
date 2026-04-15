@@ -557,7 +557,7 @@ class UnifiedSearch:
         from services.tool_family_index import get_family_index
 
         family_match_tool = None
-        if detected_entity and effective_query_type and effective_query_type != QueryType.UNKNOWN:
+        if detected_entity and effective_query_type not in (None, QueryType.UNKNOWN):
             family_match_tool = get_family_index().resolve(detected_entity, effective_query_type)
 
         ctx = BoostContext(

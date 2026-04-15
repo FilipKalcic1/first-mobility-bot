@@ -12,13 +12,12 @@ import asyncio
 import json
 import logging
 import os
-import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, Any, Optional, Tuple, TYPE_CHECKING
 
-import redis as _redis_mod
+import redis.asyncio as aioredis
 
 from config import get_settings
 from services.openai_client import get_openai_client, get_llm_circuit_breaker
@@ -71,35 +70,32 @@ def _get_settings():
     return get_settings()
 
 
-_clarify_redis_client: Optional["_redis_mod.Redis"] = None
-_clarify_redis_lock = threading.Lock()
+_clarify_redis_client: Optional["aioredis.Redis"] = None
+_clarify_redis_lock = asyncio.Lock()
 
 
-def _get_clarify_redis() -> "_redis_mod.Redis":
-    """Module-level pooled sync Redis client for clarify-log writes.
+async def _get_clarify_redis() -> "aioredis.Redis":
+    """Module-level pooled async Redis client for clarify-log writes.
 
     Reuses one ConnectionPool across all clarify calls so we don't pay a
     TCP handshake per ambiguous query.
     """
     global _clarify_redis_client
     if _clarify_redis_client is None:
-        with _clarify_redis_lock:
+        async with _clarify_redis_lock:
             if _clarify_redis_client is None:
-                _clarify_redis_client = _redis_mod.from_url(
+                _clarify_redis_client = aioredis.from_url(
                     os.environ.get("REDIS_URL", "redis://localhost:6379"),
                     max_connections=4,
                 )
     return _clarify_redis_client
 
 
-def _push_clarify_log(entry: str) -> None:
-    """Push a clarify-log entry to Redis and trim the list.
-
-    Runs synchronously; callers dispatch via asyncio.to_thread.
-    """
-    client = _get_clarify_redis()
-    client.lpush("clarify:log", entry)
-    client.ltrim("clarify:log", 0, 499)
+async def _push_clarify_log(entry: str) -> None:
+    """Push a clarify-log entry to Redis and trim the list."""
+    client = await _get_clarify_redis()
+    await client.lpush("clarify:log", entry)
+    await client.ltrim("clarify:log", 0, 499)
 
 
 class RouterAction(str, Enum):
@@ -752,7 +748,7 @@ class UnifiedRouter:
                 },
                 ensure_ascii=False,
             )
-            await asyncio.to_thread(_push_clarify_log, entry)
+            await _push_clarify_log(entry)
         except Exception as log_err:
             logger.debug(f"Clarify log to Redis failed (non-critical): {log_err}")
 
