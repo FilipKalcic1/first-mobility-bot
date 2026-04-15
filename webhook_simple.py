@@ -365,7 +365,10 @@ async def _process_webhook(request: Request, request_id: str, span) -> dict:
             _diag_log("json_parse_error", {"error": str(e), "body_preview": raw_body[:200].decode(errors='replace')})
             return {"status": "ok", "error": "invalid_json"}
 
-        logger.info(f"Received WhatsApp webhook: {json.dumps(body, ensure_ascii=False)[:500]}")
+        logger.info(
+            f"Received WhatsApp webhook: keys={list(body.keys())} "
+            f"results={len(body.get('results', []))}"
+        )
         _diag_log("received", {"keys": list(body.keys()), "result_count": len(body.get("results", []))})
 
         # Extract message details from Infobip format

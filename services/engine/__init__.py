@@ -19,9 +19,22 @@ This module has been refactored into smaller components:
 import asyncio
 import atexit
 import logging
+import re
 import time as _time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, Optional
+
+_SENDER_KEY_SAFE = re.compile(r"[^A-Za-z0-9+]")
+
+
+def _safe_redis_sender(sender: str) -> str:
+    """Strip Redis-key-hostile characters from a webhook sender id.
+
+    Whitespace, colons, and newlines in `from` would corrupt keyspace
+    partitioning and could collide across users. Keep digits, letters,
+    and `+` (E.164 prefix). Empty result means the sender is unusable.
+    """
+    return _SENDER_KEY_SAFE.sub("", sender or "")
 
 from config import get_settings
 from services.conversation_manager import ConversationManager, ConversationState
@@ -357,8 +370,9 @@ class MessageEngine:
         Returns a response string if consent is pending (block processing).
         """
         # Guest = not found in MobilityOne API → block immediately
+        sender_key = _safe_redis_sender(sender)
         if user_context.get("is_guest"):
-            consent_key = f"gdpr_consent:{sender}"
+            consent_key = f"gdpr_consent:{sender_key}"
             try:
                 await self.redis.set(consent_key, "unknown", ex=300)
             except Exception as e:
@@ -377,7 +391,7 @@ class MessageEngine:
             )
 
         # User IS in MobilityOne. Check consent status via Redis cache first.
-        consent_key = f"gdpr_consent:{sender}"
+        consent_key = f"gdpr_consent:{sender_key}"
         try:
             cached = await self.redis.get(consent_key)
         except Exception as e:
@@ -422,7 +436,7 @@ class MessageEngine:
             await user_service.record_consent(sender, given=True)
             try:
                 await self.redis.set(consent_key, "1", ex=86400)
-                await self.redis.delete(f"gdpr_consent_pending:{sender}")
+                await self.redis.delete(f"gdpr_consent_pending:{sender_key}")
             except Exception as e:
                 logger.debug(f"Redis best-effort consent accept cache write failed: {e}")
             logger.info(f"GDPR consent accepted by ***{sender[-4:]}")
@@ -434,7 +448,7 @@ class MessageEngine:
             return GDPR_CONSENT_DECLINED
 
         # Check if we already sent the consent message (via Redis flag)
-        pending_key = f"gdpr_consent_pending:{sender}"
+        pending_key = f"gdpr_consent_pending:{sender_key}"
         try:
             already_asked = await self.redis.get(pending_key)
         except Exception as e:

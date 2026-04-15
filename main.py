@@ -325,8 +325,10 @@ if settings.is_production:
 from services.security_headers import SecurityHeadersMiddleware
 app.add_middleware(SecurityHeadersMiddleware)
 
-# CORS - restricted in production, permissive in development
-if settings.DEBUG:
+# CORS - restricted in production, permissive in development.
+# Belt-and-suspenders: require BOTH DEBUG and non-production env so a stray
+# DEBUG=true leaked into prod cannot widen origins to *.
+if settings.DEBUG and not settings.is_production:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
