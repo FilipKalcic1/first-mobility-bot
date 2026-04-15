@@ -190,7 +190,14 @@ class TokenManager:
                     f"Auth server returned invalid response: {e}"
                 )
 
-            self._token = data["access_token"]
+            access_token = data.get("access_token")
+            if not access_token or not isinstance(access_token, str):
+                self._last_failure = datetime.now(timezone.utc)
+                raise GatewayError(
+                    ErrorCode.TOKEN_REFRESH_FAILED,
+                    "Auth server response missing 'access_token'"
+                )
+            self._token = access_token
             expires_in = int(data.get("expires_in", 3600))
             self._expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
             self._last_failure = None  # Clear failure state on success
