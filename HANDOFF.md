@@ -24,7 +24,7 @@ python main.py                            # API on :8000
 python worker.py                          # worker consumes stream
 ```
 
-Tests: `pytest tests/ --ignore=tests/benchmarks` — 2075 passing on a clean tree; 20 failures + 30 errors are all pre-existing mock-drift or missing-dep (`asyncpg`, live Infobip/OpenAI) and documented below.
+Tests: `pytest tests/ --ignore=tests/benchmarks` — **2134 passing, 15 skipped, 0 failed, 0 errors** on a clean tree. The 15 skipped are live-API integration smoke tests gated behind `RUN_INTEGRATION_TESTS=1` (booking/mileage/case flows, webhook signature probes, graceful-shutdown) which require real Redis + DB + Infobip + Azure OpenAI.
 
 ## Operating playbook
 
@@ -47,12 +47,15 @@ Known limits (document to buyer, not bugs):
 - `tool_categories.json` missing → ranking degrades silently → now logs ERROR at startup (commit `c2b385c`) but still boots.
 - `except Exception` in several fallback paths is intentional (Redis best-effort for consent cache, rag_scheduler pubsub reconnect). Wrapped with `exc_info=True` so stacks reach logs.
 
-## Pre-existing test failures (not caused by handoff sweep)
+## Test suite
 
-- `tests/test_engine_init.py` — 30 errors. Mocks reference `services.engine.get_drift_detector` which was removed upstream. Fix: regenerate mocks against current module surface.
-- `tests/test_worker_burst_mode.py` — 9 failures. Tests expect worker attributes that no longer match implementation.
-- `tests/test_booking_flow.py` / `test_mileage_flow.py` / `test_case_flow.py` — rely on live Redis, Postgres, and Infobip endpoints. Either run against docker compose or rewrite with `pytest-asyncio` mocks.
-- `asyncpg` not installed — a few db-integration tests skip or error on collection. `pip install asyncpg` if needed.
+All unit and component tests pass on Python 3.14. Integration smoke tests (live API + Redis + DB) are opt-in:
+
+```
+RUN_INTEGRATION_TESTS=1 pytest tests/test_booking_flow.py tests/test_case_flow.py tests/test_mileage_flow.py
+```
+
+Regression guards for post-audit fixes live in `tests/test_audit_regressions.py`.
 
 ## Architectural debts resolved in this handoff sweep
 
@@ -69,6 +72,8 @@ Known limits (document to buyer, not bugs):
 | Phone-variation nondeterminism | `8dc3e4f` | Ambiguous lookups refuse; closes cross-account takeover vector |
 | LLM JSON extractor greediness | `9967743` | Brace-depth scanner replaces `\{[\s\S]*\}` regex |
 | Token refresh KeyError | `4a2d726` | Missing `access_token` → `GatewayError` + cooldown |
+| Test suite cleanup | `4093fa2` | All 50 pre-existing failures/errors resolved; 12 new regression tests |
+| SAFE_HEADERS hot-path | `df60d24` | Hoisted per-request set-build to module-level frozenset |
 
 ## Files the buyer should read first (in order)
 
