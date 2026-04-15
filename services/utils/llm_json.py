@@ -4,10 +4,43 @@ Tolerates plain JSON, fenced blocks (```json ... ``` or ``` ... ```), and
 prose surrounding a single JSON object.
 """
 import json
-import re
 from typing import Dict, Optional
 
-_JSON_OBJECT_RE = re.compile(r"\{[\s\S]*\}")
+
+def _extract_first_object(text: str) -> Optional[str]:
+    """Return the substring spanning the first balanced {...} object, or None.
+
+    Counts braces while skipping over string literals (and their escapes) so
+    braces inside JSON strings don't perturb the depth.
+    """
+    depth = 0
+    start = -1
+    i = 0
+    n = len(text)
+    in_string = False
+    escape = False
+    while i < n:
+        ch = text[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and start != -1:
+                    return text[start:i + 1]
+        i += 1
+    return None
 
 
 def parse_llm_json(text: str) -> Optional[Dict]:
@@ -21,10 +54,10 @@ def parse_llm_json(text: str) -> Optional[Dict]:
     except json.JSONDecodeError:
         pass
 
-    match = _JSON_OBJECT_RE.search(candidate)
-    if not match:
+    extracted = _extract_first_object(candidate)
+    if extracted is None:
         return None
     try:
-        return json.loads(match.group(0))
+        return json.loads(extracted)
     except json.JSONDecodeError:
         return None
