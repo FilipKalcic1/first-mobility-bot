@@ -13,7 +13,13 @@ import json
 import logging
 import re
 from typing import Dict, Any, List, Tuple, Optional
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+try:
+    _HR_TZ = ZoneInfo("Europe/Zagreb")
+except ZoneInfoNotFoundError:
+    _HR_TZ = timezone(timedelta(hours=1))
 
 from services.tool_contracts import (
     UnifiedToolDefinition,
@@ -637,7 +643,7 @@ class ParameterManager:
             value_lower = value.lower().strip()
 
             # STEP 1: Handle Croatian natural language dates
-            today = datetime.now(timezone.utc)
+            today = datetime.now(_HR_TZ)
             time_part = None
 
             # Extract time if present (e.g., "sutra u 9:00" or "sutra 9h")

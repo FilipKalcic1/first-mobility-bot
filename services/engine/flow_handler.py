@@ -12,6 +12,12 @@ v2.0 Changes:
 import logging
 import re
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+try:
+    _HR_TZ = ZoneInfo("Europe/Zagreb")
+except ZoneInfoNotFoundError:
+    _HR_TZ = timezone(timedelta(hours=1))
 from typing import Dict, Any, List, Optional, Union
 
 from services.error_translator import get_error_translator
@@ -503,7 +509,7 @@ class FlowHandler:
         Returns ISO format string or None if unparseable.
         """
         text_lower = text.lower().strip()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(_HR_TZ)
 
         # Map Croatian day keywords to date offsets
         day_map = {
