@@ -527,7 +527,11 @@ class FlowHandler:
                 year = int(date_match.group(3)) if date_match.group(3) else now.year
                 try:
                     target_date = datetime(year, month, day).date()
-                except ValueError:
+                except ValueError as e:
+                    logger.warning(
+                        f"Invalid DD.MM.YYYY date in user input "
+                        f"(d={day} m={month} y={year}): {e}"
+                    )
                     return None
 
         if not target_date:

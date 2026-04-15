@@ -374,13 +374,13 @@ class RAGScheduler:
                     except (ConnectionError, OSError) as reconnect_err:
                         logger.warning(f"Pubsub reconnect failed, will retry next loop: {reconnect_err}")
                 except Exception as e:
-                    logger.error(f"Pub/sub error: {e}")
+                    logger.error(f"Pub/sub error: {e}", exc_info=True)
                     await asyncio.sleep(5)
 
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.error(f"Pubsub listener fatal error: {e}")
+            logger.error(f"Pubsub listener fatal error: {e}", exc_info=True)
 
     async def force_refresh(
         self,

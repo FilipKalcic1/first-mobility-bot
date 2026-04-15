@@ -102,16 +102,21 @@ class UnifiedSearch:
                 logger.info(f"Loaded {len(self._tool_documentation)} tool docs")
 
             # Load tool categories
+            cat_path = config_dir / "tool_categories.json"
             try:
-                cat_path = config_dir / "tool_categories.json"
                 with open(cat_path, 'r', encoding='utf-8') as f:
                     self._tool_categories = json.load(f)
                 logger.info("Loaded tool categories")
             except FileNotFoundError:
+                # Missing categories file silently degrades ranking; surface
+                # loudly so prod misconfigs don't get masked.
+                logger.error(
+                    f"tool_categories.json missing at {cat_path} — ranking will degrade"
+                )
                 self._tool_categories = {}
             except Exception as e:
                 err = SearchError(ErrorCode.TOOL_DOCS_NOT_LOADED, f"Failed to load tool categories: {e}")
-                logger.warning(str(err))
+                logger.error(str(err), exc_info=True)
                 self._tool_categories = {}
 
             # Pre-compute duplicate purposes for entity-specific description generation
