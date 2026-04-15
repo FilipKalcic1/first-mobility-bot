@@ -15,6 +15,7 @@ import os
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Dict, Any, Optional, Tuple, TYPE_CHECKING
 
 import redis as _redis_mod
@@ -101,19 +102,33 @@ def _push_clarify_log(entry: str) -> None:
     client.ltrim("clarify:log", 0, 499)
 
 
+class RouterAction(str, Enum):
+    """Allowed values for RouterDecision.action.
+
+    Inherits from str so existing `==` comparisons and JSON serialization
+    continue to work while giving callers a type-safe enum surface.
+    """
+    CONTINUE_FLOW = "continue_flow"
+    EXIT_FLOW = "exit_flow"
+    START_FLOW = "start_flow"
+    SIMPLE_API = "simple_api"
+    DIRECT_RESPONSE = "direct_response"
+    CLARIFY = "clarify"
+
+
 @dataclass
 class RouterDecision:
     """Result of unified routing decision."""
-    action: str  # continue_flow, exit_flow, start_flow, simple_api, direct_response, clarify
+    action: RouterAction
     tool: Optional[str] = None
     params: Dict[str, Any] = field(default_factory=dict)
     flow_type: Optional[str] = None  # booking, mileage, case
-    response: Optional[str] = None  # For direct_response
-    clarification: Optional[str] = None  # For clarify action
+    response: Optional[str] = None
+    clarification: Optional[str] = None
     reasoning: str = ""
     confidence: float = 0.0
     ambiguity_detected: bool = False
-    routing_tier: str = "full_search"  # Which tier handled this query
+    routing_tier: str = "full_search"
 
 
 # Single source of truth: tool_routing.py
@@ -332,7 +347,7 @@ class UnifiedRouter:
             span.set_attribute("routing.action", decision.action)
 
             # Extended clarify telemetry for production forensics
-            if decision.action == "clarify":
+            if decision.action == RouterAction.CLARIFY:
                 span.set_attribute("routing.clarify.clarification", decision.clarification or "")
                 span.set_attribute("routing.clarify.reasoning", decision.reasoning[:200])
                 if trace.get("ambiguity_result"):
@@ -361,7 +376,7 @@ class UnifiedRouter:
         if greeting_response:
             trace["tier"] = RoutingTier.DETERMINISTIC
             return RouterDecision(
-                action="direct_response",
+                action=RouterAction.DIRECT_RESPONSE,
                 response=greeting_response,
                 reasoning="Greeting detected",
                 confidence=1.0
@@ -372,7 +387,7 @@ class UnifiedRouter:
         if in_flow and self._check_exit_signal(query):
             trace["tier"] = RoutingTier.DETERMINISTIC
             return RouterDecision(
-                action="exit_flow",
+                action=RouterAction.EXIT_FLOW,
                 reasoning="Exit signal detected",
                 confidence=1.0
             )
@@ -387,7 +402,7 @@ class UnifiedRouter:
                 logger.info("UNIFIED ROUTER: 'show more' detected in flow, returning continue_flow")
                 trace["tier"] = RoutingTier.DETERMINISTIC
                 return RouterDecision(
-                    action="continue_flow",
+                    action=RouterAction.CONTINUE_FLOW,
                     reasoning="Show more items request in active flow",
                     confidence=1.0
                 )
@@ -398,7 +413,7 @@ class UnifiedRouter:
                     logger.info("UNIFIED ROUTER: Confirmation 'yes' detected, returning continue_flow")
                     trace["tier"] = RoutingTier.DETERMINISTIC
                     return RouterDecision(
-                        action="continue_flow",
+                        action=RouterAction.CONTINUE_FLOW,
                         reasoning="User confirmed in confirming state",
                         confidence=1.0
                     )
@@ -406,7 +421,7 @@ class UnifiedRouter:
                     logger.info("UNIFIED ROUTER: Confirmation 'no' detected, returning continue_flow")
                     trace["tier"] = RoutingTier.DETERMINISTIC
                     return RouterDecision(
-                        action="continue_flow",
+                        action=RouterAction.CONTINUE_FLOW,
                         reasoning="User cancelled in confirming state",
                         confidence=1.0
                     )
@@ -417,7 +432,7 @@ class UnifiedRouter:
                     logger.info("UNIFIED ROUTER: Item selection detected, returning continue_flow")
                     trace["tier"] = RoutingTier.DETERMINISTIC
                     return RouterDecision(
-                        action="continue_flow",
+                        action=RouterAction.CONTINUE_FLOW,
                         reasoning="User selected item by number/ordinal",
                         confidence=1.0
                     )
@@ -536,7 +551,7 @@ class UnifiedRouter:
 
         PRAVILO ZA DVOSMISLENOST:
         - Ako upit NE SPOMINJE specifični entitet (npr. vozila, troškovi, osobe),
-          koristi action="clarify" i pitaj korisnika koje podatke želi
+          koristi action=RouterAction.CLARIFY i pitaj korisnika koje podatke želi
         - Ako upit SPOMINJE entitet, odaberi alat za taj entitet
         - Primjer: "prosječna kilometraža" → entitet je vozila → get_Vehicles_Agg ili get_MasterData
         """
@@ -569,19 +584,19 @@ class UnifiedRouter:
         PRAVILA:
 
         1. AKO je korisnik U TIJEKU flow-a:
-        - Ako korisnik daje tražene parametre → action="continue_flow"
-        - Ako korisnik potvrđuje (Da/Ne) → action="continue_flow"
-        - Ako korisnik traži prikaz ostalih opcija ("pokaži ostala", "druga vozila") → action="continue_flow"
-        - Ako korisnik bira broj ("1", "2", "prvi") → action="continue_flow"
-        - SAMO ako korisnik EKSPLICITNO želi PREKINUTI flow → action="exit_flow"
+        - Ako korisnik daje tražene parametre → action=RouterAction.CONTINUE_FLOW
+        - Ako korisnik potvrđuje (Da/Ne) → action=RouterAction.CONTINUE_FLOW
+        - Ako korisnik traži prikaz ostalih opcija ("pokaži ostala", "druga vozila") → action=RouterAction.CONTINUE_FLOW
+        - Ako korisnik bira broj ("1", "2", "prvi") → action=RouterAction.CONTINUE_FLOW
+        - SAMO ako korisnik EKSPLICITNO želi PREKINUTI flow → action=RouterAction.EXIT_FLOW
         - PREPOZNAJ exit SAMO za: "ne želim ovo", "odustani od rezervacije", "zapravo nešto drugo"
         - "pokaži ostala", "koja još vozila", "više opcija" NIJE exit - to je continue_flow!
 
         2. AKO korisnik NIJE u flow-u:
-        - Ako treba pokrenuti flow (rezervacija, unos km, prijava štete) → action="start_flow"
-        - Ako je jednostavan upit (dohvat podataka) → action="simple_api"
-        - Ako je pozdrav ili zahvala → action="direct_response"
-        - Ako je upit PREVIŠE GENERIČAN (npr. "prosječna vrijednost" bez entiteta) → action="clarify"
+        - Ako treba pokrenuti flow (rezervacija, unos km, prijava štete) → action=RouterAction.START_FLOW
+        - Ako je jednostavan upit (dohvat podataka) → action=RouterAction.SIMPLE_API
+        - Ako je pozdrav ili zahvala → action=RouterAction.DIRECT_RESPONSE
+        - Ako je upit PREVIŠE GENERIČAN (npr. "prosječna vrijednost" bez entiteta) → action=RouterAction.CLARIFY
 
         3. ODABIR ALATA:
         - "unesi km", "upiši kilometražu", "mogu li upisati" → post_AddMileage (WRITE!)
@@ -601,14 +616,14 @@ class UnifiedRouter:
         - generic: za BILO KOJI drugi alat koji zahtijeva korisničke parametre
 
         5. GENERIC FLOW:
-        - POST/PUT/PATCH/DELETE alat koji NIJE booking/mileage/case → action="start_flow", flow_type="generic"
-        - GET alat gdje korisnik NIJE naveo potrebne parametre → action="start_flow", flow_type="generic"
+        - POST/PUT/PATCH/DELETE alat koji NIJE booking/mileage/case → action=RouterAction.START_FLOW, flow_type="generic"
+        - GET alat gdje korisnik NIJE naveo potrebne parametre → action=RouterAction.START_FLOW, flow_type="generic"
         - UVIJEK postavi "tool" polje kod generic flowa!
         - Primjeri: "kreiraj trošak" → flow_type="generic", tool="post_Expenses"
                     "ažuriraj servis" → flow_type="generic", tool="put_UpdateService"
 
         6. CLARIFY:
-        - Koristi action="clarify" SAMO kada je upit previše generičan
+        - Koristi action=RouterAction.CLARIFY SAMO kada je upit previše generičan
         - U "clarification" polju postavi pitanje koje će pomoći identificirati pravi alat
         - Primjer: "Za koje podatke želite izračunati statistiku? (vozila, troškovi, putovanja)"
 
@@ -742,7 +757,7 @@ class UnifiedRouter:
             logger.debug(f"Clarify log to Redis failed (non-critical): {log_err}")
 
         return RouterDecision(
-            action="clarify",
+            action=RouterAction.CLARIFY,
             clarification=clarification_text,
             reasoning=result.get("reasoning", "Query is ambiguous, need clarification"),
             confidence=float(result.get("confidence", 0.3)),
@@ -784,19 +799,19 @@ class UnifiedRouter:
                 f"ambiguous={ambiguity_result.is_ambiguous if ambiguity_result else False}"
             )
 
-            if action == "exit_flow" and not conversation_state:
+            if action == RouterAction.EXIT_FLOW and not conversation_state:
                 logger.warning(
                     f"LLM returned exit_flow but no active flow - "
                     f"converting to direct_response. Query: '{query[:40]}...'"
                 )
                 return RouterDecision(
-                    action="direct_response",
+                    action=RouterAction.DIRECT_RESPONSE,
                     response="Razumijem. Kako vam mogu pomoći?",
                     reasoning="LLM returned exit_flow but no active flow",
                     confidence=0.8,
                 )
 
-            if action == "clarify":
+            if action == RouterAction.CLARIFY:
                 return await self._handle_clarify_action(query, result, ambiguity_result)
 
             return RouterDecision(
@@ -891,7 +906,7 @@ class UnifiedRouter:
                 winner_metadata = tool_metadata_map.get(winner.tool_id)
                 flow_type = winner_metadata["flow_type"] if winner_metadata else "simple"
                 return RouterDecision(
-                    action="start_flow" if flow_type in (
+                    action=RouterAction.START_FLOW if flow_type in (
                         "booking", "mileage_input", "case_creation",
                         "delete_booking", "delete_case", "delete_trip",
                     ) else "simple_api",
@@ -928,7 +943,7 @@ class UnifiedRouter:
         # Ultimate fallback - ask for clarification instead of guessing
         logger.warning("FALLBACK: QueryRouter no match, asking for clarification")
         return RouterDecision(
-            action="direct_response",
+            action=RouterAction.DIRECT_RESPONSE,
             response=(
                 "Nisam siguran što tražite. Možete pitati za:\n"
                 "* Rezervaciju vozila\n"
@@ -996,7 +1011,7 @@ class UnifiedRouter:
                         pass
 
             return RouterDecision(
-                action="direct_response",
+                action=RouterAction.DIRECT_RESPONSE,
                 response=response_text,
                 reasoning=f"QueryRouter {path_type}: {qr_result.reason}",
                 confidence=confidence
@@ -1016,7 +1031,7 @@ class UnifiedRouter:
             }.get(flow_type, flow_type)
 
             return RouterDecision(
-                action="start_flow",
+                action=RouterAction.START_FLOW,
                 tool=qr_result.tool_name,
                 flow_type=canonical_flow,
                 reasoning=f"QueryRouter {path_type}: {qr_result.reason}",
@@ -1026,7 +1041,7 @@ class UnifiedRouter:
         # 3. Simple API calls (get_MasterData, get_VehicleCalendar, etc.)
         # flow_type: "simple" or "list"
         return RouterDecision(
-            action="simple_api",
+            action=RouterAction.SIMPLE_API,
             tool=qr_result.tool_name,
             flow_type=flow_type,
             reasoning=f"QueryRouter {path_type}: {qr_result.reason}",

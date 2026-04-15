@@ -33,7 +33,7 @@ from services.error_learning import ErrorLearningService
 from services.cost_tracker import CostTracker
 from services.response_extractor import get_response_extractor
 from services.query_router import get_query_router, RouteResult
-from services.unified_router import get_unified_router
+from services.unified_router import get_unified_router, RouterAction
 
 from .tool_handler import ToolHandler
 from .flow_handler import FlowHandler
@@ -542,24 +542,24 @@ class MessageEngine:
         logger.info(f"TIMING router: {int((_rt1-_rt0)*1000)}ms (since pws_start: {int((_rt1-_pws_start)*1000)}ms)")
 
         # Handle routing decisions
-        if decision.action == "direct_response":
+        if decision.action == RouterAction.DIRECT_RESPONSE:
             return decision.response or "Kako vam mogu pomoći?"
 
-        if decision.action == "clarify":
+        if decision.action == RouterAction.CLARIFY:
             logger.info(f"UNIFIED ROUTER: Clarification needed - '{decision.clarification}'")
             return decision.clarification or "Možete li mi reći više detalja o tome što tražite?"
 
-        if decision.action == "exit_flow":
+        if decision.action == RouterAction.EXIT_FLOW:
             if conv_manager.is_in_flow():
                 logger.info("UNIFIED ROUTER: Exiting flow, resetting state")
                 await conv_manager.reset()
                 new_decision = await self.unified_router.route(text, user_context, None)
 
-                if new_decision.action == "direct_response":
+                if new_decision.action == RouterAction.DIRECT_RESPONSE:
                     return new_decision.response or "Kako vam mogu pomoći?"
-                if new_decision.action == "start_flow":
+                if new_decision.action == RouterAction.START_FLOW:
                     return await self._handle_flow_start(new_decision, text, user_context, conv_manager)
-                if new_decision.action == "simple_api" and new_decision.tool:
+                if new_decision.action == RouterAction.SIMPLE_API and new_decision.tool:
                     route = RouteResult(
                         matched=True,
                         tool_name=new_decision.tool,
@@ -578,7 +578,7 @@ class MessageEngine:
                 logger.warning("UNIFIED ROUTER: exit_flow received but not in flow - ignoring")
                 return "Kako vam mogu pomoći?"
 
-        if decision.action == "continue_flow":
+        if decision.action == RouterAction.CONTINUE_FLOW:
             if state == ConversationState.SELECTING_ITEM:
                 return await self._flow_handler.handle_selection(
                     sender, text, user_context, conv_manager, self._handle_new_request
@@ -618,7 +618,7 @@ class MessageEngine:
                 logger.warning(f"STATE MISMATCH: {err}")
                 await conv_manager.reset()
 
-        if decision.action == "start_flow":
+        if decision.action == RouterAction.START_FLOW:
             # Guest users cannot use flows (booking, mileage, case) - require registration
             if user_context.get("is_guest") and not UserContextManager(user_context).person_id:
                 return (
@@ -627,7 +627,7 @@ class MessageEngine:
                 )
             return await self._handle_flow_start(decision, text, user_context, conv_manager)
 
-        if decision.action == "simple_api" and decision.tool:
+        if decision.action == RouterAction.SIMPLE_API and decision.tool:
             # Guest users: check if tool needs PersonId before calling API
             if user_context.get("is_guest") and not UserContextManager(user_context).person_id:
                 tool = self.registry.get_tool(decision.tool) if self.registry else None
