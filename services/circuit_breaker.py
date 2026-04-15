@@ -22,9 +22,10 @@ logger = logging.getLogger(__name__)
 
 class CircuitState(str, Enum):
     """Circuit breaker states."""
-    CLOSED = "closed"      # Normal operation
-    OPEN = "open"          # Failures detected - blocking calls
-    HALF_OPEN = "half_open"  # Testing if endpoint recovered
+    CLOSED = "closed"                    # Normal operation
+    OPEN = "open"                        # Failures detected - blocking calls
+    HALF_OPEN = "half_open"              # Cooldown elapsed, next caller may probe
+    HALF_OPEN_PROBING = "half_open_probing"  # A probe is in flight; block others
 
 
 @dataclass
@@ -61,7 +62,6 @@ class CircuitBreaker:
         """Initialize circuit breaker."""
         self.circuits: Dict[str, CircuitMetrics] = {}
         self._lock = asyncio.Lock()
-        self._half_open_in_progress: Dict[str, bool] = {}
         logger.info("CircuitBreaker initialized")
 
     async def call(self, endpoint_key: str, func, *args, **kwargs):
@@ -80,33 +80,24 @@ class CircuitBreaker:
             CircuitOpenError: If circuit is open
             Original exception: If function fails
         """
-        # Acquire lock for state check — hold through execution for HALF_OPEN safety
         async with self._lock:
             circuit = self._get_circuit(endpoint_key)
 
-            # Check if circuit is open
             if circuit.state == CircuitState.OPEN:
                 if self._should_attempt_reset(circuit):
-                    circuit.state = CircuitState.HALF_OPEN
-                    self._half_open_in_progress[endpoint_key] = True
-                    logger.info(f"Circuit HALF_OPEN: {endpoint_key}")
+                    circuit.state = CircuitState.HALF_OPEN_PROBING
+                    logger.info(f"Circuit HALF_OPEN (probing): {endpoint_key}")
                 else:
                     raise CircuitOpenError(
                         endpoint_key,
                         cooldown_seconds=self._time_until_reset(circuit),
                     )
-
-            # Prevent multiple concurrent calls through half-open gate
             elif circuit.state == CircuitState.HALF_OPEN:
-                if self._half_open_in_progress.get(endpoint_key, False):
-                    # A test call is already in flight — block subsequent callers
-                    raise CircuitOpenError(
-                        endpoint_key,
-                        cooldown_seconds=5.0,
-                    )
-
-        # Execute function outside lock (CLOSED state doesn't need serialization,
-        # HALF_OPEN is gated by _half_open_in_progress flag set under lock)
+                # Cooldown already elapsed — take the probe slot.
+                circuit.state = CircuitState.HALF_OPEN_PROBING
+            elif circuit.state == CircuitState.HALF_OPEN_PROBING:
+                # A probe is already in flight; block subsequent callers.
+                raise CircuitOpenError(endpoint_key, cooldown_seconds=5.0)
         try:
             result = await func(*args, **kwargs)
             await self._record_success(endpoint_key)
@@ -124,18 +115,14 @@ class CircuitBreaker:
             circuit.failure_count = 0
             circuit.last_success_time = time.time()
 
-            # Release the half-open gate so the next probe can run; the
-            # lock above already serializes this with the call-entry check,
-            # so there's no race window for a concurrent sneak-through.
-            self._half_open_in_progress[endpoint_key] = False
-
-            if (
-                circuit.state == CircuitState.HALF_OPEN
-                and circuit.success_count >= self.SUCCESS_THRESHOLD_TO_RESET
-            ):
-                circuit.state = CircuitState.CLOSED
-                circuit.opened_at = None
-                logger.info(f"Circuit CLOSED: {endpoint_key}")
+            if circuit.state == CircuitState.HALF_OPEN_PROBING:
+                if circuit.success_count >= self.SUCCESS_THRESHOLD_TO_RESET:
+                    circuit.state = CircuitState.CLOSED
+                    circuit.opened_at = None
+                    logger.info(f"Circuit CLOSED: {endpoint_key}")
+                else:
+                    # Probe succeeded but threshold not yet met — release the slot.
+                    circuit.state = CircuitState.HALF_OPEN
 
     async def _record_failure(self, endpoint_key: str) -> None:
         """Record failed call."""
@@ -145,13 +132,11 @@ class CircuitBreaker:
             circuit.success_count = 0
             circuit.last_failure_time = time.time()
 
-            # A failure during the HALF_OPEN probe means the endpoint is still
-            # unhealthy — trip the breaker back to OPEN immediately rather than
-            # waiting for failure_count to hit the threshold a second time.
-            if circuit.state == CircuitState.HALF_OPEN:
+            # A failure during probe means the endpoint is still unhealthy —
+            # trip the breaker back to OPEN immediately.
+            if circuit.state == CircuitState.HALF_OPEN_PROBING:
                 circuit.state = CircuitState.OPEN
                 circuit.opened_at = time.time()
-                self._half_open_in_progress[endpoint_key] = False
                 logger.warning(
                     f"🔴 Circuit re-OPEN after HALF_OPEN probe failure: {endpoint_key}"
                 )
@@ -160,7 +145,6 @@ class CircuitBreaker:
             if circuit.failure_count >= self.FAILURE_THRESHOLD:
                 circuit.state = CircuitState.OPEN
                 circuit.opened_at = time.time()
-                self._half_open_in_progress[endpoint_key] = False
                 logger.warning(
                     f"🔴 Circuit OPEN: {endpoint_key} "
                     f"(failures: {circuit.failure_count})"
