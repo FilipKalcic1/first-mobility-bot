@@ -46,7 +46,14 @@ OUT_PATH = Path(os.getenv("PARAPHRASE_OUT", str(_DEFAULT_OUT)))
 if not OUT_PATH.is_absolute():
     OUT_PATH = PROJECT_ROOT / OUT_PATH
 SEED = int(os.getenv("PARAPHRASE_SEED", "42"))
-SAMPLE_SIZE = 100
+SAMPLE_SIZE = int(os.getenv("PARAPHRASE_SAMPLE_SIZE", "100"))
+# Comma-separated indices to exclude from random draw — used to produce
+# held-out benchmark splits that don't overlap prior seeds. Indices in
+# MUST_INCLUDE_INDICES are never excluded.
+PARAPHRASE_EXCLUDE = {
+    int(x) for x in os.getenv("PARAPHRASE_EXCLUDE_INDICES", "").split(",")
+    if x.strip().isdigit()
+}
 MUST_INCLUDE_INDICES = [134, 314, 453]
 PARAPHRASES_PER_TOOL = 3
 MAX_RETRIES_PER_TOOL = 5
@@ -348,8 +355,14 @@ def select_tools(tool_doc: dict) -> list:
 
     random.seed(SEED)
     random_indices = set(MUST_INCLUDE_INDICES)
+    excluded = PARAPHRASE_EXCLUDE - set(MUST_INCLUDE_INDICES)
+    if excluded:
+        print(f"  Excluding {len(excluded)} indices from prior seeds")
     while len(random_indices) < SAMPLE_SIZE:
-        random_indices.add(random.randint(0, 949))
+        idx = random.randint(0, 949)
+        if idx in excluded:
+            continue
+        random_indices.add(idx)
 
     indices = sorted(random_indices)
     return [(idx, all_ids[idx]) for idx in indices]

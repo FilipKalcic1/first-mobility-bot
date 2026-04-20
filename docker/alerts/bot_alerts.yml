@@ -1,7 +1,15 @@
+# Prometheus alert rules for the MobilityOne WhatsApp bot.
+#
+# Only includes alerts backed by metrics the bot actually exports
+# (see services/ai_orchestrator.py, services/unified_router.py,
+# services/faiss_vector_store.py, main.py).
+#
+# Alerts that required redis_exporter / cAdvisor / blackbox-exporter were
+# removed — add them back alongside the exporters if you deploy them.
+
 groups:
   - name: bot_availability
     rules:
-      # Health check failures
       - alert: BotAPIDown
         expr: up{job="mobility-api"} == 0
         for: 1m
@@ -11,35 +19,8 @@ groups:
           summary: "Bot API is down"
           description: "Bot API has been unreachable for over 1 minute."
 
-      - alert: BotHealthUnhealthy
-        expr: probe_success{job="mobility-api"} == 0
-        for: 2m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Bot health check failing"
-
-      # Redis failures
-      - alert: RedisDown
-        expr: up{job="redis"} == 0
-        for: 30s
-        labels:
-          severity: critical
-        annotations:
-          summary: "Redis is down - message queue unavailable"
-
-      # Database connection failures
-      - alert: DatabaseConnectionErrors
-        expr: rate(http_requests_total{endpoint="/health",status="503"}[5m]) > 0
-        for: 2m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Database health checks failing"
-
   - name: bot_performance
     rules:
-      # High API latency
       - alert: HighAPILatency
         expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 10
         for: 5m
@@ -49,7 +30,6 @@ groups:
           summary: "API p95 latency exceeds 10 seconds"
           description: "95th percentile response time: {{ $value }}s"
 
-      # LLM latency spike
       - alert: HighLLMLatency
         expr: histogram_quantile(0.95, rate(llm_request_duration_seconds_bucket[5m])) > 15
         for: 3m
@@ -59,7 +39,6 @@ groups:
           summary: "LLM p95 latency exceeds 15 seconds"
           description: "95th percentile LLM call time: {{ $value }}s"
 
-      # LLM error rate
       - alert: HighLLMErrorRate
         expr: rate(llm_requests_total{status=~"error|timeout"}[5m]) / rate(llm_requests_total[5m]) > 0.1
         for: 5m
@@ -69,7 +48,6 @@ groups:
           summary: "LLM error rate exceeds 10%"
           description: "Error rate: {{ $value | humanizePercentage }}"
 
-      # LLM circuit breaker open
       - alert: LLMCircuitBreakerOpen
         expr: llm_circuit_breaker_open == 1
         for: 1m
@@ -78,7 +56,6 @@ groups:
         annotations:
           summary: "LLM circuit breaker is OPEN - AI unavailable"
 
-      # Rate limit hits
       - alert: HighRateLimitHits
         expr: rate(llm_rate_limit_hits_total[5m]) > 0.5
         for: 3m
@@ -90,7 +67,6 @@ groups:
 
   - name: bot_cost
     rules:
-      # Daily cost budget exceeded
       - alert: DailyCostBudgetExceeded
         expr: increase(llm_cost_usd_total[24h]) > 50
         labels:
@@ -99,7 +75,6 @@ groups:
           summary: "Daily LLM cost budget exceeded ($50)"
           description: "Current daily cost: ${{ $value | humanize }}"
 
-      # Cost spike (hourly rate implies >$100/day)
       - alert: CostSpike
         expr: rate(llm_cost_usd_total[1h]) * 24 > 100
         for: 15m
@@ -109,52 +84,8 @@ groups:
           summary: "LLM cost spike detected - projected >$100/day"
           description: "Projected daily cost: ${{ $value | humanize }}"
 
-  - name: bot_queue
-    rules:
-      # Message queue backlog
-      - alert: HighQueueBacklog
-        expr: redis_stream_length{stream="whatsapp_stream_inbound"} > 100
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Message queue backlog exceeds 100"
-          description: "Queue depth: {{ $value }} messages"
-
-      # Dead letter queue growing
-      - alert: DLQGrowing
-        expr: redis_list_length{key="dlq:inbound"} > 10
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Dead letter queue has {{ $value }} failed messages"
-
-  - name: bot_resources
-    rules:
-      # High memory usage
-      - alert: HighMemoryUsage
-        expr: container_memory_usage_bytes{name=~".*worker.*|.*api.*"} / container_spec_memory_limit_bytes > 0.85
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Container memory usage >85%"
-          description: "Container {{ $labels.name }}: {{ $value | humanizePercentage }}"
-
-      # High CPU usage
-      - alert: HighCPUUsage
-        expr: rate(container_cpu_usage_seconds_total{name=~".*worker.*|.*api.*"}[5m]) > 0.8
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Container CPU usage >80%"
-          description: "Container {{ $labels.name }}: {{ $value | humanizePercentage }}"
-
   - name: bot_routing
     rules:
-      # Clarify rate too high — users hitting ambiguous queries
       - alert: HighClarifyRate
         expr: |
           (
@@ -171,7 +102,6 @@ groups:
             clarify actions. Users may be using vocabulary that the entity
             detector does not recognize. Check /admin/clarify/log for details.
 
-      # Sustained high clarify rate — potential regression
       - alert: SustainedHighClarifyRate
         expr: |
           (

@@ -40,34 +40,8 @@ _DIACRITIC_TABLE: Final = str.maketrans(DIACRITIC_MAP)
 # Synonym map (canonical forms for common Croatian variations)
 # ---------------------------------------------------------------------------
 
-SYNONYM_MAP: Final[Dict[str, str]] = {
-    # Vehicle synonyms → vozilo/vozila
-    'auto': 'vozilo',
-    'auta': 'vozila',
-    'automobil': 'vozilo',
-    'automobili': 'vozila',
-    'automobila': 'vozila',
-    'kola': 'vozilo',
-    'kolima': 'vozilima',
-
-    # Phone synonyms → telefon
-    'mobitel': 'telefon',
-    'mobitela': 'telefona',
-    'gsm': 'telefon',
-    'tel': 'telefon',
-
-    # Mileage synonyms → kilometara
-    'kilometraza': 'kilometara',
-    'km': 'kilometara',
-
-    # Common typos → corrected form
-    'telfon': 'telefon',
-    'telef': 'telefon',
-    'rezevacija': 'rezervacija',
-    'rezevirati': 'rezervirati',
-    'osteio': 'ostetio',
-    'ostetiti': 'ostetio',
-}
+from services.config_loader import load_json as _load_json
+SYNONYM_MAP: Final[Dict[str, str]] = _load_json("linguistic", "typo_synonyms.json")["synonym_map"]
 
 # Pre-compiled synonym pattern with word boundaries — handles punctuation correctly.
 # Sorted longest-first so "automobili" matches before "auto".

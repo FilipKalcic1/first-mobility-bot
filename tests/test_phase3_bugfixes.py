@@ -149,8 +149,6 @@ def _import_unified_router():
             "services.openai_client",
             "services.circuit_breaker",
             "services.ambiguity_detector",
-            "services.query_type_classifier",
-            "services.intent_classifier",
             "services.llm_reranker",
         ]:
             _ensure_stub(dep)

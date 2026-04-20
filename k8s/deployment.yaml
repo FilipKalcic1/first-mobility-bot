@@ -1,82 +1,61 @@
 # =============================================================================
-# MobilityOne WhatsApp Bot - Kubernetes Deployment
-# Version: 2.0 — Resource-Optimized
+# MobilityOne WhatsApp Bot — Single-Pod Deployment
 #
-# RESOURCE STRATEGY:
-# - Burstable QoS (requests < limits) to minimize reserved resources
-# - CPU requests minimal: bot is I/O-bound (waits for Azure OpenAI API)
-# - Memory requests based on ACTUAL docker stats measurements (2026-03-18):
-#     API:    323.5 MB steady state (0.10% CPU)
-#     Worker: 345.1 MB steady state (0.07% CPU)
-#     Admin:   65.7 MB steady state (0.10% CPU)
-#     Redis:   10.3 MB steady state (0.34% CPU)
-# - Limits set higher to allow startup spikes (FAISS/ML model loading)
+# CONSTRAINT: 1 replica, 1 CPU limit, 1 GiB memory limit for the whole Pod.
 #
-# TOTAL RESERVED: 200m CPU + 1440Mi RAM (API×2 + Worker + Admin + Redis)
+# DESIGN:
+# - One Pod with two sidecar containers (api + worker) sharing localhost +
+#   the embeddings cache PVC. No horizontal scaling, no KEDA.
+# - API exposes :8000 for Infobip webhooks; worker is background-only.
+# - Migration runs as a separate Job (one-shot). The Deployment does NOT
+#   gate on it — apply the Job, wait for completion, then roll the Deployment.
 #
-# DB CONNECTION WARNING: See configmap.yaml for connection pool math.
-# With maxReplicaCount=5 workers, burst peak = 240 DB connections.
-# Ensure PostgreSQL max_connections >= 300 or use PgBouncer.
+# BUDGET (measured docker stats 2026-03-18 + headroom):
+#   requests:  api 50m/350Mi  + worker 50m/350Mi  = 100m / 700Mi
+#   limits:    api 400m/400Mi + worker 500m/500Mi = 900m / 900Mi
+# Both stay below the Pod ceiling (1000m / 1024Mi) with ~12% headroom for
+# kubelet/sidecar overhead.
 # =============================================================================
 
 ---
-# =============================================================================
-# API DEPLOYMENT - Receives WhatsApp webhooks
-# =============================================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mobility-api
+  name: mobility-bot
   labels:
     app: mobility-bot
-    component: api
 spec:
-  replicas: 2  # HA: 2 replicas for zero-downtime deploys and node failure tolerance
+  replicas: 1
   strategy:
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0  # Zero downtime: new pod must be ready before old is killed
+    type: Recreate  # Single replica + RWO PVC — rolling update would deadlock on volume attach.
   selector:
     matchLabels:
       app: mobility-bot
-      component: api
   template:
     metadata:
       labels:
         app: mobility-bot
-        component: api
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8000"
         prometheus.io/path: "/metrics"
     spec:
-      # NOTE: DB migrations are handled by a separate Job (see below).
-      # Do NOT use init containers for migrations - with multiple replicas,
-      # concurrent alembic runs cause lock conflicts.
-
-      # Spread API pods across nodes to survive single-node failure
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app: mobility-bot
-                    component: api
-                topologyKey: kubernetes.io/hostname
-
-      # Pod-level security: enforce non-root, read-only filesystem
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
 
+      terminationGracePeriodSeconds: 120  # Worker drains in-flight messages (90s timeout + 30s buffer)
+
       containers:
+        # -----------------------------------------------------------------
+        # API container — FastAPI on :8000, receives Infobip webhooks
+        # -----------------------------------------------------------------
         - name: api
           image: ghcr.io/mobilityone/bot:latest
-          imagePullPolicy: Always  # Required when using :latest tag
+          imagePullPolicy: Always
+          command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -93,35 +72,24 @@ spec:
                 name: mobility-secrets
             - configMapRef:
                 name: mobility-config
-
-          # Burstable QoS — measured: 0.10% CPU, 323.5MB RSS (docker stats 2026-03-18)
-          # Bot is I/O-bound (waits for Azure API), CPU barely used
           resources:
             requests:
-              cpu: "50m"        # 0.05 CPU reserved (measured: 0.10%)
-              memory: "400Mi"   # 323MB baseline + 77MB scheduling headroom
+              cpu: "50m"
+              memory: "350Mi"
             limits:
-              cpu: "500m"       # Burst for startup (FAISS/ML model loading)
-              memory: "512Mi"   # 323MB + 189MB headroom for spikes
-
-          # Volume mounts for shared cache + writable tmpfs
+              cpu: "400m"
+              memory: "400Mi"
           volumeMounts:
             - name: cache-volume
               mountPath: /app/.cache
-            - name: models-volume
-              mountPath: /app/models
-            - name: tmp
+            - name: tmp-api
               mountPath: /tmp
-
-          # Startup probe: 60 × 10s = 10 min window (longer for low-CPU startup)
           startupProbe:
             httpGet:
               path: /health
               port: 8000
             failureThreshold: 60
             periodSeconds: 10
-
-          # Liveness: only checked AFTER startup probe succeeds
           livenessProbe:
             httpGet:
               path: /health
@@ -129,7 +97,6 @@ spec:
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
-
           readinessProbe:
             httpGet:
               path: /ready
@@ -137,58 +104,14 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 3
-
-          # Graceful shutdown
           lifecycle:
             preStop:
               exec:
                 command: ["/bin/sh", "-c", "sleep 10"]
 
-      # Volumes for shared cache (speeds up pod startup from 120s to <5s)
-      volumes:
-        - name: cache-volume
-          persistentVolumeClaim:
-            claimName: mobility-cache-pvc
-        - name: models-volume
-          persistentVolumeClaim:
-            claimName: mobility-cache-pvc  # Same PVC, different mount path
-        - name: tmp
-          emptyDir:
-            medium: Memory
-            sizeLimit: 10Mi
-
-      terminationGracePeriodSeconds: 30
-
----
-# =============================================================================
-# WORKER DEPLOYMENT - Processes messages from Redis queue
-# =============================================================================
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mobility-worker
-  labels:
-    app: mobility-bot
-    component: worker
-spec:
-  replicas: 1  # KEDA scales based on queue depth
-  selector:
-    matchLabels:
-      app: mobility-bot
-      component: worker
-  template:
-    metadata:
-      labels:
-        app: mobility-bot
-        component: worker
-    spec:
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
-
-      containers:
+        # -----------------------------------------------------------------
+        # Worker container — consumes whatsapp_stream_inbound
+        # -----------------------------------------------------------------
         - name: worker
           image: ghcr.io/mobilityone/bot:latest
           imagePullPolicy: Always
@@ -206,166 +129,54 @@ spec:
                 name: mobility-secrets
             - configMapRef:
                 name: mobility-config
-
-          # Burstable QoS — measured: 0.07% CPU, 345.1MB RSS (docker stats 2026-03-18)
-          # Worker is purely I/O-bound (waiting for Azure OpenAI API)
-          # Peak under 10 concurrent: ~405MB, async I/O adds negligible memory
           resources:
             requests:
-              cpu: "50m"        # 0.05 CPU reserved (measured: 0.07%)
-              memory: "416Mi"   # 345MB baseline + 71MB scheduling headroom
+              cpu: "50m"
+              memory: "350Mi"
             limits:
-              cpu: "500m"       # Burst for FAISS/ML model loading at startup
-              memory: "512Mi"   # 345MB + 167MB headroom for concurrent spikes
-
-          # Volume mounts for shared cache + writable tmpfs for DLQ fallback
+              cpu: "500m"
+              memory: "500Mi"
           volumeMounts:
             - name: cache-volume
               mountPath: /app/.cache
-            - name: models-volume
-              mountPath: /app/models
-            - name: tmp
+            - name: tmp-worker
               mountPath: /tmp
-
-          # Startup probe: 60 × 10s = 10 min window (FAISS/ML loading at low CPU)
           startupProbe:
             exec:
               command:
                 - /bin/sh
                 - -c
-                - 'python -c "import os,redis; r=redis.from_url(os.environ[\"REDIS_URL\"]); r.ping()"'
+                - 'python -c "import os,redis; r=redis.from_url(os.environ[\"REDIS_URL\"]); r.ping(); r.close()"'
             failureThreshold: 60
             periodSeconds: 10
-
-          # Liveness: only checked AFTER startup probe succeeds
           livenessProbe:
             exec:
               command:
                 - /bin/sh
                 - -c
-                - 'python -c "import os,redis; r=redis.from_url(os.environ[\"REDIS_URL\"]); r.ping()"'
+                - 'python -c "import os,redis; r=redis.from_url(os.environ[\"REDIS_URL\"]); r.ping(); r.close()"'
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
 
-          readinessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - 'python -c "import os,redis; r=redis.from_url(os.environ[\"REDIS_URL\"]); r.ping()"'
-            periodSeconds: 15
-            timeoutSeconds: 10
-            failureThreshold: 3
-
-      # Volumes for shared cache
       volumes:
         - name: cache-volume
           persistentVolumeClaim:
             claimName: mobility-cache-pvc
-        - name: models-volume
-          persistentVolumeClaim:
-            claimName: mobility-cache-pvc
-        - name: tmp
-          emptyDir:
-            medium: Memory
-            sizeLimit: 50Mi  # DLQ fallback file + temporary data
-
-      terminationGracePeriodSeconds: 120  # Must exceed 90s message timeout + 30s safety buffer
-
----
-# =============================================================================
-# ADMIN API DEPLOYMENT - Internal admin interface
-# =============================================================================
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mobility-admin
-  labels:
-    app: mobility-bot
-    component: admin
-spec:
-  replicas: 1  # Single replica for admin
-  selector:
-    matchLabels:
-      app: mobility-bot
-      component: admin
-  template:
-    metadata:
-      labels:
-        app: mobility-bot
-        component: admin
-    spec:
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
-
-      containers:
-        - name: admin
-          image: ghcr.io/mobilityone/bot:latest
-          imagePullPolicy: Always
-          command: ["uvicorn", "admin_api:app", "--host", "0.0.0.0", "--port", "8080"]
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          ports:
-            - containerPort: 8080
-              name: http
-          env:
-            - name: SERVICE_TYPE
-              value: "admin"
-          envFrom:
-            - secretRef:
-                name: mobility-secrets
-            - configMapRef:
-                name: mobility-config
-
-          volumeMounts:
-            - name: tmp
-              mountPath: /tmp
-
-          # Burstable QoS — measured: 0.10% CPU, 65.7MB RSS (docker stats 2026-03-18)
-          resources:
-            requests:
-              cpu: "25m"        # 0.025 CPU (admin barely used)
-              memory: "96Mi"    # 65.7MB baseline + 30MB headroom
-            limits:
-              cpu: "200m"       # Burst for occasional admin requests
-              memory: "192Mi"
-
-          startupProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            failureThreshold: 30
-            periodSeconds: 10
-
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            periodSeconds: 15
-
-          readinessProbe:
-            httpGet:
-              path: /ready
-              port: 8080
-            periodSeconds: 5
-
-      volumes:
-        - name: tmp
+        - name: tmp-api
           emptyDir:
             medium: Memory
             sizeLimit: 10Mi
+        - name: tmp-worker
+          emptyDir:
+            medium: Memory
+            sizeLimit: 50Mi  # DLQ fallback file when Redis is down
 
 ---
 # =============================================================================
-# DB MIGRATION JOB - Run before deploying new versions
-# Usage: kubectl apply -f deployment.yaml && kubectl wait --for=condition=complete job/mobility-db-migrate
+# DB MIGRATION JOB — apply first, wait for completion, then roll the Deployment:
+#   kubectl apply -f k8s/deployment.yaml
+#   kubectl wait --for=condition=complete --timeout=5m job/mobility-db-migrate
 # =============================================================================
 apiVersion: batch/v1
 kind: Job
@@ -376,7 +187,7 @@ metadata:
     component: migration
 spec:
   backoffLimit: 3
-  ttlSecondsAfterFinished: 300  # Clean up after 5 minutes
+  ttlSecondsAfterFinished: 300
   template:
     metadata:
       labels:
@@ -418,18 +229,3 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 10Mi
-
----
-# =============================================================================
-# POD DISRUPTION BUDGET - Ensure availability during updates
-# =============================================================================
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: mobility-api-pdb
-spec:
-  minAvailable: 1  # At least 1 API pod must stay up during drain/upgrades (requires replicas≥2)
-  selector:
-    matchLabels:
-      app: mobility-bot
-      component: api

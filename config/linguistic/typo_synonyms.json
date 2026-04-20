@@ -1,0 +1,23 @@
+{
+  "synonym_map": {
+    "auto": "vozilo",
+    "auta": "vozila",
+    "automobil": "vozilo",
+    "automobili": "vozila",
+    "automobila": "vozila",
+    "kola": "vozilo",
+    "kolima": "vozilima",
+    "mobitel": "telefon",
+    "mobitela": "telefona",
+    "gsm": "telefon",
+    "tel": "telefon",
+    "kilometraza": "kilometara",
+    "km": "kilometara",
+    "telfon": "telefon",
+    "telef": "telefon",
+    "rezevacija": "rezervacija",
+    "rezevirati": "rezervirati",
+    "osteio": "ostetio",
+    "ostetiti": "ostetio"
+  }
+}

@@ -108,12 +108,16 @@ class ToolFamilyIndex:
             method_key = f"{method}_{variant}"
             if method_key in family:
                 return family[method_key]
-            # For delete/post/put, the variant is usually "id"
             if variant == "list":
-                # delete/post on the base entity
+                # Try base entity variant (delete/post on collection)
                 method_key = f"{method}_list"
                 if method_key in family:
                     return family[method_key]
+                # PUT/PATCH always target a single entity by ID
+                if method in ("put", "patch"):
+                    method_key = f"{method}_id"
+                    if method_key in family:
+                        return family[method_key]
 
         # Fallback to simple family (GET)
         simple_family = self.families.get(entity_lower, {})
@@ -124,11 +128,34 @@ class ToolFamilyIndex:
             alt = "agg" if variant == "groupby" else "groupby"
             result = simple_family.get(alt)
 
+        # Single-tool family fallback: if entity has exactly one tool and
+        # we couldn't match the variant, return it (e.g. persondata has only
+        # get_PersonData_personIdOrEmail — "list" won't match but it's the
+        # only option).
+        if not result and len(simple_family) == 1:
+            result = next(iter(simple_family.values()))
+
         return result
 
     def get_family_tools(self, entity: str) -> Dict[str, str]:
         """Get all tools in an entity family."""
         return self.families.get(entity.lower(), {})
+
+    def get_extended_family_tools(self, entity: str) -> Dict[str, str]:
+        """Get tools from the entity family AND prefix-related families.
+
+        E.g., "equipment" → equipment + equipmentcalendar + equipmenttypes tools.
+        Currently unused — kept for future entity-expansion experiments.
+        """
+        entity_lower = entity.lower()
+        result = dict(self.families.get(entity_lower, {}))
+        for existing_entity, family in self.families.items():
+            if existing_entity != entity_lower and existing_entity.startswith(entity_lower):
+                for variant, tool_id in family.items():
+                    prefixed_key = f"{existing_entity}_{variant}"
+                    if prefixed_key not in result:
+                        result[prefixed_key] = tool_id
+        return result
 
     def get_all_entities(self) -> List[str]:
         """Get all entity keys."""

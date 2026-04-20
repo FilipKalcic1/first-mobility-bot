@@ -227,8 +227,8 @@ async def run_benchmark(us, data: dict) -> dict:
                     "intent": response.intent.value if hasattr(response.intent, "value") else str(response.intent),
                 })
 
-            # Progress every 30 queries
-            if query_idx % 30 == 0:
+            # Progress every 10 queries
+            if query_idx % 10 == 0:
                 print(f"  [{query_idx}/{total_queries}] "
                       f"Top-1={results['top1_hits']}/{query_idx} "
                       f"Top-5={results['top5_hits']}/{query_idx} "

@@ -692,3 +692,45 @@ async def webhook_debug(request: Request):
         diag["redis"]["status"] = f"error: {e}"
 
     return diag
+
+
+@router.get("/whatsapp/routing-log")
+async def routing_accuracy_log(request: Request):
+    """
+    Production routing accuracy log — last 100 routing decisions.
+
+    SECURED: Requires ?token=ADMIN_TOKEN query parameter.
+    Optional: ?limit=N (default 100, max 500)
+    """
+    token = request.query_params.get("token", "")
+    expected_tokens = set()
+    for i in range(1, 5):
+        env_token = os.environ.get(f"ADMIN_TOKEN_{i}")
+        if env_token:
+            expected_tokens.add(env_token)
+
+    token_bytes = (token or "").encode()
+    valid = False
+    for stored in expected_tokens:
+        if hmac.compare_digest(token_bytes, stored.encode()):
+            valid = True
+    if not expected_tokens or not valid:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    limit = min(int(request.query_params.get("limit", "100")), 500)
+
+    try:
+        redis_client = await get_redis()
+        raw_entries = await redis_client.lrange("routing:accuracy_log", 0, limit - 1)
+        entries = []
+        for raw in raw_entries:
+            try:
+                entries.append(json.loads(raw))
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return {
+            "count": len(entries),
+            "entries": entries,
+        }
+    except Exception as e:
+        return {"error": str(e), "count": 0, "entries": []}

@@ -1,0 +1,26 @@
+# =============================================================================
+# Kustomize entrypoint — apply with:
+#   kubectl apply -k k8s/
+# Then wait for the migration Job and check pod readiness:
+#   kubectl wait --for=condition=complete --timeout=5m job/mobility-db-migrate
+#   kubectl rollout status deployment/mobility-bot
+# =============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: mobility-bot
+      app.kubernetes.io/part-of: mobilityone
+    includeSelectors: true
+
+resources:
+  - configmap.yaml
+  - sealed-secrets.yaml
+  - pvc.yaml
+  - redis.yaml       # Remove when switching to managed Redis
+  - deployment.yaml
+  - service.yaml
+  - monitoring.yaml  # ServiceMonitor + PrometheusRule + Grafana dashboard
+                     # Requires kube-prometheus-stack installed in the cluster.

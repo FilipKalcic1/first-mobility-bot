@@ -11,6 +11,7 @@ from typing import List, Optional, Dict
 from dataclasses import dataclass
 
 from config import get_settings
+from services.config_loader import load_text
 from services.text_normalizer import sanitize_for_llm
 from services.utils.llm_json import parse_llm_json
 
@@ -51,9 +52,8 @@ async def rerank_with_llm(
 
     # Build candidate descriptions
     candidate_info = []
-    for i, c in enumerate(candidates[:10]):  # Max 10 candidates
+    for i, c in enumerate(candidates[:20]):  # Max 20 candidates
         tool_id = c.get('tool_id', '')
-        score = c.get('score', 0)
 
         # Get tool description: prefer tool_documentation, fall back to candidate's own description
         description = ""
@@ -66,8 +66,7 @@ async def rerank_with_llm(
         candidate_info.append({
             "index": i + 1,
             "tool_id": tool_id,
-            "faiss_score": round(score, 4),
-            "description": description[:200] if description else "N/A"
+            "description": description[:300] if description else "N/A"
         })
 
     # Build prompt
@@ -78,37 +77,39 @@ FAISS pretraga je vratila sljedeće kandidate (sortirano po sličnosti):
 
 {json.dumps(candidate_info, ensure_ascii=False, indent=2)}
 
-Tvoj zadatak je odabrati TOČAN alat za korisnikov upit.
+Tvoj zadatak je POREDATI kandidate po relevantnosti za korisnikov upit.
 
 VAŽNA PRAVILA:
-1. Ako korisnik traži "NAJNOVIJE" ili "LATEST" - odaberi alat s "Latest" u imenu
-2. Ako korisnik traži "DOKUMENT" nekog entiteta - odaberi alat s "_documents" ili "_documentId"
-3. Ako korisnik traži "METAPODATKE" - odaberi alat s "_metadata"
-4. Ako korisnik traži "POTPUNO ZAMIJENI" - odaberi PUT, ne PATCH
-5. Ako korisnik traži "DJELOMIČNO AŽURIRAJ" - odaberi PATCH, ne PUT
-6. Ako korisnik traži "VIŠE STAVKI ODJEDNOM" - odaberi "_multipatch"
+{load_text("flow", "reranker_domain_rules.txt")}
 
 Vrati JSON odgovor u formatu:
 {{
-    "best_match": <index najboljeg alata (1-10)>,
+    "ranking": [<index1>, <index2>, <index3>, <index4>, <index5>],
     "confidence": <0.0-1.0>,
     "reasoning": "<kratko obrazloženje>"
 }}
 
+"ranking" sadrži indekse (1-{len(candidate_info)}) od najboljeg do najgoreg. Navedi barem 5 indeksa.
 Odgovori SAMO s JSON-om, bez dodatnog teksta."""
 
     try:
-        from services.openai_client import get_openai_client
-        client = get_openai_client()
+        settings = _get_settings()
+        from services.openai_client import get_reranker_client
+        client = get_reranker_client()
+
+        # Use gpt-4o via direct OpenAI if configured, else Azure gpt-4o-mini
+        model = (settings.OPENAI_RERANKER_MODEL
+                 if settings.OPENAI_RERANKER_API_KEY
+                 else settings.AZURE_OPENAI_DEPLOYMENT_NAME)
 
         response = await client.chat.completions.create(
-            model=_get_settings().AZURE_OPENAI_DEPLOYMENT_NAME,
+            model=model,
             messages=[
                 {"role": "system", "content": "Ti si ekspert za odabir pravog API alata. Odgovaraš SAMO u JSON formatu."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0,
-            max_tokens=200
+            max_tokens=400
         )
 
         # Persist to Redis via CostTracker
@@ -126,32 +127,35 @@ Odgovori SAMO s JSON-om, bez dodatnog teksta."""
         if result is None:
             raise json.JSONDecodeError("No JSON object found in LLM response", response_text, 0)
 
-        best_idx = result.get("best_match", 1) - 1  # Convert to 0-indexed
         confidence = result.get("confidence", 0.5)
         reasoning = result.get("reasoning", "")
 
-        if 0 <= best_idx < len(candidates):
-            best_candidate = candidates[best_idx]
+        ranking = result.get("ranking")
+        if not ranking:
+            best_idx = result.get("best_match", 1) - 1
+            ranking = [best_idx + 1]
 
-            # Return reranked results with best match first
-            reranked = [
-                RerankResult(
-                    tool_id=best_candidate.get('tool_id', ''),
+        reranked = []
+        seen = set()
+        for idx_1based in ranking:
+            idx = int(idx_1based) - 1
+            if 0 <= idx < len(candidates) and idx not in seen:
+                seen.add(idx)
+                reranked.append(RerankResult(
+                    tool_id=candidates[idx].get('tool_id', ''),
                     confidence=confidence,
-                    reasoning=reasoning
-                )
-            ]
+                    reasoning=reasoning if len(reranked) == 0 else "LLM ranked"
+                ))
 
-            # Add other candidates in original order
-            for i, c in enumerate(candidates[:top_k]):
-                if i != best_idx:
-                    reranked.append(RerankResult(
-                        tool_id=c.get('tool_id', ''),
-                        confidence=c.get('score', 0),
-                        reasoning="FAISS candidate"
-                    ))
+        for i, c in enumerate(candidates[:top_k]):
+            if i not in seen:
+                reranked.append(RerankResult(
+                    tool_id=c.get('tool_id', ''),
+                    confidence=c.get('score', 0),
+                    reasoning="FAISS candidate"
+                ))
 
-            return reranked[:top_k]
+        return reranked[:top_k]
 
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse LLM rerank response: {e}")

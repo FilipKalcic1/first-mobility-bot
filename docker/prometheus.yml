@@ -1,45 +1,20 @@
-# Prometheus Configuration for MobilityOne
-# Used with: docker-compose.prod.yml --profile monitoring
-# Updated: 2026 - KPI Tracking for Autoscaler
+# Prometheus configuration for the MobilityOne WhatsApp bot.
+# Only scrapes what actually exists: the API container exposes /metrics on :8000
+# (see main.py — guarded by admin token in production).
+#
+# If you later add Redis metrics, install redis_exporter as a sidecar and add a
+# job here. Same for cAdvisor / node-exporter / blackbox-exporter.
 
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
-# Alerting rules for KPIs
 rule_files:
   - /etc/prometheus/alerts/*.yml
 
 scrape_configs:
-  # Bot API metrics
   - job_name: 'mobility-api'
     static_configs:
       - targets: ['api:8000']
     metrics_path: /metrics
     scrape_interval: 10s
-
-  # Admin API metrics
-  - job_name: 'mobility-admin'
-    static_configs:
-      - targets: ['admin-api:8080']
-    metrics_path: /metrics
-    scrape_interval: 30s
-
-  # NOTE: Autoscaler removed - using Kubernetes KEDA for scaling
-  # Metrics will come from KEDA operator in Kubernetes
-
-  # Redis metrics (requires redis_exporter)
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['redis:6379']
-
-  # Traefik metrics
-  - job_name: 'traefik'
-    static_configs:
-      - targets: ['traefik:8082']
-
-  # Docker container metrics (cAdvisor)
-  - job_name: 'cadvisor'
-    static_configs:
-      - targets: ['cadvisor:8080']
-    scrape_interval: 15s

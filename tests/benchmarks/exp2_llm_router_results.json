@@ -1,0 +1,1245 @@
+{
+  "experiment": "Exp 2: LLM-as-router",
+  "model": "gpt-4o",
+  "total_queries": 176,
+  "top1_hits": 25,
+  "details": [
+    {
+      "expected": "delete_Cases_DeleteByCriteria",
+      "predicted": "delete_Cases_DeleteByCriteria",
+      "query": "Trebam očistiti određene zapise koji udovoljavaju specifičnim uvjetima.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"delete_Cases_DeleteByCriteria\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "delete_Cases_DeleteByCriteria",
+      "predicted": "delete_Cases_DeleteByCriteria",
+      "query": "Trebam eliminirati više unosa koji ispunjavaju specifične zahtjeve.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"delete_Cases_DeleteByCriteria\", \"confidence\": 0.8}\n```"
+    },
+    {
+      "expected": "delete_Cases_DeleteByCriteria",
+      "predicted": null,
+      "query": "Trebam da se oslobodim nekoliko unosa koji odgovaraju mojim filtrima.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 12325, Requested 19146. Please try again in 2.942s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_EquipmentCalendar_DeleteByCriteria",
+      "predicted": "delete_EquipmentCalendar_DeleteByCriteria",
+      "query": "Trebam se riješiti nekih stavki iz rezervacijskog plana koje odgovaraju specifičnim filtrima.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"delete_EquipmentCalendar_DeleteByCriteria\", \"confidence\": 0.8}\n```"
+    },
+    {
+      "expected": "delete_EquipmentCalendar_DeleteByCriteria",
+      "predicted": "delete_PeriodicActivitiesSchedules_DeleteByCriteria",
+      "query": "Trebam maknuti više rezervacijskih planova koji se temelje na specifičnim uvjetima.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"delete_PeriodicActivitiesSchedules_DeleteByCriteria\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "delete_ExpenseTypes",
+      "predicted": null,
+      "query": "Želim da se svi navedeni izdaci uklone iz evidencije.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 11106, Requested 19142. Please try again in 496ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_Expenses_id",
+      "predicted": "delete_Cases_id",
+      "query": "Možeš li mi pomoći da izbacim stavku koja mi ne treba?",
+      "hit": false,
+      "raw_response": "{\"tool_id\": \"delete_Cases_id\", \"confidence\": 0.6}"
+    },
+    {
+      "expected": "delete_Expenses_id",
+      "predicted": "delete_Expenses_id",
+      "query": "Pomozi mi da se oslobodim jednog iznosa koji više nema smisla.",
+      "hit": true,
+      "raw_response": "{\"tool_id\": \"delete_Expenses_id\", \"confidence\": 0.7}"
+    },
+    {
+      "expected": "delete_Expenses_id",
+      "predicted": null,
+      "query": "Trebam izbrisati jedan iznos koji mi ne treba više.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 30000, Requested 19141. Please try again in 38.282s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_LatestPeriodicActivities_DeleteByCriteria",
+      "predicted": "delete_LatestEquipmentCalendar_DeleteByCriteria",
+      "query": "Molim te da izbrišeš sve nedavne unosne elemente koji odgovaraju zadanom parametru.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"delete_LatestEquipmentCalendar_DeleteByCriteria\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "delete_LatestPeriodicActivities_DeleteByCriteria",
+      "predicted": null,
+      "query": "Trebam da se oslobodim svih recentnih podataka koji zadovoljavaju definirane smjernice.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 30000, Requested 19150. Please try again in 38.3s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_LatestPeriodicActivities_DeleteByCriteria",
+      "predicted": null,
+      "query": "Želim da se eliminiraju svi aktuelni unosi koji ispunjavaju postavljene uvjete.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 19215, Requested 19148. Please try again in 16.726s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_PeriodicActivitiesSchedules_id",
+      "predicted": "delete_DashboardItems_id",
+      "query": "Želim da se izvrši brisanje odabrane stavke iz agende.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"delete_DashboardItems_id\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "delete_PeriodicActivitiesSchedules_id",
+      "predicted": "delete_EquipmentCalendar_id",
+      "query": "Možeš li maknuti određeni unos iz hodograma koji imam?",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"delete_EquipmentCalendar_id\", \"confidence\": 0.8}\n```"
+    },
+    {
+      "expected": "delete_PeriodicActivities_DeleteByCriteria",
+      "predicted": null,
+      "query": "Trebam se riješiti nekoliko ponovljenih spisa koji ispunjavaju specifične zahtjeve.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 30000, Requested 19150. Please try again in 38.3s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_PeriodicActivities_DeleteByCriteria",
+      "predicted": "delete_PeriodicActivities_id",
+      "query": "Želim da se izbrišu pojedinačne ponavljajuće stvari na temelju zadanih opcija.",
+      "hit": false,
+      "raw_response": "{\"tool_id\": \"delete_PeriodicActivities_id\", \"confidence\": 0.7}"
+    },
+    {
+      "expected": "delete_PeriodicActivities_DeleteByCriteria",
+      "predicted": "delete_PeriodicActivities_DeleteByCriteria",
+      "query": "Trebam eliminirati niz ponavljajućih zadataka temeljem postavljenih pravila.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"delete_PeriodicActivities_DeleteByCriteria\", \"confidence\": 0.8}\n```"
+    },
+    {
+      "expected": "delete_PeriodicActivityTypes_DeleteByCriteria",
+      "predicted": "delete_ExpenseGroups_DeleteByCriteria",
+      "query": "Zanima me kako da eliminiram određene grupe na temelju specifičnih kriterija.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"delete_ExpenseGroups_DeleteByCriteria\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "delete_PeriodicActivityTypes_DeleteByCriteria",
+      "predicted": "delete_CaseTypes_DeleteByCriteria",
+      "query": "Trebam eliminirati određene kategorije na osnovu specifičnih postavki.",
+      "hit": false,
+      "raw_response": "{\"tool_id\": \"delete_CaseTypes_DeleteByCriteria\", \"confidence\": 0.7}"
+    },
+    {
+      "expected": "delete_PeriodicActivityTypes_DeleteByCriteria",
+      "predicted": "delete_CaseTypes_DeleteByCriteria",
+      "query": "Želim eliminirati različite klase na temelju specifičnih uvjeta.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"delete_CaseTypes_DeleteByCriteria\", \"confidence\": 0.8}\n```"
+    },
+    {
+      "expected": "delete_PeriodicActivityTypes_id",
+      "predicted": "delete_PeriodicActivitiesSchedules_id",
+      "query": "Trebam izbrisati jedan tip rasporeda prema njegovom identifikatoru.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"delete_PeriodicActivitiesSchedules_id\", \"confidence\": 1.0}\n```"
+    },
+    {
+      "expected": "delete_PeriodicActivityTypes_id",
+      "predicted": null,
+      "query": "Trebam se riješiti jedne vrste rasporeda prema njegovom ID-u.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 30000, Requested 19144. Please try again in 38.288s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_PeriodicActivityTypes_id",
+      "predicted": "delete_PeriodicActivitiesSchedules_id",
+      "query": "Trebam eliminirati specifične klase rasporeda prema njihovom ID-u.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"delete_PeriodicActivitiesSchedules_id\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "delete_PersonActivityTypes",
+      "predicted": null,
+      "query": "Želim izbrisati različite kategorije zadataka u sustavu.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 11261, Requested 19143. Please try again in 808ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_PersonActivityTypes",
+      "predicted": "delete_PersonActivityTypes",
+      "query": "Želim izbrisati više kategorija zadatka odjednom.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"delete_PersonActivityTypes\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "delete_PersonActivityTypes",
+      "predicted": null,
+      "query": "Možeš li mi pomoći da se oslobodim nekoliko vrsta poslova?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 18824, Requested 19144. Please try again in 15.936s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_Pools_DeleteByCriteria",
+      "predicted": null,
+      "query": "Tražim način da se oslobodim više limuzina koristeći specifične postavke filtriranja.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 11486, Requested 19151. Please try again in 1.274s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_Pools_DeleteByCriteria",
+      "predicted": null,
+      "query": "Možeš li eliminirati određene kombije na temelju unaprijed postavljenih smjernica?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 23095, Requested 19150. Please try again in 24.49s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_Pools_DeleteByCriteria",
+      "predicted": "delete_Vehicles_DeleteByCriteria",
+      "query": "Možeš li mi pomoći da eliminiram određena motorna sredstva na osnovu definiranih smjernica?",
+      "hit": false,
+      "raw_response": "{\"tool_id\": \"delete_Vehicles_DeleteByCriteria\", \"confidence\": 0.9}"
+    },
+    {
+      "expected": "delete_TenantPermissions_DeleteByCriteria",
+      "predicted": "delete_Cases_DeleteByCriteria",
+      "query": "Molim te da mi pomogneš da očistim stavke koje ne ispunjavaju postavljene uvjete.",
+      "hit": false,
+      "raw_response": "{\"tool_id\": \"delete_Cases_DeleteByCriteria\", \"confidence\": 0.7}"
+    },
+    {
+      "expected": "delete_TenantPermissions_DeleteByCriteria",
+      "predicted": null,
+      "query": "Želim da se oslobodim elemenata koji zadovoljavaju specifične kriterije ovlasti.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 19339, Requested 19149. Please try again in 16.976s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_TenantPermissions_DeleteByCriteria",
+      "predicted": "delete_Metadata_DeleteByCriteria",
+      "query": "Možeš li mi pomoći da eliminiram nevažeće unose koji se temelje na definiranim pravilima?",
+      "hit": false,
+      "raw_response": "{\"tool_id\": \"delete_Metadata_DeleteByCriteria\", \"confidence\": 0.7}"
+    },
+    {
+      "expected": "delete_TenantPermissions_id_documents_documentId",
+      "predicted": "delete_TenantPermissions_id",
+      "query": "Želim se osloboditi neaktualnog akta koji se odnosi na ovlasti iznajmljivača.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"delete_TenantPermissions_id\", \"confidence\": 0.8}\n```"
+    },
+    {
+      "expected": "delete_Tenants_DeleteByCriteria",
+      "predicted": "delete_Tenants",
+      "query": "Treba mi da makneš grupu iznajmljivača u skladu s definiranim smjernicama.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"delete_Tenants\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "delete_Tenants_DeleteByCriteria",
+      "predicted": "delete_Tenants_DeleteByCriteria",
+      "query": "Možeš li pomoći da se oslobodim odabranih iznajmljivača na temelju zadanih uvjeta?",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"delete_Tenants_DeleteByCriteria\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "delete_Tenants_DeleteByCriteria",
+      "predicted": null,
+      "query": "Trebam opozvati više iznajmljivača koristeći specifične kriterije.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 30000, Requested 19146. Please try again in 38.292s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_TripTypes",
+      "predicted": "delete_TripTypes",
+      "query": "Možeš li izbrisati razne vrste trajekata koje više ne trebaju biti prisutne?",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"delete_TripTypes\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "delete_Trips_id_documents_documentId",
+      "predicted": "delete_DocumentTypes_id",
+      "query": "Kako da obrišem neki akt koji više ne koristim?",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"delete_DocumentTypes_id\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "delete_Trips_id_documents_documentId",
+      "predicted": null,
+      "query": "Treba mi pomoć da se oslobodim jednog obraza koji nije aktualan.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 22785, Requested 19145. Please try again in 23.86s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "delete_VehicleTypes",
+      "predicted": "delete_VehicleTypes",
+      "query": "Želim da se eliminiraju razni modeli motornih sredstava s popisa.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"delete_VehicleTypes\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "delete_VehicleTypes",
+      "predicted": "delete_VehicleTypes",
+      "query": "Trebam da se ukinu određeni tipovi motornih sredstava u sustavu.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"delete_VehicleTypes\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "delete_VehicleTypes",
+      "predicted": "delete_Vehicles_DeleteByCriteria",
+      "query": "Kako mogu maknuti višak limuzina i ostalih motornih sredstava iz baze?",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"delete_Vehicles_DeleteByCriteria\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "delete_Vehicles_DeleteByCriteria",
+      "predicted": "delete_Vehicles_DeleteByCriteria",
+      "query": "Želim se osloboditi više motornih sredstava koja više nisu potrebna.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"delete_Vehicles_DeleteByCriteria\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "delete_Vehicles_DeleteByCriteria",
+      "predicted": "delete_Vehicles_DeleteByCriteria",
+      "query": "Trebam eliminirati nekoliko kombija koji više nisu u upotrebi.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"delete_Vehicles_DeleteByCriteria\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "delete_Vehicles_DeleteByCriteria",
+      "predicted": null,
+      "query": "Tražim način da se oslobodim limuzina na temelju specifičnih smjernica.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 11970, Requested 19147. Please try again in 2.234s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "get_CaseTypes_ProjectTo",
+      "predicted": "get_PeriodicActivityTypes",
+      "query": "Mogu li vidjeti sve vrste projekata zajedno s relevantnim detaljima?",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_PeriodicActivityTypes\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_CostCenters_Agg",
+      "predicted": "get_CostCenters_Agg",
+      "query": "Treba mi informacija o sveukupnim iznosima za sve sektore.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"get_CostCenters_Agg\", \"confidence\": 0.8}\n```"
+    },
+    {
+      "expected": "get_CostCenters_Agg",
+      "predicted": "get_OrgUnits_Agg",
+      "query": "Tražim prikaz ukupnih iznosa prema različitim jedinicama.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_OrgUnits_Agg\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_CostCenters_Agg",
+      "predicted": "get_Master_Agg",
+      "query": "Možete li mi pokazati zbirne brojke za sve relevantne stavke?",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_Master_Agg\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_DocumentTypes_Agg",
+      "predicted": "get_Lookup_CaseSeverities",
+      "query": "Molim te da prikažeš izvore s pravilima sažimanja za sve relevantne potvrde.",
+      "hit": false,
+      "raw_response": "{\"tool_id\": \"get_Lookup_CaseSeverities\", \"confidence\": 0.6}"
+    },
+    {
+      "expected": "get_DocumentTypes_Agg",
+      "predicted": "get_AvailabilityProjection_Agg",
+      "query": "Zanima me kako izgleda zbirna funkcija za različite potvrde unutar postavljenih parametara.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_AvailabilityProjection_Agg\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_DocumentTypes_Agg",
+      "predicted": null,
+      "query": "Možeš li mi reći rezultati agregacije za tipove akata koji zadovoljavaju određene kriterije?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 30000, Requested 19152. Please try again in 38.304s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "get_DocumentTypes_id_documents",
+      "predicted": "get_Lookup_ActivityCategories",
+      "query": "Zanima me koji su svi akti dostupni za određenu klasifikaciju.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_Lookup_ActivityCategories\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_Equipment_GroupBy",
+      "predicted": "get_Equipment_GroupBy",
+      "query": "Zanima me kako su različiti tehnički aparati grupirani u skladu s postavkama.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"get_Equipment_GroupBy\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "get_Equipment_GroupBy",
+      "predicted": null,
+      "query": "Možeš li mi prikazati organizaciju tehničkih sredstava po definiranom modelu?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 30000, Requested 19148. Please try again in 38.296s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "get_Equipment_id_documents",
+      "predicted": "get_Metadata",
+      "query": "Želim znati koje su evidencije dostupne za tu stavku.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_Metadata\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_ExpenseTypes_id_documents",
+      "predicted": null,
+      "query": "Možeš li mi pokazati sve akte za određenu vrstu izdatka?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 18555, Requested 19143. Please try again in 15.396s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar",
+      "predicted": null,
+      "query": "Možeš li mi prikazati sve informacije o novim prijevoznim sredstvima i njihovim rasporedima?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 28513, Requested 19152. Please try again in 35.33s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar",
+      "predicted": null,
+      "query": "Možeš li mi pokazati sva dostupna prijevozna sredstva prema rasporedu?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 13590, Requested 19146. Please try again in 5.472s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar",
+      "predicted": "get_AvailableVehicles",
+      "query": "Zanima me koji su kombiji dostupni u hodogramu.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_AvailableVehicles\", \"confidence\": 0.8}\n```"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar_ProjectTo",
+      "predicted": "get_LatestVehicleCalendar",
+      "query": "Pružite mi informacije o najnovijim podacima za limuzine u planu termina.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_LatestVehicleCalendar\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar_ProjectTo",
+      "predicted": "get_LatestVehicleContracts",
+      "query": "Kako da pristupim informacijama o najnovijim kombijima iz agende vezane uz projekt?",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_LatestVehicleContracts\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar_ProjectTo",
+      "predicted": "get_VehicleCalendar",
+      "query": "Zanima me pregled planova za prijevozno sredstvo u aktualnom razdoblju.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_VehicleCalendar\", \"confidence\": 0.8}\n```"
+    },
+    {
+      "expected": "get_LatestVehicleContracts_ProjectTo",
+      "predicted": "get_Vehicles_ProjectTo",
+      "query": "Interesira me sažetak podataka o kombijima koji su uključeni u projekt.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_Vehicles_ProjectTo\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_Lookup_CaseStatuses",
+      "predicted": "get_Lookup_CaseStatuses",
+      "query": "Želim dobiti sve relevantne informacije o statusima postupaka.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"get_Lookup_CaseStatuses\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "get_Lookup_CaseStatuses",
+      "predicted": "get_Lookup_CaseStatuses",
+      "query": "Mogu li dobiti informacije o različitim statusima predmeta?",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"get_Lookup_CaseStatuses\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "get_Lookup_CaseStatuses",
+      "predicted": "get_Cases_id_metadata",
+      "query": "Interesiraju me svi aktualni statusi vezani uz predmete.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_Cases_id_metadata\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_Lookup_PersonTypeId",
+      "predicted": "get_PersonTypes",
+      "query": "Želim saznati koji su tipovi ljudi dostupni.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_PersonTypes\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "get_Lookup_PersonTypeId",
+      "predicted": "get_Lookup_PersonTypeId",
+      "query": "Možeš li mi reći koje su kategorije pojedinaca?",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"get_Lookup_PersonTypeId\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "get_Lookup_PersonTypeId",
+      "predicted": "get_PersonTypes",
+      "query": "Možeš li mi reći koje vrste pojedinaca postoje?",
+      "hit": false,
+      "raw_response": "{\"tool_id\": \"get_PersonTypes\", \"confidence\": 0.9}"
+    },
+    {
+      "expected": "get_Lookup_SupplierId",
+      "predicted": "get_Lookup_ProviderId",
+      "query": "Tražim informacije o svim onima koji nude proizvode ili usluge.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_Lookup_ProviderId\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "get_Lookup_SupplierId",
+      "predicted": "get_Lookup_SupplierId",
+      "query": "Trebam informacije o svim opskrbljivačima u bazi podataka.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"get_Lookup_SupplierId\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "get_Lookup_SupplierId",
+      "predicted": "get_Lookup_SupplierId",
+      "query": "Zanima me pregled svih onih koji opskrbljuju naše proizvode.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"get_Lookup_SupplierId\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "get_Master_GroupBy",
+      "predicted": "get_Master_GroupBy",
+      "query": "Želim vidjeti sastav svih važnih segmenata koji su klasificirani po unaprijed definiranim načelima.",
+      "hit": true,
+      "raw_response": "{\"tool_id\": \"get_Master_GroupBy\", \"confidence\": 0.7}"
+    },
+    {
+      "expected": "get_Master_GroupBy",
+      "predicted": null,
+      "query": "Možeš li mi pokazati raspodijeljene elemente koji su klasificirani na specifičan način?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 30000, Requested 19151. Please try again in 38.302s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "get_Master_GroupBy",
+      "predicted": "get_Master_GroupBy",
+      "query": "Koje su sve varijante koje pripadaju maticnom skupu?",
+      "hit": true,
+      "raw_response": "{\"tool_id\": \"get_Master_GroupBy\", \"confidence\": 0.7}"
+    },
+    {
+      "expected": "get_Metadata_ProjectTo",
+      "predicted": "get_Master_id_metadata",
+      "query": "Mogu li dobiti pregled specifičnih značajki projekta?",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_Master_id_metadata\", \"confidence\": 0.6}\n```"
+    },
+    {
+      "expected": "get_Metadata_ProjectTo",
+      "predicted": "get_Master_ProjectTo",
+      "query": "Želim vidjeti samo određene detalje o svom projektu.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_Master_ProjectTo\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_Metadata_ProjectTo",
+      "predicted": "get_WhatCanIDo",
+      "query": "Zanima me koji su specifični podaci dostupni za moj projekt.",
+      "hit": false,
+      "raw_response": "{\"tool_id\": \"get_WhatCanIDo\", \"confidence\": 0.7}"
+    },
+    {
+      "expected": "get_Metadata_id",
+      "predicted": "get_Master_id",
+      "query": "Trebam pregledati podatke koji se odnose na jedan konkretan entitet prema njegovom identifikatoru.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_Master_id\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_Metadata_id",
+      "predicted": "get_Metadata_id",
+      "query": "Možeš mi reći više o stavci koja se odnosi na određene podatke?",
+      "hit": true,
+      "raw_response": "{\"tool_id\": \"get_Metadata_id\", \"confidence\": 0.6}"
+    },
+    {
+      "expected": "get_Metadata_id",
+      "predicted": "get_Master_id",
+      "query": "Možeš li mi pomoći da dođem do informacija o jednom ključnom zapisu?",
+      "hit": false,
+      "raw_response": "{\"tool_id\": \"get_Master_id\", \"confidence\": 0.7}"
+    },
+    {
+      "expected": "get_MileageReports_GroupBy",
+      "predicted": null,
+      "query": "Možeš li mi pokazati analizu vožnji organiziranih po različitim klasama?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_MonthlyMileagesAssigned_ProjectTo",
+      "predicted": null,
+      "query": "Trebam informacije o mjesečnim voznim troškovima koji su povezani s projektom.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_MonthlyMileagesAssigned_ProjectTo",
+      "predicted": null,
+      "query": "Kako mogu pristupiti podacima o mjesečnim kilometrima vezanim uz moj projekt?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_MonthlyMileagesAssigned_ProjectTo",
+      "predicted": null,
+      "query": "Želim pregledati raspored putnih troškova vezanih uz moj projekt za tekući mjesec.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_MonthlyMileages_Agg",
+      "predicted": null,
+      "query": "Tražim informacije o prikupljenim udaljenostima za ovaj plan termina.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_MonthlyMileages_Agg",
+      "predicted": null,
+      "query": "Trebam informacije o skupnim prijevoznim sredstvima prema rasporedu.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Partners_ProjectTo",
+      "predicted": null,
+      "query": "Kako mogu dobiti pregled stavki vezanih uz naše projekte i suradničke odnose?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Partners_ProjectTo",
+      "predicted": null,
+      "query": "Trebam vidjeti sve podatke o suradnicima i aktivnostima.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Partners_ProjectTo",
+      "predicted": "get_Partners",
+      "query": "Zanima me cjelokupni pregled svih suradničkih odnosa i projekata.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_Partners\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_PeriodicActivities",
+      "predicted": null,
+      "query": "Tražim pregled svih ponavljajućih zadataka, s podrškom za filtriranje.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PeriodicActivities",
+      "predicted": null,
+      "query": "Treba mi uvid u sve redovne obrade s opcijama za sortiranje rezultata.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PeriodicActivities",
+      "predicted": null,
+      "query": "Kako mogu pristupiti svim cikličnim zaduženjima i primijeniti filtere?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PeriodicActivities_id_metadata",
+      "predicted": null,
+      "query": "Tražim uvid u specifikacije redovnih poslova.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PeriodicActivities_id_metadata",
+      "predicted": null,
+      "query": "Možeš li mi pomoći da dobijem sažetak o svojstvima redovitih programa?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 28817, Requested 19147. Please try again in 35.928s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "expected": "get_PeriodicActivityTypes",
+      "predicted": null,
+      "query": "Možeš li mi prikazati sve kategorije redovnih zadataka?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PeriodicActivityTypes",
+      "predicted": null,
+      "query": "Zanima me koji su svi tipovi planiranih akcija dostupni.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PeriodicActivityTypes",
+      "predicted": null,
+      "query": "Možeš li mi pokazati sve modele procesa na temelju rasporeda?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PersonOrgUnits",
+      "predicted": null,
+      "query": "Želim pregledati sve informacije o ljudima i njihovim institucijama.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PersonOrgUnits",
+      "predicted": "get_Persons",
+      "query": "Možeš li mi pokazati sve zapise koji se odnose na pojedince i ustanove?",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"get_Persons\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "get_PersonOrgUnits",
+      "predicted": null,
+      "query": "Treba mi pregled svih elemenata koji se tiču članova i njihovih organizacija.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PersonOrgUnits_Agg",
+      "predicted": null,
+      "query": "Treba mi pregled najnižih i najviših rezultata u okviru radnih grupa.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PersonOrgUnits_Agg",
+      "predicted": null,
+      "query": "Zanima me koja su ukupna i prosječna mjerila za timove u tvrtki.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PersonOrgUnits_Agg",
+      "predicted": null,
+      "query": "Zanima me koji su minimalni i maksimalni rezultati za sve koje pripadaju toj organizaciji.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PersonOrgUnits_id_metadata",
+      "predicted": null,
+      "query": "Mogu li dobiti podatke o karakteristikama određene organizacije?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PersonOrgUnits_id_metadata",
+      "predicted": null,
+      "query": "Mogu li dobiti detalje o podacima za određenu upravnu grupu?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PersonOrgUnits_id_metadata",
+      "predicted": null,
+      "query": "Tražim sažetak podataka za specifičnu organizaciju.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PersonPeriodicActivities_id",
+      "predicted": null,
+      "query": "Mogu li provjeriti stanje vezano uz redovite obveze koje su dodijeljene pojedincu?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PersonPeriodicActivities_id",
+      "predicted": null,
+      "query": "Zanima me koje su ponavljajuće dužnosti predviđene za određenog člana kolektiva.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_PersonPeriodicActivities_id",
+      "predicted": null,
+      "query": "Želim provjeriti stanje redovnih obveza za jednog člana tima.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Persons_GroupBy",
+      "predicted": null,
+      "query": "Zanima me kako mogu organizirati pojedince na temelju određenih parametara.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Persons_GroupBy",
+      "predicted": null,
+      "query": "Želim prikazati članove na osnovu specifičnih kriterija.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Persons_GroupBy",
+      "predicted": null,
+      "query": "Trebam prikazati poredak pojedinaca na temelju određenih odrednica.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_SchedulingModels_id_metadata",
+      "predicted": null,
+      "query": "Kako mogu pristupiti podacima o određenom hodogramu koristeći njegov jedinstveni identifikator?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Stats_NoMileageSince",
+      "predicted": null,
+      "query": "Želim pregledati koja prijevozna sredstva nisu evidentirala vožnje od određenog trenutka.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Tags_ProjectTo",
+      "predicted": null,
+      "query": "Kako mogu pregledati sve tagove koji pripadaju određenom zadatku?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Tags_ProjectTo",
+      "predicted": null,
+      "query": "Želim vidjeti sve etikete povezane s mojim planom aktivnosti.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Tags_ProjectTo",
+      "predicted": null,
+      "query": "Tražim sve etikete koje pripadaju određenom projektu.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Tags_id_documents",
+      "predicted": null,
+      "query": "Možeš li pokazati sve stavke koje se odnose na taj tag?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_TeamMembers",
+      "predicted": null,
+      "query": "Trebam pregledati sve pripadnike ovog kolektiva uz mogućnost sortiranja rezultata.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_TeamMembers",
+      "predicted": null,
+      "query": "Zanima me pregled svih sudionika našeg projekta.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_TeamMembers",
+      "predicted": null,
+      "query": "Želim dobiti pregled svih sudionika u grupi.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_TeamMembers_id",
+      "predicted": null,
+      "query": "Mogu li dobiti pregled podataka o osobi iz našeg kolektiva?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_TeamMembers_id",
+      "predicted": null,
+      "query": "Mogu li dobiti pregled informacija o osobi unutar kolektiva?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_TeamMembers_id",
+      "predicted": "get_Partners",
+      "query": "Možeš li mi reći nešto više o partneru u organizaciji?",
+      "hit": false,
+      "raw_response": "{\"tool_id\": \"get_Partners\", \"confidence\": 0.7}"
+    },
+    {
+      "expected": "get_TenantPermissions_id_documents_documentId",
+      "predicted": null,
+      "query": "Želim saznati status specifične isprave koju imam.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_TenantPermissions_id_documents_documentId",
+      "predicted": null,
+      "query": "Želim pogledati status određenog akta koji pripada iznajmljivaču.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_TenantPermissions_id_documents_documentId",
+      "predicted": null,
+      "query": "Tražim podatke o privilegijama za određenu ispravu.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Tenants_id_documents",
+      "predicted": "get_Tenants_id_documents",
+      "query": "Molim te da mi prikažeš sve relevantne potvrde za mog iznajmljivača.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"get_Tenants_id_documents\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "get_Trips_id_metadata",
+      "predicted": null,
+      "query": "Interesira me koji su detalji dostupni za ovu specifičnu turu.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Trips_id_metadata",
+      "predicted": null,
+      "query": "Trebam uvid u podatke o toj jedinstvenoj ekspediciji.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_Trips_id_metadata",
+      "predicted": null,
+      "query": "Želim saznati više o karakteristikama vezanim za taj aranžman.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_VehicleCalendar_id_documents",
+      "predicted": null,
+      "query": "Možeš li mi prikazati sve akte koji se odnose na plan termina za motorna sredstva?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_VehicleInputHelper_DistinctMakes",
+      "predicted": null,
+      "query": "Tražim detalje o raznim proizvođačima koji se odnose na specifično prijevozno sredstvo.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_VehicleInputHelper_DistinctMakes",
+      "predicted": null,
+      "query": "Možeš li mi prikazati sve jedinstvene brendove za određeno prijevozno sredstvo?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_VehicleInputHelper_DistinctMakes",
+      "predicted": null,
+      "query": "Zanima me koje su specifične oznake za traženo limuzinsko prijevozno sredstvo.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_VehicleTypes_id_metadata",
+      "predicted": null,
+      "query": "Trebam pristup informacijama o specifikacijama za određeno prijevozno sredstvo s danim identifikatorom.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "get_VehiclesHistoricalEntries_ProjectTo",
+      "predicted": null,
+      "query": "Kako mogu vidjeti sve evidencije o limuzinama iz povijesnog pregleda projekta?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "patch_Equipment_id",
+      "predicted": null,
+      "query": "Možeš li mi pomoći s izmjenom određenih podataka o instrumentu?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "patch_SchedulingModels_id",
+      "predicted": "patch_PeriodicActivities_id",
+      "query": "Tražim mogućnost da modificiram određene detalje u svojoj agendi.",
+      "hit": false,
+      "raw_response": "```json\n{\"tool_id\": \"patch_PeriodicActivities_id\", \"confidence\": 0.7}\n```"
+    },
+    {
+      "expected": "patch_SchedulingModels_id",
+      "predicted": null,
+      "query": "Želim unijeti nove detalje u hodogram bez brisanja postojećih informacija.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "patch_Tenants_id",
+      "predicted": null,
+      "query": "Želim izvršiti promjenu podataka vezanih za iznajmljivača.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "patch_Tenants_id",
+      "predicted": null,
+      "query": "Želio bih unijeti nove podatke za aktivnog iznajmljivača.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "patch_Tenants_id",
+      "predicted": null,
+      "query": "Trebam izvršiti promjene na informacijama vezanim uz korisnika u vezi s najmom.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_Equipment_id_documents",
+      "predicted": null,
+      "query": "Želim povezati isprave s određenim motorom.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_Equipment_id_documents",
+      "predicted": null,
+      "query": "Zanima me kako mogu uključiti nove potvrde za moje pribore.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_Equipment_id_documents",
+      "predicted": null,
+      "query": "Molim te da priložiš isprave za određeno motorno sredstvo.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_ExpenseTypes_id_documents",
+      "predicted": "post_Cases_id_documents",
+      "query": "Možeš li mi pomoći s povezivanjem akta na moju stavku?",
+      "hit": false,
+      "raw_response": "{\"tool_id\": \"post_Cases_id_documents\", \"confidence\": 0.7}"
+    },
+    {
+      "expected": "post_ExpenseTypes_id_documents",
+      "predicted": null,
+      "query": "Tražim način da unesem potvrdu za ovu određenu stavku.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_PeriodicActivitiesSchedules_multipatch",
+      "predicted": null,
+      "query": "Zanima me kako mogu prilagoditi razne dijelove u hodogramu za redovite sastanke.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_PeriodicActivitiesSchedules_multipatch",
+      "predicted": null,
+      "query": "Trebam izvršiti promjene na nekoliko točaka u hodogramu.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_PeriodicActivitiesSchedules_multipatch",
+      "predicted": null,
+      "query": "Trebam izvršiti promjene na više stavki u hodogramu.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_SendEmail",
+      "predicted": null,
+      "query": "Želim poslati poruku putem elektroničke pošte korisnicima.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_SendEmail",
+      "predicted": null,
+      "query": "Trebam poslati potvrde kupcima putem elektronskih poruka.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_SendEmail",
+      "predicted": null,
+      "query": "Trebam potvrdu koja će se poslati na e-adrese kupaca.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_TenantPermissions",
+      "predicted": null,
+      "query": "Želim unijeti nove privilegije za iznajmljivača u sustav.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_TenantPermissions",
+      "predicted": "post_TenantPermissions",
+      "query": "Želim unijeti nove privilegije za iznajmljivača.",
+      "hit": true,
+      "raw_response": "{\"tool_id\": \"post_TenantPermissions\", \"confidence\": 0.9}"
+    },
+    {
+      "expected": "post_TenantPermissions",
+      "predicted": null,
+      "query": "Želim postaviti nova pravila za ovlasti unutar sustava.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_TenantPermissions_SetRolesForUser_personId",
+      "predicted": null,
+      "query": "Kako mogu dodijeliti ovlasti za iznajmljivača koristeći njegov ID?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_TenantPermissions_SetRolesForUser_personId",
+      "predicted": null,
+      "query": "Molim te, odredi autorizacije za iznajmljivača koristeći njegovu ID oznaku.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_Tenants",
+      "predicted": null,
+      "query": "Želim unijeti novog iznajmljivača u sustav.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_Tenants",
+      "predicted": null,
+      "query": "Tražim način za unos novog iznajmljivača podataka.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_Tenants",
+      "predicted": null,
+      "query": "Trebam registrirati novog iznajmljivača u sustavu.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_Tenants_id_documents",
+      "predicted": null,
+      "query": "Molim te da registriraš novu potvrdu za iznajmljivača.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_Tenants_id_documents",
+      "predicted": null,
+      "query": "Mogu li unijeti novu ispravu za iznajmljivača?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "post_Tenants_id_documents",
+      "predicted": "post_Tenants_id_documents",
+      "query": "Trebam pridružiti novu ispravu iznajmljivaču.",
+      "hit": true,
+      "raw_response": "```json\n{\"tool_id\": \"post_Tenants_id_documents\", \"confidence\": 0.9}\n```"
+    },
+    {
+      "expected": "put_Cases_id_documents_documentId",
+      "predicted": null,
+      "query": "Trebam ažurirati sadržaj akta koji se odnosi na tu temu.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "put_Expenses_id_documents_documentId",
+      "predicted": null,
+      "query": "Tražim da se izmijene podaci o potvrdi koja se odnosi na financijski teret.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "put_Teams_id_documents_documentId",
+      "predicted": null,
+      "query": "Trebam ažurirati informacije o potvrdi na temelju ID kolektiva i ID-a isprave.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "put_TenantPermissions_id",
+      "predicted": null,
+      "query": "Mogu li ažurirati ovlasti za iznajmljivača u sustavu?",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "put_TenantPermissions_id",
+      "predicted": null,
+      "query": "Zanima me kako da osvježim privilegije za iznajmljivača u bazi podataka.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "put_TenantPermissions_id",
+      "predicted": null,
+      "query": "Molim te da ažuriraš privilegije za iznajmljivača.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "put_Vehicles_id",
+      "predicted": null,
+      "query": "Želim unijeti nove podatke za svoje motorno sredstvo.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "put_Vehicles_id",
+      "predicted": null,
+      "query": "Želim izvršiti kompletnu promjenu informacija vezanih uz moju limuzinu.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}"
+    },
+    {
+      "expected": "put_Vehicles_id",
+      "predicted": null,
+      "query": "Trebam obnoviti cijeli set podataka za svoj kombi.",
+      "hit": false,
+      "error": "Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-8CqqAL9OHk0MDi7V1lFeGd91 on tokens per min (TPM): Limit 30000, Used 16488, Requested 19141. Please try again in 11.258s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"
+    }
+  ],
+  "total_input_tokens": 1382513,
+  "total_output_tokens": 1548,
+  "cost_usd": 3.47,
+  "elapsed_seconds": 4460.3,
+  "avg_ms_per_query": 25342.0
+}

@@ -1,20 +1,9 @@
 # =============================================================================
-# PERSISTENT VOLUME CLAIM - Cache for ML embeddings and models
-# =============================================================================
+# Embeddings cache PVC — persists .cache/tool_embeddings.json between pod
+# restarts so startup drops from ~120s (regenerate all embeddings from Azure)
+# to <5s (load from disk).
 #
-# PURPOSE:
-# - Stores pre-computed Azure OpenAI embeddings (~40MB)
-# - Stores trained ML models (intent classifier, etc.)
-# - Without this, each pod startup takes 60-120 seconds generating embeddings
-# - With this, pod startup takes <5 seconds
-#
-# IMPORTANT:
-# - Use ReadWriteMany (RWX) access mode so all pods can share the cache
-# - Requires a storage class that supports RWX:
-#     Azure AKS: azurefile (default) or azurefile-premium
-#     AWS EKS:   efs-sc (requires EFS CSI driver)
-#     GCP GKE:   standard-rwx (requires Filestore CSI driver)
-#     On-prem:   nfs-client
+# Single pod → ReadWriteOnce is sufficient; no need for RWX storage class.
 # =============================================================================
 
 apiVersion: v1
@@ -26,15 +15,13 @@ metadata:
     component: cache
 spec:
   accessModes:
-    - ReadWriteMany  # All pods can read/write (required for shared cache)
+    - ReadWriteOnce
   resources:
     requests:
-      storage: 500Mi  # Embeddings (~40MB) + ML models (~100MB) + headroom
-  # -------------------------------------------------------------------------
-  # REQUIRED: Set storage class for your cloud provider.
-  # Azure AKS (default target):
-  storageClassName: azurefile
-  # AWS EKS:   storageClassName: efs-sc
-  # GCP GKE:   storageClassName: standard-rwx
-  # On-prem:   storageClassName: nfs-client
-  # -------------------------------------------------------------------------
+      storage: 200Mi  # ~40Mi embeddings + headroom for future indices
+  # Pick the default block-storage class for your cluster (examples):
+  #   Azure AKS: managed-csi / managed-premium
+  #   AWS EKS:   gp3
+  #   GCP GKE:   standard-rwo / premium-rwo
+  #   On-prem:   local-path (k3s) or your CSI default
+  # Omit storageClassName to use the cluster default.

@@ -1,11 +1,10 @@
 # =============================================================================
-# MobilityOne WhatsApp Bot - Kubernetes Services
+# Services, Ingress, and NetworkPolicy for single-pod deployment.
+#
+# Only the API container exposes a port. Worker is background-only.
 # =============================================================================
 
 ---
-# =============================================================================
-# API SERVICE - Public facing (via Ingress)
-# =============================================================================
 apiVersion: v1
 kind: Service
 metadata:
@@ -20,37 +19,15 @@ spec:
       targetPort: 8000
       protocol: TCP
       name: http
-  selector:
-    app: mobility-bot
-    component: api
-
----
-# =============================================================================
-# ADMIN SERVICE - Internal only (no Ingress)
-# =============================================================================
-apiVersion: v1
-kind: Service
-metadata:
-  name: mobility-admin
-  labels:
-    app: mobility-bot
-    component: admin
-spec:
-  type: ClusterIP
-  ports:
-    - port: 8080
-      targetPort: 8080
+    - port: 8000
+      targetPort: 8000
       protocol: TCP
-      name: http
+      name: metrics   # ServiceMonitor scrapes this named port
   selector:
     app: mobility-bot
-    component: admin
 
 ---
-# =============================================================================
-# REDIS SERVICE
-# =============================================================================
-# OPTION A: In-cluster Redis (dev/staging) — points to redis.yaml StatefulSet
+# Redis Service — switch to ExternalName when using managed Redis.
 apiVersion: v1
 kind: Service
 metadata:
@@ -67,342 +44,89 @@ spec:
   selector:
     app: redis
 
-# OPTION B: Managed Redis (production) — uncomment and replace Option A
-# When using Azure Cache for Redis or ElastiCache, replace the Service above
-# with an ExternalName service so all pods resolve redis-service to managed host:
-#
-# apiVersion: v1
-# kind: Service
-# metadata:
-#   name: redis-service
-# spec:
-#   type: ExternalName
-#   externalName: your-redis.redis.cache.windows.net  # Azure Cache for Redis hostname
-#   # AWS: your-redis.xxxxx.use1.cache.amazonaws.com
-#   # GCP: 10.0.0.x (Memorystore uses private IP)
-
 ---
-# =============================================================================
-# INGRESS - External access to API
-# =============================================================================
+# Ingress — Infobip webhooks terminate here over TLS.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: mobility-ingress
+  name: mobility-api
+  labels:
+    app: mobility-bot
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
-    # Rate limiting at ingress level (defense-in-depth with app-level rate limiter)
-    nginx.ingress.kubernetes.io/limit-rps: "50"
-    nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
-    # cert-manager TLS — requires cert-manager installed in cluster
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"     # Matches MAX_REQUEST_BODY_BYTES in main.py
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - bot.mobilityone.io
-      secretName: mobility-tls
+        - bot.mobilityone.example
+      secretName: mobility-api-tls
   rules:
-    - host: bot.mobilityone.io
+    - host: bot.mobilityone.example
       http:
         paths:
-          # WhatsApp webhook endpoint
-          - path: /webhook
+          - path: /
             pathType: Prefix
             backend:
               service:
                 name: mobility-api
                 port:
                   number: 80
-          # Health check (for external monitoring)
-          - path: /health
-            pathType: Exact
-            backend:
-              service:
-                name: mobility-api
-                port:
-                  number: 80
-          # NOTE: /metrics is NOT exposed via Ingress (security risk).
-          # Prometheus scrapes internally via ClusterIP + pod annotations.
 
 ---
-# =============================================================================
-# NETWORK POLICIES - Per-component traffic restriction
-# =============================================================================
-# NOTE: Egress rules allow external HTTPS (0.0.0.0/0:443) for:
-#   - MobilityOne API (dev-k1.mobilityone.io)
-#   - Azure OpenAI (*.openai.azure.com)
-#   - Infobip (*.api.infobip.com)
-#   - Managed PostgreSQL (*.postgres.database.azure.com) if used
-#   - Managed Redis (*.redis.cache.windows.net) if used
-#
-# For tighter security, replace 0.0.0.0/0 with specific CIDRs of your
-# managed services. Run: nslookup <hostname> to get IPs.
-# =============================================================================
-
-# --- API Network Policy (public-facing, ingress from nginx) ---
+# NetworkPolicy — default-deny, explicit allow.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: mobility-api-netpol
+  name: mobility-bot
 spec:
   podSelector:
     matchLabels:
       app: mobility-bot
-      component: api
   policyTypes:
     - Ingress
     - Egress
   ingress:
-    # From ingress controller
+    # Only the ingress controller may reach :8000 for webhook traffic.
     - from:
         - namespaceSelector:
             matchLabels:
-              name: ingress-nginx
+              kubernetes.io/metadata.name: ingress-nginx
       ports:
-        - protocol: TCP
-          port: 8000
-    # Prometheus scraping
-    - from:
-        - podSelector:
-            matchLabels:
-              app: prometheus
-      ports:
-        - protocol: TCP
-          port: 8000
-  egress:
-    # DNS
-    - to:
-        - namespaceSelector: {}
-      ports:
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 53
-    # In-cluster PostgreSQL (if used)
-    - to:
-        - podSelector:
-            matchLabels:
-              app: postgresql
-      ports:
-        - protocol: TCP
-          port: 5432
-    # In-cluster Redis (if used)
-    - to:
-        - podSelector:
-            matchLabels:
-              app: redis
-      ports:
-        - protocol: TCP
-          port: 6379
-    # External HTTPS (MobilityOne API, Azure OpenAI, Infobip, managed DB/Redis)
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-      ports:
-        - protocol: TCP
-          port: 443
-    # Managed PostgreSQL (Azure default port — needed when using managed DB)
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-      ports:
-        - protocol: TCP
-          port: 5432
-    # Managed Redis (Azure Cache uses port 6380 for TLS)
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-      ports:
-        - protocol: TCP
-          port: 6380
-
----
-# --- Worker Network Policy (no external ingress needed) ---
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: mobility-worker-netpol
-spec:
-  podSelector:
-    matchLabels:
-      app: mobility-bot
-      component: worker
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    # Workers: only internal health checks from same app
-    - from:
-        - podSelector:
-            matchLabels:
-              app: mobility-bot
-      ports:
-        - protocol: TCP
-          port: 8000
-  egress:
-    # DNS
-    - to:
-        - namespaceSelector: {}
-      ports:
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 53
-    # In-cluster PostgreSQL
-    - to:
-        - podSelector:
-            matchLabels:
-              app: postgresql
-      ports:
-        - protocol: TCP
-          port: 5432
-    # In-cluster Redis
-    - to:
-        - podSelector:
-            matchLabels:
-              app: redis
-      ports:
-        - protocol: TCP
-          port: 6379
-    # External HTTPS (MobilityOne API, Azure OpenAI)
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-      ports:
-        - protocol: TCP
-          port: 443
-    # Managed PostgreSQL
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-      ports:
-        - protocol: TCP
-          port: 5432
-    # Managed Redis (TLS port)
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-      ports:
-        - protocol: TCP
-          port: 6380
-
----
-# --- Admin API Network Policy (internal only, no public ingress) ---
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: mobility-admin-netpol
-spec:
-  podSelector:
-    matchLabels:
-      app: mobility-bot
-      component: admin
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    # Only from internal VPN/admin namespace
+        - port: 8000
+          protocol: TCP
+    # kube-prometheus-stack scrapes /metrics on :8000 from the monitoring namespace.
     - from:
         - namespaceSelector:
             matchLabels:
-              name: admin
-        - ipBlock:
-            cidr: 10.0.0.0/8
+              kubernetes.io/metadata.name: monitoring
       ports:
-        - protocol: TCP
-          port: 8080
+        - port: 8000
+          protocol: TCP
   egress:
     # DNS
     - to:
         - namespaceSelector: {}
       ports:
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 53
-    # In-cluster PostgreSQL (admin uses full-access user)
-    - to:
-        - podSelector:
-            matchLabels:
-              app: postgresql
-      ports:
-        - protocol: TCP
-          port: 5432
-    # In-cluster Redis
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Redis (in-cluster)
     - to:
         - podSelector:
             matchLabels:
               app: redis
       ports:
-        - protocol: TCP
-          port: 6379
-    # Managed PostgreSQL
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-      ports:
-        - protocol: TCP
-          port: 5432
-    # Managed Redis (TLS port)
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-      ports:
-        - protocol: TCP
-          port: 6380
-
-# =============================================================================
-# CERT-MANAGER PREREQUISITE
-# =============================================================================
-# Install cert-manager for automatic TLS certificate provisioning:
-#   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.0/cert-manager.yaml
-#
-# Create ClusterIssuer for Let's Encrypt:
-#   apiVersion: cert-manager.io/v1
-#   kind: ClusterIssuer
-#   metadata:
-#     name: letsencrypt-prod
-#   spec:
-#     acme:
-#       server: https://acme-v02.api.letsencrypt.org/directory
-#       email: admin@mobilityone.io
-#       privateKeySecretRef:
-#         name: letsencrypt-prod-key
-#       solvers:
-#         - http01:
-#             ingress:
-#               class: nginx
+        - port: 6379
+          protocol: TCP
+    # Postgres, Azure OpenAI, MobilityOne API — external HTTPS + Postgres
+    - ports:
+        - port: 443
+          protocol: TCP
+        - port: 5432
+          protocol: TCP
+        - port: 6432
+          protocol: TCP  # PgBouncer

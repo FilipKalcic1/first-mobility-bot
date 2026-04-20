@@ -16,6 +16,7 @@ import os
 import re
 from typing import Optional, Dict, List
 
+from services.config_loader import load_json
 from services.text_normalizer import normalize_diacritics
 
 logger = logging.getLogger(__name__)
@@ -26,135 +27,19 @@ def _normalize(text: str) -> str:
     return normalize_diacritics(text.lower())
 
 
-# Hand-curated entity stems — highest quality, ordering matters.
-# MORE SPECIFIC entities must come BEFORE generic ones.
-CURATED_STEMS: Dict[str, List[str]] = {
-    # Compound/specific entities FIRST
-    "vehicletypes": ["tipovi vozil", "tip vozil", "tipov vozil", "vrsta vozil", "kategorija vozil"],
-    "vehiclecontracts": ["ugovor vozil", "leasing", "najam vozil", "lizing"],
-    "vehiclecalendar": ["rezervacij", "booking", "kalendar vozil"],
-    "equipmenttypes": ["tipovi oprem", "tip oprem", "tipov oprem", "vrsta oprem", "kategorija oprem"],
-    "equipmentcalendar": ["kalendar oprem", "raspored oprem"],
-    "casetypes": ["tipovi slucaj", "tip slucaj", "tipov slucaj", "vrsta stete", "kategorija prijav", "tipovi slučaj", "tip slučaj", "tipov slučaj", "vrsta štete"],
-    "expensetypes": ["tipovi trosk", "tip trosk", "tipov trosk", "vrsta trosk", "kategorija trosk", "tipovi trošk", "tip trošk", "tipov trošk", "vrsta trošk"],
-    "expensegroups": ["grupa trosk", "skupine trosk", "grupa trošk", "skupine trošk"],
-    "periodicactivities": ["periodicn", "periodičn", "servis", "redovn aktiv"],
-    "schedulingmodels": ["model raspored", "modeli raspored", "raspored model", "model raspoređ", "modeli raspoređ"],
-    "mileagereports": ["kilometraz", "kilometraž", "izvjest km", "izvješt km", "km izvjest", "km izvješt", "prijedeni put", "prijeđeni put"],
-    "costcenters": ["troskovn", "troškovn", "centar troska", "centar troška", "cost center", "mjesto troska", "mjesto troška"],
-    "personactivitycategories": ["kategorije aktivnosti", "kategorija aktivnost", "nadskup aktivnost"],
-    "personactivitytypes": ["tipovi aktivnosti", "vrste aktivnosti", "tip aktivnost", "vrsta aktivnost"],
-    "personperiodicactivities": ["periodicke aktivnosti", "periodičke aktivnosti", "aktivnosti osobe", "aktivnosti zaposlenika"],
-    "personorgunits": ["org jedinice osobe", "odjeli zaposlenika"],
-    "tenantpermissions": ["dozvole tenanta", "korisnicke dozvole", "korisničke dozvole"],
-    "teammembers": ["clanovi tima", "članovi tima", "zaposlenici u timu"],
-    "vehicleassignments": ["dodjele vozila", "tko vozi"],
-    "documenttypes": ["tipovi dokument", "tip dokument", "tipov dokument", "vrsta dokument", "kategorija dokument"],
+# Hand-curated entity stems — ordering matters, more specific entities first.
+# Data in config/domain/entity_stems.json so linguists can edit without Python PR.
+CURATED_STEMS: Dict[str, List[str]] = load_json("domain", "entity_stems.json")["curated_stems"]
 
-    # Primary entities
-    "companies": ["kompanij", "tvrtk", "firm", "poduzec", "poduzeć"],
-    "vehicles": ["vozil", "auto", "automobil", "flot", "auti", "kola"],
-    "persons": ["osob", "korisnik", "zaposlenik", "radnik", "voditelj", "djelatnik"],
-    "expenses": ["trosk", "trosak", "troška", "trošak", "trošk", "izdatak", "racun", "račun", "cijena", "rashod"],
-    "trips": ["putovanj", "trip", "voznj", "vožnj", "putni"],
-    "cases": ["slucaj", "slučaj", "steta", "šteta", "kvar", "incident", "prijav"],
-    "equipment": ["oprem", "uredaj", "uređaj", "inventar", "alat"],
-    "partners": ["partner", "dobavljac", "dobavljač", "klijent"],
-    "teams": ["tim ", "grupa", "ekip"],
-    "orgunits": ["organizacij", "jedinic", "odjel", "sektor"],
-    "roles": ["ulog", "rola", "dozvol", "permisij"],
-    "tags": ["oznaka", "tag ", "label"],
-    "pools": ["pool", "bazen vozil"],
-    "tenants": ["tenant", "najmoprimc"],
-    "documents": ["dokument", "prilog", "datoteka", "pdf"],
-    "metadata": ["metapoda", "metapodat", "metadata", "struktur entitet", "shema entitet", "definicij polj", "field defin"],
-    "lookup": ["sifrarnik", "šifrarnik", "dropdown", "izbornik", "skraceni popis", "skraćeni popis"],
-}
 
 # Minimum stem length to avoid false positives
 _MIN_STEM_LEN = 4
 
-# Full Croatian words that must NEVER become auto-stems.
-# These would substring-match nearly every query and corrupt entity detection.
-# Includes: pronouns, modals, auxiliaries, generic verbs, generic nouns, adverbs.
-_CROATIAN_STOPWORDS = {
-    # Pronouns
-    "koji", "koja", "koje", "kojim", "kojih", "kojima",
-    "jedan", "jedna", "jedno", "jednog", "jednu", "jedne",
-    "koliko", "koliki", "kolika",
-    "sve", "svi", "sva", "svih", "svim", "svima",
-    "moj", "moja", "moje", "moji", "mojih", "mojim",
-    "ovaj", "ova", "ovo", "onaj", "ona", "ono", "taj", "ta", "to",
-    "neki", "neka", "neko", "nekog", "nekoliko",
-    "isti", "ista", "isto",
-    # Modal/auxiliary verbs and forms
-    "zelim", "zelis", "zeli", "zelite", "zelio",
-    "trebam", "trebas", "treba", "trebate", "trebao",
-    "moram", "moras", "mora", "morate", "morao",
-    "mogu", "mozes", "moze", "mozete", "mogao",
-    "imam", "imas", "ima", "imate", "imao",
-    "biti", "budem", "bude", "bili", "bila", "bilo",
-    # Generic action verbs (present in most tool synonyms)
-    "obris", "obrisi", "obrisati", "brisa", "brisati",
-    "azuri", "azurir", "azuriraj", "azurirati",
-    "promi", "promijen", "promijeni", "promijeniti",
-    "izmij", "izmijen", "izmijeni", "izmijeniti",
-    "dodaj", "dodati", "dodavanje",
-    "kreir", "kreiraj", "kreirati", "kreiranje",
-    "napra", "napravi", "napraviti",
-    "pokaz", "pokazi", "pokazati",
-    "prika", "prikaz", "prikazi", "prikazati", "prikazivanje",
-    "dohva", "dohvat", "dohvati", "dohvatiti", "dohvacanje",
-    "makni", "maknuti", "micanj",
-    "ukloni", "ukloniti", "uklanjanj",
-    "updat", "update", "updat e",
-    "unesi", "unesti",
-    "upisi", "upisati",
-    "daj", "daje", "daju", "dati",
-    "zatra", "zatrazi",
-    "proja", "pronad", "pronaci",
-    "provj", "provje", "provjeri",
-    # Generic nouns that appear in many tool synonyms
-    "lista", "liste", "listu", "listi",
-    "popis", "popisu", "popisa",
-    "polja", "polje", "poljima",
-    "info", "inform", "informacij",
-    "poda", "podat", "podatak", "podaci", "podatke",
-    "stav", "stavk", "stavka", "stavke", "stavki",
-    "detal", "detalj", "detalji",
-    "speci", "specif", "specifi", "specifican",
-    "novi", "nova", "novo", "novog", "nove",
-    "stari", "stara", "staro",
-    "kojeg",
-    "preg", "pregl", "pregle", "pregled", "pregledaj", "preglednik",
-    "spis", "spisa", "spisu",
-    "akt", "akta", "aktu",
-    "zapis", "zapisa",
-    # Adverbs/prepositions
-    "prema", "preko", "ispod", "iznad", "unutar",
-    "kada", "kada ", "kako", "gdje", "zasto",
-    "samo", "vise", "manje", "najvi", "najma",
-    "kriter", "kriteriju", "kriterijima",
-    "tipov", "tipa", "tipu",
-    "vrsta", "vrste", "vrsti",
-    "grupa", "grupe", "grupi",
-    "kateg", "kategorij",
-    # Generic tech terms
-    "id", "id-u", "po id",
-    "api", "endpoint", "tool",
-    "bulk", "batch",
-    "helpe", "helper", "input",
-    "po i",
-}
-
-# Stems (first 5 chars) that are too generic. Kept for backward compat; the
-# _CROATIAN_STOPWORDS above is the primary filter.
-_STOP_STEMS = {
-    "dohv", "prik", "poka", "obri", "dodaj", "krei", "azur",
-    "novi", "nova", "novo", "po i", "spec", "konk", "deta",
-    "info", "poda", "stav", "svih", "svi ", "sva ", "list",
-    "popi", "preg",
-}
+# Croatian stopwords + generic stem prefixes that must never become entity stems.
+# Data in config/linguistic/stopwords_hr.json.
+_sw_cfg = load_json("linguistic", "stopwords_hr.json")
+_CROATIAN_STOPWORDS = set(_sw_cfg["stopwords"])
+_STOP_STEMS = set(_sw_cfg["stop_stems"])
 
 
 def _is_stopword(word: str) -> bool:
@@ -316,6 +201,11 @@ def _get_normalized_stems() -> Dict[str, List[str]]:
     return _NORMALIZED_STEMS_CACHE
 
 
+# Entities that describe an operation/view rather than a business object.
+# When both a modifier and a concrete entity match, the concrete entity wins.
+_MODIFIER_ENTITIES = frozenset({"stats", "metadata", "settings", "dashboarditems", "demo"})
+
+
 def detect_entity(query: str) -> Optional[str]:
     """
     Detect which entity a query refers to.
@@ -323,15 +213,32 @@ def detect_entity(query: str) -> Optional[str]:
     Uses diacritic-normalized substring matching.
     Returns entity key (e.g., 'vehicles', 'expenses') or None.
 
-    More specific entities are checked first (e.g., 'vehicletypes' before 'vehicles').
+    More specific entities are checked first: stems are sorted longest-first
+    so 'tipovi putovanj' (triptypes) matches before 'putovanj' (trips).
+
+    Modifier entities (stats, metadata, settings) describe an operation, not a
+    business entity.  When a modifier AND a concrete entity both match, the
+    concrete entity wins.  E.g. "statistika vozila" → vehicles, not stats.
     """
     query_norm = _normalize(query)
+    # Build (stem, entity) pairs sorted by stem length descending.
+    # Longer stems are more specific and should match first.
+    all_stems = []
     for entity, stems_norm in _get_normalized_stems().items():
         for stem_norm in stems_norm:
-            if stem_norm in query_norm:
-                return entity
+            all_stems.append((stem_norm, entity))
+    all_stems.sort(key=lambda x: len(x[0]), reverse=True)
 
-    return None
+    first_match = None
+    for stem_norm, entity in all_stems:
+        if stem_norm in query_norm:
+            if entity not in _MODIFIER_ENTITIES:
+                return entity
+            if first_match is None:
+                first_match = entity
+
+    # Only modifier entities matched (e.g. bare "statistika")
+    return first_match
 
 
 def get_entity_keywords(entity: str) -> list:

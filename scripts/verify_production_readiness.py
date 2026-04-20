@@ -1,14 +1,14 @@
 """
 Production Readiness Verification Suite
 
-Validates all pre-flight checks for 0.5 CPU / 1GB RAM deployment:
+Validates pre-flight checks for single-pod 1 CPU / 1 GiB deployment:
 1. Lua script cache persistence in Redis
 2. FAISS index ID integrity (no ID drift after operations)
-3. Memory baseline under target limit
+3. Memory baseline under target limit (<900 MiB)
 4. PII masking in log output
 
 Usage:
-    docker exec mobility_worker python scripts/verify_production_readiness.py
+    kubectl exec deploy/mobility-bot -c worker -- python scripts/verify_production_readiness.py
 """
 
 import asyncio

@@ -94,7 +94,27 @@ class Settings(BaseSettings):
     AZURE_OPENAI_API_VERSION: str = Field(default="2024-08-01-preview")
     AZURE_OPENAI_DEPLOYMENT_NAME: str = Field(default="gpt-4o-mini")
     AZURE_OPENAI_EMBEDDING_DEPLOYMENT: str = Field(default="text-embedding-ada-002")
-    
+
+    # ---
+    # DIRECT OPENAI (for text-embedding-3-large — bypasses Azure)
+    # ---
+    OPENAI_EMBEDDING_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Direct OpenAI API key for embeddings (bypasses Azure when set)"
+    )
+    OPENAI_EMBEDDING_MODEL: str = Field(
+        default="text-embedding-3-large",
+        description="OpenAI embedding model (used when OPENAI_EMBEDDING_API_KEY is set)"
+    )
+    OPENAI_RERANKER_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Direct OpenAI API key for reranker (bypasses Azure when set)"
+    )
+    OPENAI_RERANKER_MODEL: str = Field(
+        default="gpt-4o",
+        description="OpenAI model for reranker (used when OPENAI_RERANKER_API_KEY is set)"
+    )
+
     # ---
     # AI SETTINGS
     # ---

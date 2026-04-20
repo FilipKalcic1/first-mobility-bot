@@ -42,31 +42,14 @@ class IntentDetectionResult:
 # Left word boundary that respects Croatian diacritics.
 _WORD = r"(?<![a-zA-ZčćžšđČĆŽŠĐ])"
 
-_DELETE_KEYWORDS = [
-    "obriši", "obrisi", "izbriši", "izbrisi", "izbaci",
-    "otkaži", "otkazi", "ponisti", "poništi", "ukloni", "makni",
-    "delete", "remove", "cancel",
-]
-_UPDATE_KEYWORDS = [
-    "ažuriraj", "azuriraj", "promijeni", "promjeni", "izmijeni", "izmjeni",
-    "update", "change", "modify", "edit",
-]
-_CREATE_KEYWORDS = [
-    "dodaj", "kreiraj", "napravi", "unesi", "prijavi", "zakaži", "zakazi",
-    "rezerviraj", "upiši", "upisi", "otvori", "zauzmi", "pošalji", "posalji",
-    "stavi",
-    "add", "create", "submit", "book", "reserve", "send", "post",
-]
-_READ_KEYWORDS = [
-    "prikaži", "prikazi", "pokaži", "pokazi", "popis", "lista", "daj",
-    "koji", "koja", "koje", "koliko", "kada", "gdje", "što", "sto",
-    "imam", "imaš", "imas", "vidim", "vidjeti",
-    "show", "list", "get", "fetch", "what", "which", "how", "when",
-    "where", "do i have", "do you have", "view", "display",
-]
-_GREETING_KEYWORDS = [
-    "bok", "pozdrav", "hvala", "hello", "hi", "help", "pomoć", "pomoc",
-]
+from services.config_loader import load_json as _load_json
+
+_VERBS = _load_json("domain", "http_verbs_hr.json")["action_intent_keywords"]
+_DELETE_KEYWORDS = _VERBS["delete"]
+_UPDATE_KEYWORDS = _VERBS["update"]
+_CREATE_KEYWORDS = _VERBS["create"]
+_READ_KEYWORDS = _VERBS["read"]
+_GREETING_KEYWORDS = _VERBS["greeting"]
 
 
 def _compile_alts(keywords: List[str]) -> re.Pattern:

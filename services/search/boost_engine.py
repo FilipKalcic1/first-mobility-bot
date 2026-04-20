@@ -232,7 +232,7 @@ def apply_boosts(
                     tool_entity = tool_parts[2].lower()
                 # Trailing-'s' strip handles plural/singular: "vehicles" → "vehicle"
                 # matches "vehiclecalendar"; "expenses" → "expense" matches "expensegroups".
-                entity_stem = detected_entity.rstrip('s') if len(detected_entity) > 3 else detected_entity
+                entity_stem = detected_entity[:-1] if len(detected_entity) > 3 and detected_entity.endswith('s') else detected_entity
                 entity_matches = (
                     tool_entity == detected_entity
                     or detected_entity in tool_entity

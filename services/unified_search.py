@@ -59,10 +59,12 @@ class UnifiedSearchResponse:
     query: str
     total_candidates: int  # Before filtering
     detected_entity: Optional[str] = None  # Surfaced so callers don't re-run detect_entity
+    entity_clarification_needed: bool = False  # True when operation is clear but entity unknown
+    entity_candidates: Optional[List[str]] = None  # Top entity options for clarification
 
 
 # FAISS candidate pool sizing
-_POOL_SIZE_MIN = 80           # Floor for regular queries
+_POOL_SIZE_MIN = 500          # Floor for regular queries
 _POOL_SIZE_MULT = 3           # top_k × this, clamped by MIN
 
 # Exact-match injection score — must exceed any possible FAISS+boost total.
@@ -78,10 +80,20 @@ class UnifiedSearch:
         self._tool_categories: Optional[Dict] = None
         self._initialized = False
         self._init_lock = asyncio.Lock()
+        self._redis = None  # Optional, set via set_redis() for HyDE cache
+        self._cost_tracker = None  # Optional, set via set_cost_tracker() for HyDE usage tracking
 
     def set_registry(self, registry: "ToolRegistry") -> None:
         """Set tool registry (allows late binding)."""
         self._registry = registry
+
+    def set_redis(self, redis_client) -> None:
+        """Late-bind Redis for HyDE cache (7-day TTL on hypothetical docs)."""
+        self._redis = redis_client
+
+    def set_cost_tracker(self, cost_tracker) -> None:
+        """Late-bind CostTracker so HyDE LLM usage is recorded."""
+        self._cost_tracker = cost_tracker
 
     async def initialize(self) -> None:
         """Load all configuration files."""
@@ -249,11 +261,48 @@ class UnifiedSearch:
                 or (detected_method in ("delete", "put", "patch", "post"))
             )
 
-            # Entity + no-mutation → LIST. "radnik" → persons+LIST → get_Persons.
-            # Mutations (delete/post/put) keep UNKNOWN so TFI skips (mutation routing
-            # picks the id/criteria variant via method-qualified family).
-            if detected_entity and not is_mutation:
-                effective_query_type = QueryType.LIST
+            # ── QueryType determination (drives TFI resolution) ──
+            # Goal: resolve the OPERATION TYPE so TFI can do deterministic lookup.
+            # Old approach: mutations→UNKNOWN, suffix→bypass. New: resolve everything.
+            from services.search.config import SUFFIX_INTENT_BOOST as _SIB, LOOKUP_INTENT_BOOST as _LIB
+
+            if detected_entity:
+                # Step A: Delete-specific check FIRST (prevents "masovno obriši"
+                # from matching _multipatch's "masovno" keyword)
+                if is_mutation and detected_method == "delete":
+                    _criteria_stems = ["kriterij", "uvjet", "po filtr", "bulk", "masovno", "vise zapisa"]
+                    if any(s in query_lower_norm for s in _criteria_stems):
+                        effective_query_type = QueryType.DELETE_CRITERIA
+
+                # Step B: Check suffix keywords → set specific QueryType
+                if effective_query_type == QueryType.UNKNOWN:
+                    _suffix_query_type_map = {
+                        "_agg": QueryType.AGGREGATION,
+                        "_groupby": QueryType.AGGREGATION,
+                        "_projectto": QueryType.PROJECTION,
+                        "_multipatch": QueryType.BULK_UPDATE,
+                    }
+                    for sfx_key, (sfx_stems, _) in _SIB.items():
+                        if any(s in query_lower_norm for s in sfx_stems):
+                            mapped_qt = _suffix_query_type_map.get(sfx_key)
+                            if mapped_qt:
+                                effective_query_type = mapped_qt
+                                break
+
+                # Lookup keywords → LIST (lookup is a list variant)
+                if effective_query_type == QueryType.UNKNOWN:
+                    if any(s in query_lower_norm for s in _LIB[0]):
+                        effective_query_type = QueryType.LIST
+
+                # Step C: Mutation with no specific suffix → LIST (TFI handles via method param)
+                # e.g., "obriši troškove" → entity=expenses, qt=LIST, method=delete
+                #        → TFI: resolve("expenses", LIST, method="delete") → delete_Expenses
+                if effective_query_type == QueryType.UNKNOWN and is_mutation:
+                    effective_query_type = QueryType.LIST
+
+                # Step D: Non-mutation default → LIST
+                if effective_query_type == QueryType.UNKNOWN:
+                    effective_query_type = QueryType.LIST
 
             # Possessive ("moj auto") → SINGLE_ENTITY, not LIST.
             if is_possessive and effective_query_type == QueryType.LIST:
@@ -262,25 +311,14 @@ class UnifiedSearch:
             # Step 2.7c: USER PROFILE FLAG (defence-in-depth for ML fallback)
             # Profile tools are injected into results after boost pipeline (Step 4.7).
 
-            # Step 2.8: TFI HARD OVERRIDE — deterministic path (~70% of queries)
-            # When entity + queryType are both known, skip FAISS entirely.
-            # Return the whole entity family so LLM has context for final pick.
-            # NOTE: Only fires for substring-detected entities (high confidence).
+            # Step 2.8: TFI HARD OVERRIDE — deterministic path
+            # When entity + queryType are both known, resolve via TFI.
+            # Returns the whole entity family so LLM has context for final pick.
             from services.tool_family_index import get_family_index
             family_index = get_family_index()
             tfi_override_result = None
 
-            # Bypass TFI when query carries analytical/structural intent
-            # (agg/groupby/projectto/lookup/thumb/setasdefault/multipatch) — TFI would
-            # collapse these to plain-list tools and hide the correct variant.
-            from services.search.config import SUFFIX_INTENT_BOOST as _SIB, LOOKUP_INTENT_BOOST as _LIB
-            _suffix_intent_hit = any(
-                s in query_lower_norm
-                for _stems, _ in _SIB.values()
-                for s in _stems
-            ) or any(s in query_lower_norm for s in _LIB[0])
-
-            if detected_entity and effective_query_type != QueryType.UNKNOWN and not _suffix_intent_hit:
+            if detected_entity and effective_query_type != QueryType.UNKNOWN:
                 # Prefer verb-detected method over ML intent (more reliable for Croatian)
                 tfi_method = detected_method or (
                     intent_result.intent.value.lower()
@@ -295,12 +333,15 @@ class UnifiedSearch:
                 family_tools = family_index.get_family_tools(detected_entity)
 
                 if tfi_tool and family_tools:
-                    # Build results from entire family, TFI match gets highest score
+                    # Build results from entire family.
+                    # Scores set in FAISS range (0.75-0.88) so TFI nudges
+                    # ranking but doesn't dominate when entity detection
+                    # misfires. Exact match injection (15.0) still wins.
                     family_results = []
                     seen_tools = set()
 
                     for _variant, tool_id in family_tools.items():
-                        score = 2.0 if tool_id.lower() == tfi_tool.lower() else 1.0
+                        score = 0.88 if tool_id.lower() == tfi_tool.lower() else 0.75
                         parts = tool_id.split("_")
                         method = parts[0].upper() if parts else "GET"
                         family_results.append(SearchResult(
@@ -316,7 +357,7 @@ class UnifiedSearch:
                         parts = tfi_tool.split("_")
                         family_results.append(SearchResult(
                             tool_id=tfi_tool,
-                            score=2.0,
+                            score=0.90,
                             method=parts[0].upper() if parts else "GET"
                         ))
 
@@ -344,16 +385,17 @@ class UnifiedSearch:
                         f"resolved={tfi_tool}, family_size={len(family_results)}"
                     )
 
-            # Step 3: FAISS search (skipped if TFI override succeeded)
-            if tfi_override_result is not None:
-                faiss_results = tfi_override_result
-                total_candidates = len(faiss_results)
-                # Skip boost pipeline — TFI results are already scored
-                boosted_results = faiss_results
-            else:
-                faiss_store = get_faiss_store()
+            # Step 3: FAISS search — always run, even when TFI succeeded.
+            # TFI results are merged as strong candidates, but FAISS provides
+            # fallback coverage when entity detection misfires.
+            faiss_store = get_faiss_store()
 
-                if not faiss_store.is_initialized():
+            if not faiss_store.is_initialized():
+                if tfi_override_result is not None:
+                    faiss_results = tfi_override_result
+                    total_candidates = len(faiss_results)
+                    boosted_results = faiss_results
+                else:
                     logger.warning("UnifiedSearch: FAISS not initialized, returning empty results")
                     return UnifiedSearchResponse(
                         results=[],
@@ -363,18 +405,56 @@ class UnifiedSearch:
                         total_candidates=0,
                         detected_entity=detected_entity,
                     )
-
-                # Specialized-suffix pool-widening was gated on the removed ML classifier.
+            else:
                 pool_size = max(top_k * _POOL_SIZE_MULT, _POOL_SIZE_MIN)
 
-                # Search 1: BASE query (always)
                 faiss_results = await faiss_store.search(
                     query=query,
                     top_k=pool_size,
                     action_filter=action_filter,
                     entity_filter=detected_entity,
-                    auto_detect_entity=False,  # Entity already detected above
+                    auto_detect_entity=False,
                 )
+
+                # Step 3.5: HyDE FALLBACK — low-confidence retrieval gets an LLM-generated
+                # hypothetical tool description concatenated with the original query, then
+                # re-searched. Skip when an exact match is queued (signal already strong).
+                from services.hyde import (
+                    should_trigger as _hyde_should,
+                    generate_hypothetical_doc,
+                    build_expanded_query,
+                    HYDE_SCORE_UPLIFT,
+                )
+                top_score = faiss_results[0].score if faiss_results else None
+                if exact_match_tool is None and _hyde_should(top_score, query):
+                    try:
+                        from services.openai_client import get_openai_client
+                        hyde_text = await generate_hypothetical_doc(
+                            query=query,
+                            openai_client=get_openai_client(),
+                            redis_client=getattr(self, "_redis", None),
+                            cost_tracker=getattr(self, "_cost_tracker", None),
+                        )
+                        if hyde_text:
+                            expanded = build_expanded_query(query, hyde_text)
+                            hyde_results = await faiss_store.search(
+                                query=expanded,
+                                top_k=pool_size,
+                                action_filter=action_filter,
+                                entity_filter=detected_entity,
+                                auto_detect_entity=False,
+                            )
+                            if hyde_results:
+                                hyde_top = hyde_results[0].score
+                                base_top = faiss_results[0].score if faiss_results else 0.0
+                                HYDE_SCORE_UPLIFT.observe(hyde_top - base_top)
+                                if not faiss_results or hyde_top > base_top:
+                                    logger.info(
+                                        f"HyDE lifted top score {base_top:.3f} → {hyde_top:.3f}"
+                                    )
+                                    faiss_results = hyde_results
+                    except Exception as e:
+                        logger.warning(f"HyDE fallback failed, using base FAISS results: {e}")
 
                 total_candidates = len(faiss_results)
 
@@ -389,63 +469,129 @@ class UnifiedSearch:
                     detected_entity=detected_entity,
                 )
 
-            # Step 4: Apply boosts (FAISS path only; TFI path is already scored)
-            # Boosts + BM25 are entity-gated: without a detected entity they inject
-            # noise (raw FAISS beats boosted FAISS on ambiguous queries).
-            if tfi_override_result is None:
-                if detected_entity:
-                    # Guard the entire boost+BM25 stage so any bug falls back to
-                    # raw FAISS ordering rather than failing the whole search.
-                    try:
-                        boosted_results = self._apply_boosts(
-                            query, faiss_results,
-                            detected_entity=detected_entity,
-                            effective_query_type=effective_query_type,
-                            is_possessive=is_possessive,
-                            detected_method=detected_method,
+            # Step 3.7: ENTITY INFERENCE from FAISS results.
+            # When entity detection failed, use FAISS top results to infer the entity.
+            # If one entity dominates top-10, treat it as detected and re-resolve via TFI.
+            # If multiple entities compete, signal entity_clarification_needed.
+            _entity_clarification_needed = False
+            _entity_candidates = None
+            if not detected_entity and faiss_results and tfi_override_result is None:
+                from collections import Counter
+                _top_entities = Counter()
+                for _fr in faiss_results[:10]:
+                    _parts = _fr.tool_id.split("_")
+                    if len(_parts) >= 2 and _parts[0].lower() in ("get","post","put","patch","delete"):
+                        _top_entities[_parts[1].lower()] += 1
+                if _top_entities:
+                    _best_entity, _best_count = _top_entities.most_common(1)[0]
+                    _total_top = sum(_top_entities.values())
+                    _entity_dominance = _best_count / _total_top
+                    # If one entity has ≥50% of top-10 results, infer it
+                    if _entity_dominance >= 0.5 and _best_count >= 3:
+                        detected_entity = _best_entity
+                        effective_query_type = QueryType.LIST
+                        tfi_method = detected_method or (
+                            intent_result.intent.value.lower()
+                            if intent_result.intent not in (ActionIntent.UNKNOWN, ActionIntent.NONE)
+                            else None
+                        )
+                        tfi_tool = family_index.resolve(
+                            detected_entity, effective_query_type,
+                            method=tfi_method,
+                        )
+                        family_tools = family_index.get_family_tools(detected_entity)
+                        if tfi_tool and family_tools:
+                            family_results = []
+                            for _variant, tool_id in family_tools.items():
+                                score = 0.88 if tool_id.lower() == tfi_tool.lower() else 0.75
+                                parts = tool_id.split("_")
+                                method_str = parts[0].upper() if parts else "GET"
+                                family_results.append(SearchResult(
+                                    tool_id=tool_id, score=score, method=method_str
+                                ))
+                            family_results.sort(key=lambda r: r.score, reverse=True)
+                            tfi_override_result = family_results
+                            logger.info(
+                                f"UnifiedSearch ENTITY INFERRED from FAISS: "
+                                f"entity={detected_entity} ({_entity_dominance:.0%} dominance), "
+                                f"resolved={tfi_tool}"
+                            )
+                    else:
+                        # Multiple entities compete — signal clarification needed
+                        _entity_candidates = [e for e, _ in _top_entities.most_common(5)]
+                        _entity_clarification_needed = True
+                        logger.info(
+                            f"UnifiedSearch ENTITY UNCLEAR: top entities={_top_entities.most_common(5)}, "
+                            f"dominance={_entity_dominance:.0%} — clarification needed"
                         )
 
-                        if self._bm25_index and self._bm25_index.is_built:
-                            bm25_tool_ids = [r.tool_id for r in boosted_results]
-                            bm25_scores = self._bm25_index.get_scores_batch(query, bm25_tool_ids)
-                            if bm25_scores:
-                                max_bm25 = max(bm25_scores.values()) or 1.0
-                                for r in boosted_results:
-                                    bm25_raw = bm25_scores.get(r.tool_id, 0.0)
-                                    if bm25_raw > 0:
-                                        r.score += _BM25_WEIGHT * (bm25_raw / max_bm25)
-                    except Exception as e:
-                        logger.warning(f"Boost pipeline failed (FAISS results unaffected): {e}")
-                        boosted_results = faiss_results
-                else:
-                    # No entity: trust raw FAISS ranking
-                    boosted_results = faiss_results
+            # Step 4: Apply boosts + merge TFI candidates into FAISS results.
+            # TFI tools get a strong boost but don't monopolize — FAISS provides
+            # fallback coverage when entity detection misfires.
+            if detected_entity:
+                try:
+                    boosted_results = self._apply_boosts(
+                        query, faiss_results,
+                        detected_entity=detected_entity,
+                        effective_query_type=effective_query_type,
+                        is_possessive=is_possessive,
+                        detected_method=detected_method,
+                    )
 
-                # Step 4.5: EXACT MATCH INJECTION
-                if exact_match_tool:
-                    found = False
-                    for result in boosted_results:
-                        if result.tool_id == exact_match_tool:
-                            result.score = _EXACT_MATCH_SCORE
-                            found = True
-                            break
-                    if not found:
-                        boosted_results.insert(0, SearchResult(
-                            tool_id=exact_match_tool,
-                            score=_EXACT_MATCH_SCORE,
-                            method="GET"
-                        ))
+                    if self._bm25_index and self._bm25_index.is_built:
+                        bm25_tool_ids = [r.tool_id for r in boosted_results]
+                        bm25_scores = self._bm25_index.get_scores_batch(query, bm25_tool_ids)
+                        if bm25_scores:
+                            max_bm25 = max(bm25_scores.values()) or 1.0
+                            for r in boosted_results:
+                                bm25_raw = bm25_scores.get(r.tool_id, 0.0)
+                                if bm25_raw > 0:
+                                    r.score += _BM25_WEIGHT * (bm25_raw / max_bm25)
+                except Exception as e:
+                    logger.warning(f"Boost pipeline failed (FAISS results unaffected): {e}")
+                    boosted_results = faiss_results
             else:
                 boosted_results = faiss_results
+
+            # Step 4.3: MERGE TFI candidates into FAISS+boost results.
+            # TFI resolved tool gets a strong score boost but competes with FAISS.
+            if tfi_override_result is not None:
+                seen = {r.tool_id.lower() for r in boosted_results}
+                for tfi_r in tfi_override_result:
+                    if tfi_r.tool_id.lower() not in seen:
+                        boosted_results.append(tfi_r)
+                        seen.add(tfi_r.tool_id.lower())
+                    else:
+                        for r in boosted_results:
+                            if r.tool_id.lower() == tfi_r.tool_id.lower():
+                                r.score = max(r.score, tfi_r.score)
+                                break
+
+            # Step 4.5: EXACT MATCH INJECTION
+            if exact_match_tool:
+                found = False
+                for result in boosted_results:
+                    if result.tool_id == exact_match_tool:
+                        result.score = _EXACT_MATCH_SCORE
+                        found = True
+                        break
+                if not found:
+                    boosted_results.insert(0, SearchResult(
+                        tool_id=exact_match_tool,
+                        score=_EXACT_MATCH_SCORE,
+                        method="GET"
+                    ))
 
             # Step 4.6: LLM ENTITY BOOST — disabled. Reserved for future LLM query expansion (v2).
 
             # Step 4.7: USER PROFILE INJECTION (D1 fix)
             # Inject profile tools so LLM fallback has the right candidates.
+            # Data in config/per_tool/profile_query_tools.json.
             if is_user_profile and not is_mutation:
+                from services.config_loader import load_json as _load_profile_tools
                 _profile_tools = [
-                    ("get_PersonData_personIdOrEmail", 2.0),
-                    ("get_Persons_id", 1.5),
+                    (t["tool_id"], t["score"])
+                    for t in _load_profile_tools("per_tool", "profile_query_tools.json")["tools"]
                 ]
                 for pt_id, pt_score in _profile_tools:
                     if self._registry and self._registry.get_tool(pt_id):
@@ -455,45 +601,48 @@ class UnifiedSearch:
             # Step 5: Sort by final score (boost system already applied entity/suffix boosts)
             boosted_results.sort(key=lambda r: r.score, reverse=True)
 
-            # Step 5.5: LLM RERANK for fully ambiguous queries
-            # When NO entity was detected (not even by LLM), the top-20 contains
-            # tools from random entities with near-identical scores.
-            # One LLM call to reorder top-10 significantly improves Top-1 accuracy.
-            if not detected_entity:
-                try:
-                    from services.llm_reranker import rerank_with_llm
-                    candidates = []
-                    for r in boosted_results[:20]:
-                        doc = (self._tool_documentation or {}).get(r.tool_id, {})
-                        desc = doc.get('purpose', '')
-                        entity_desc = self._build_entity_description(r.tool_id, r.method)
-                        if entity_desc:
-                            desc = f"{entity_desc}. {desc}"
-                        candidates.append({
-                            'tool_id': r.tool_id,
-                            'score': r.score,
-                            'description': desc,
-                        })
-                    reranked = await rerank_with_llm(
-                        query=query,
-                        candidates=candidates,
-                        top_k=20,
-                        tool_documentation=self._tool_documentation,
-                    )
-                    if reranked and reranked[0].tool_id:
-                        reranked_ids = [r.tool_id for r in reranked]
-                        id_to_result = {r.tool_id: r for r in boosted_results}
-                        new_results = []
-                        for rid in reranked_ids:
-                            if rid in id_to_result:
-                                new_results.append(id_to_result[rid])
-                        for r in boosted_results:
-                            if r.tool_id not in reranked_ids:
-                                new_results.append(r)
-                        boosted_results = new_results
-                        logger.info(f"UnifiedSearch: LLM rerank -> top={reranked[0].tool_id}")
-                except Exception as e:
-                    logger.warning(f"UnifiedSearch: LLM rerank failed (using FAISS order): {e}")
+            # Step 5.5: LLM RERANK — correct entity-detection misfires
+            # and improve ranking when FAISS scores are close.
+            try:
+                from services.llm_reranker import rerank_with_llm
+                candidates = []
+                for r in boosted_results[:20]:
+                    doc = (self._tool_documentation or {}).get(r.tool_id, {})
+                    desc = doc.get('purpose', '')
+                    when = doc.get('when_to_use', [])
+                    if when:
+                        desc = f"{desc} | {' '.join(when[:2])}"
+                    syns = doc.get('synonyms_hr', [])
+                    if syns:
+                        desc = f"{desc} ({', '.join(syns[:5])})"
+                    entity_desc = self._build_entity_description(r.tool_id, r.method)
+                    if entity_desc:
+                        desc = f"{entity_desc}. {desc}"
+                    candidates.append({
+                        'tool_id': r.tool_id,
+                        'score': r.score,
+                        'description': desc,
+                    })
+                reranked = await rerank_with_llm(
+                    query=query,
+                    candidates=candidates,
+                    top_k=20,
+                    tool_documentation=self._tool_documentation,
+                )
+                if reranked and reranked[0].tool_id:
+                    reranked_ids = [r.tool_id for r in reranked]
+                    id_to_result = {r.tool_id: r for r in boosted_results}
+                    new_results = []
+                    for rid in reranked_ids:
+                        if rid in id_to_result:
+                            new_results.append(id_to_result[rid])
+                    for r in boosted_results:
+                        if r.tool_id not in reranked_ids:
+                            new_results.append(r)
+                    boosted_results = new_results
+                    logger.info(f"UnifiedSearch: LLM rerank -> top={reranked[0].tool_id}")
+            except Exception as e:
+                logger.warning(f"UnifiedSearch: LLM rerank failed (using FAISS order): {e}")
 
             # Step 6: Convert to final format
             final_results = []
@@ -544,6 +693,8 @@ class UnifiedSearch:
                 query=query,
                 total_candidates=total_candidates,
                 detected_entity=detected_entity,
+                entity_clarification_needed=_entity_clarification_needed,
+                entity_candidates=_entity_candidates,
             )
 
     # Single source of truth: config/tool_routing.py

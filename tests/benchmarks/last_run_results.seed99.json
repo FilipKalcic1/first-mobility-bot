@@ -1,0 +1,2397 @@
+{
+  "seed": 99,
+  "sample_size": 100,
+  "paraphrases_per_tool": 3,
+  "total_queries": 176,
+  "top1_hits": 0,
+  "top5_hits": 0,
+  "top20_hits": 0,
+  "per_tool": [
+    {
+      "tool_id": "delete_Cases_DeleteByCriteria",
+      "index": 5,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_Cases_id_documents_documentId",
+      "index": 7,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "delete_EquipmentCalendar_DeleteByCriteria",
+      "index": 23,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 2
+    },
+    {
+      "tool_id": "delete_ExpenseTypes",
+      "index": 37,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "delete_Expenses_id",
+      "index": 43,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_LatestPeriodicActivities_DeleteByCriteria",
+      "index": 52,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_PeriodicActivitiesSchedules_id",
+      "index": 82,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 2
+    },
+    {
+      "tool_id": "delete_PeriodicActivitiesSchedules_id_documents_documentId",
+      "index": 83,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "delete_PeriodicActivities_DeleteByCriteria",
+      "index": 84,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_PeriodicActivityTypes_DeleteByCriteria",
+      "index": 88,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_PeriodicActivityTypes_id",
+      "index": 89,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_PersonActivityTypes",
+      "index": 91,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_Pools_DeleteByCriteria",
+      "index": 112,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_TenantPermissions_DeleteByCriteria",
+      "index": 132,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_TenantPermissions_id_documents_documentId",
+      "index": 134,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "delete_Tenants_DeleteByCriteria",
+      "index": 136,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_TripTypes",
+      "index": 139,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "delete_Trips_id_documents_documentId",
+      "index": 146,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 2
+    },
+    {
+      "tool_id": "delete_VehicleTypes",
+      "index": 155,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "delete_Vehicles_DeleteByCriteria",
+      "index": 164,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_AverageFuelExpensesAndMileages_from_to_GroupBy",
+      "index": 175,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_CaseTypes_ProjectTo",
+      "index": 180,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "get_CaseTypes_id",
+      "index": 181,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_CaseTypes_id_documents_documentId",
+      "index": 183,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_Companies_id_documents_documentId_thumb",
+      "index": 202,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_CostCenters",
+      "index": 204,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_CostCenters_Agg",
+      "index": 205,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_CostCenters_id",
+      "index": 208,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_DocumentTypes_Agg",
+      "index": 217,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_DocumentTypes_id_documents",
+      "index": 221,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "get_EquipmentCalendar_Agg",
+      "index": 235,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_Equipment_GroupBy",
+      "index": 254,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 2
+    },
+    {
+      "tool_id": "get_Equipment_id_documents",
+      "index": 257,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "get_ExpenseTypes_id_documents",
+      "index": 275,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "get_LatestVehicleCalendar",
+      "index": 314,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_LatestVehicleCalendar_ProjectTo",
+      "index": 317,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_LatestVehicleContracts_ProjectTo",
+      "index": 323,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "get_Lookup_CaseStatuses",
+      "index": 337,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Lookup_EquipmentId",
+      "index": 346,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_Lookup_PersonTypeId",
+      "index": 366,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Lookup_SupplierId",
+      "index": 371,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Master_GroupBy",
+      "index": 382,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Metadata_ProjectTo",
+      "index": 389,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Metadata_id",
+      "index": 390,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Metadata_id_documents_documentId",
+      "index": 392,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_MileageReports_GroupBy",
+      "index": 397,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "get_MonthlyMileagesAssigned_ProjectTo",
+      "index": 412,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_MonthlyMileages_Agg",
+      "index": 413,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 2
+    },
+    {
+      "tool_id": "get_MonthlyMileages_ProjectTo",
+      "index": 415,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_Partners_ProjectTo",
+      "index": 429,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Partners_id_documents",
+      "index": 431,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_PeriodicActivities",
+      "index": 435,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_PeriodicActivities_id_metadata",
+      "index": 452,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 2
+    },
+    {
+      "tool_id": "get_PeriodicActivityTypes",
+      "index": 453,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_PersonOrgUnits",
+      "index": 472,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_PersonOrgUnits_Agg",
+      "index": 473,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_PersonOrgUnits_id_metadata",
+      "index": 480,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_PersonPeriodicActivities_id",
+      "index": 485,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Persons_GroupBy",
+      "index": 501,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Pools_id_documents_documentId_thumb",
+      "index": 515,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_SchedulingModels_id_metadata",
+      "index": 531,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "get_Stats_NoMileageSince",
+      "index": 535,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "get_Tags_ProjectTo",
+      "index": 541,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Tags_id_documents",
+      "index": 543,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "get_TeamMembers",
+      "index": 547,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_TeamMembers_id",
+      "index": 551,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_TenantPermissions_id_documents_documentId",
+      "index": 571,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_Tenants_id_documents",
+      "index": 580,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "get_Trips_id_metadata",
+      "index": 602,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_VehicleCalendar_Agg",
+      "index": 609,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_VehicleCalendar_id_documents",
+      "index": 613,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "get_VehicleContracts_ProjectTo",
+      "index": 620,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_VehicleInputHelper_DistinctMakes",
+      "index": 627,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "get_VehicleTypes_GroupBy",
+      "index": 632,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "get_VehicleTypes_id_metadata",
+      "index": 638,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "get_VehiclesHistoricalEntries_ProjectTo",
+      "index": 647,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "patch_Equipment_id",
+      "index": 676,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "patch_SchedulingModels_id",
+      "index": 693,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 2
+    },
+    {
+      "tool_id": "patch_Tenants_id",
+      "index": 698,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "patch_Trips_id",
+      "index": 700,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "post_Companies_id_documents",
+      "index": 717,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "post_EquipmentTypes_multipatch",
+      "index": 732,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "post_Equipment_id_documents",
+      "index": 733,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "post_ExpenseTypes_id_documents",
+      "index": 739,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 2
+    },
+    {
+      "tool_id": "post_Metadata_id_documents",
+      "index": 746,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "post_PeriodicActivitiesSchedules_multipatch",
+      "index": 765,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "post_PersonPeriodicActivities_id_documents",
+      "index": 778,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "post_SendEmail",
+      "index": 793,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "post_TenantPermissions",
+      "index": 806,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "post_TenantPermissions_SetRolesForUser_personId",
+      "index": 807,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 2
+    },
+    {
+      "tool_id": "post_Tenants",
+      "index": 810,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "post_Tenants_id_documents",
+      "index": 811,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "put_CaseTypes_id_documents_documentId",
+      "index": 839,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "put_Cases_id_documents_documentId",
+      "index": 842,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "put_Expenses_id_documents_documentId",
+      "index": 870,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "put_Partners_id_documents_documentId",
+      "index": 882,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "put_Teams_id_documents_documentId",
+      "index": 921,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 1
+    },
+    {
+      "tool_id": "put_TenantPermissions_id",
+      "index": 923,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    },
+    {
+      "tool_id": "put_VehicleTypes_id_documents_documentId",
+      "index": 942,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 0
+    },
+    {
+      "tool_id": "put_Vehicles_id",
+      "index": 947,
+      "top1": 0,
+      "top5": 0,
+      "top20": 0,
+      "n": 3
+    }
+  ],
+  "misses": [
+    {
+      "expected": "delete_Cases_DeleteByCriteria",
+      "query": "Trebam očistiti određene zapise koji udovoljavaju specifičnim uvjetima.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_Cases_DeleteByCriteria",
+      "query": "Trebam eliminirati više unosa koji ispunjavaju specifične zahtjeve.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_Cases_DeleteByCriteria",
+      "query": "Trebam da se oslobodim nekoliko unosa koji odgovaraju mojim filtrima.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_EquipmentCalendar_DeleteByCriteria",
+      "query": "Trebam se riješiti nekih stavki iz rezervacijskog plana koje odgovaraju specifičnim filtrima.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "vehiclecalendar",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_EquipmentCalendar_DeleteByCriteria",
+      "query": "Trebam maknuti više rezervacijskih planova koji se temelje na specifičnim uvjetima.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "vehiclecalendar",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_ExpenseTypes",
+      "query": "Želim da se svi navedeni izdaci uklone iz evidencije.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "delete_Expenses_id",
+      "query": "Možeš li mi pomoći da izbacim stavku koja mi ne treba?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_Expenses_id",
+      "query": "Pomozi mi da se oslobodim jednog iznosa koji više nema smisla.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_Expenses_id",
+      "query": "Trebam izbrisati jedan iznos koji mi ne treba više.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_LatestPeriodicActivities_DeleteByCriteria",
+      "query": "Molim te da izbrišeš sve nedavne unosne elemente koji odgovaraju zadanom parametru.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_LatestPeriodicActivities_DeleteByCriteria",
+      "query": "Trebam da se oslobodim svih recentnih podataka koji zadovoljavaju definirane smjernice.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_LatestPeriodicActivities_DeleteByCriteria",
+      "query": "Želim da se eliminiraju svi aktuelni unosi koji ispunjavaju postavljene uvjete.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_PeriodicActivitiesSchedules_id",
+      "query": "Želim da se izvrši brisanje odabrane stavke iz agende.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "delete_PeriodicActivitiesSchedules_id",
+      "query": "Možeš li maknuti određeni unos iz hodograma koji imam?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_PeriodicActivities_DeleteByCriteria",
+      "query": "Trebam se riješiti nekoliko ponovljenih spisa koji ispunjavaju specifične zahtjeve.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_PeriodicActivities_DeleteByCriteria",
+      "query": "Želim da se izbrišu pojedinačne ponavljajuće stvari na temelju zadanih opcija.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "delete_PeriodicActivities_DeleteByCriteria",
+      "query": "Trebam eliminirati niz ponavljajućih zadataka temeljem postavljenih pravila.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_PeriodicActivityTypes_DeleteByCriteria",
+      "query": "Zanima me kako da eliminiram određene grupe na temelju specifičnih kriterija.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_PeriodicActivityTypes_DeleteByCriteria",
+      "query": "Trebam eliminirati određene kategorije na osnovu specifičnih postavki.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "settings",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_PeriodicActivityTypes_DeleteByCriteria",
+      "query": "Želim eliminirati različite klase na temelju specifičnih uvjeta.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_PeriodicActivityTypes_id",
+      "query": "Trebam izbrisati jedan tip rasporeda prema njegovom identifikatoru.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_PeriodicActivityTypes_id",
+      "query": "Trebam se riješiti jedne vrste rasporeda prema njegovom ID-u.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "delete_PeriodicActivityTypes_id",
+      "query": "Trebam eliminirati specifične klase rasporeda prema njihovom ID-u.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_PersonActivityTypes",
+      "query": "Želim izbrisati različite kategorije zadataka u sustavu.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_PersonActivityTypes",
+      "query": "Želim izbrisati više kategorija zadatka odjednom.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_PersonActivityTypes",
+      "query": "Možeš li mi pomoći da se oslobodim nekoliko vrsta poslova?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "NONE"
+    },
+    {
+      "expected": "delete_Pools_DeleteByCriteria",
+      "query": "Tražim način da se oslobodim više limuzina koristeći specifične postavke filtriranja.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "settings",
+      "intent": "POST"
+    },
+    {
+      "expected": "delete_Pools_DeleteByCriteria",
+      "query": "Možeš li eliminirati određene kombije na temelju unaprijed postavljenih smjernica?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_Pools_DeleteByCriteria",
+      "query": "Možeš li mi pomoći da eliminiram određena motorna sredstva na osnovu definiranih smjernica?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_TenantPermissions_DeleteByCriteria",
+      "query": "Molim te da mi pomogneš da očistim stavke koje ne ispunjavaju postavljene uvjete.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "teams",
+      "intent": "POST"
+    },
+    {
+      "expected": "delete_TenantPermissions_DeleteByCriteria",
+      "query": "Želim da se oslobodim elemenata koji zadovoljavaju specifične kriterije ovlasti.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_TenantPermissions_DeleteByCriteria",
+      "query": "Možeš li mi pomoći da eliminiram nevažeće unose koji se temelje na definiranim pravilima?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_TenantPermissions_id_documents_documentId",
+      "query": "Želim se osloboditi neaktualnog akta koji se odnosi na ovlasti iznajmljivača.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_Tenants_DeleteByCriteria",
+      "query": "Treba mi da makneš grupu iznajmljivača u skladu s definiranim smjernicama.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "delete_Tenants_DeleteByCriteria",
+      "query": "Možeš li pomoći da se oslobodim odabranih iznajmljivača na temelju zadanih uvjeta?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "NONE"
+    },
+    {
+      "expected": "delete_Tenants_DeleteByCriteria",
+      "query": "Trebam opozvati više iznajmljivača koristeći specifične kriterije.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "delete_TripTypes",
+      "query": "Možeš li izbrisati razne vrste trajekata koje više ne trebaju biti prisutne?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_Trips_id_documents_documentId",
+      "query": "Kako da obrišem neki akt koji više ne koristim?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_Trips_id_documents_documentId",
+      "query": "Treba mi pomoć da se oslobodim jednog obraza koji nije aktualan.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_VehicleTypes",
+      "query": "Želim da se eliminiraju razni modeli motornih sredstava s popisa.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_VehicleTypes",
+      "query": "Trebam da se ukinu određeni tipovi motornih sredstava u sustavu.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "delete_VehicleTypes",
+      "query": "Kako mogu maknuti višak limuzina i ostalih motornih sredstava iz baze?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_Vehicles_DeleteByCriteria",
+      "query": "Želim se osloboditi više motornih sredstava koja više nisu potrebna.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "delete_Vehicles_DeleteByCriteria",
+      "query": "Trebam eliminirati nekoliko kombija koji više nisu u upotrebi.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "DELETE"
+    },
+    {
+      "expected": "delete_Vehicles_DeleteByCriteria",
+      "query": "Tražim način da se oslobodim limuzina na temelju specifičnih smjernica.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_CaseTypes_ProjectTo",
+      "query": "Mogu li vidjeti sve vrste projekata zajedno s relevantnim detaljima?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_CostCenters_Agg",
+      "query": "Treba mi informacija o sveukupnim iznosima za sve sektore.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "orgunits",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_CostCenters_Agg",
+      "query": "Tražim prikaz ukupnih iznosa prema različitim jedinicama.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "teams",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_CostCenters_Agg",
+      "query": "Možete li mi pokazati zbirne brojke za sve relevantne stavke?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_DocumentTypes_Agg",
+      "query": "Molim te da prikažeš izvore s pravilima sažimanja za sve relevantne potvrde.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_DocumentTypes_Agg",
+      "query": "Zanima me kako izgleda zbirna funkcija za različite potvrde unutar postavljenih parametara.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "POST"
+    },
+    {
+      "expected": "get_DocumentTypes_Agg",
+      "query": "Možeš li mi reći rezultati agregacije za tipove akata koji zadovoljavaju određene kriterije?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_DocumentTypes_id_documents",
+      "query": "Zanima me koji su svi akti dostupni za određenu klasifikaciju.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Equipment_GroupBy",
+      "query": "Zanima me kako su različiti tehnički aparati grupirani u skladu s postavkama.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "settings",
+      "intent": "POST"
+    },
+    {
+      "expected": "get_Equipment_GroupBy",
+      "query": "Možeš li mi prikazati organizaciju tehničkih sredstava po definiranom modelu?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Equipment_id_documents",
+      "query": "Želim znati koje su evidencije dostupne za tu stavku.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_ExpenseTypes_id_documents",
+      "query": "Možeš li mi pokazati sve akte za određenu vrstu izdatka?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar",
+      "query": "Možeš li mi prikazati sve informacije o novim prijevoznim sredstvima i njihovim rasporedima?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar",
+      "query": "Možeš li mi pokazati sva dostupna prijevozna sredstva prema rasporedu?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar",
+      "query": "Zanima me koji su kombiji dostupni u hodogramu.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar_ProjectTo",
+      "query": "Pružite mi informacije o najnovijim podacima za limuzine u planu termina.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar_ProjectTo",
+      "query": "Kako da pristupim informacijama o najnovijim kombijima iz agende vezane uz projekt?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_LatestVehicleCalendar_ProjectTo",
+      "query": "Zanima me pregled planova za prijevozno sredstvo u aktualnom razdoblju.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_LatestVehicleContracts_ProjectTo",
+      "query": "Interesira me sažetak podataka o kombijima koji su uključeni u projekt.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_CaseStatuses",
+      "query": "Želim dobiti sve relevantne informacije o statusima postupaka.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "POST"
+    },
+    {
+      "expected": "get_Lookup_CaseStatuses",
+      "query": "Mogu li dobiti informacije o različitim statusima predmeta?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "teams",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_CaseStatuses",
+      "query": "Interesiraju me svi aktualni statusi vezani uz predmete.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Lookup_PersonTypeId",
+      "query": "Želim saznati koji su tipovi ljudi dostupni.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_PersonTypeId",
+      "query": "Možeš li mi reći koje su kategorije pojedinaca?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_PersonTypeId",
+      "query": "Možeš li mi reći koje vrste pojedinaca postoje?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "POST"
+    },
+    {
+      "expected": "get_Lookup_SupplierId",
+      "query": "Tražim informacije o svim onima koji nude proizvode ili usluge.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Lookup_SupplierId",
+      "query": "Trebam informacije o svim opskrbljivačima u bazi podataka.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Lookup_SupplierId",
+      "query": "Zanima me pregled svih onih koji opskrbljuju naše proizvode.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Master_GroupBy",
+      "query": "Želim vidjeti sastav svih važnih segmenata koji su klasificirani po unaprijed definiranim načelima.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Master_GroupBy",
+      "query": "Možeš li mi pokazati raspodijeljene elemente koji su klasificirani na specifičan način?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Master_GroupBy",
+      "query": "Koje su sve varijante koje pripadaju maticnom skupu?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Metadata_ProjectTo",
+      "query": "Mogu li dobiti pregled specifičnih značajki projekta?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Metadata_ProjectTo",
+      "query": "Želim vidjeti samo određene detalje o svom projektu.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Metadata_ProjectTo",
+      "query": "Zanima me koji su specifični podaci dostupni za moj projekt.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Metadata_id",
+      "query": "Trebam pregledati podatke koji se odnose na jedan konkretan entitet prema njegovom identifikatoru.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Metadata_id",
+      "query": "Možeš mi reći više o stavci koja se odnosi na određene podatke?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Metadata_id",
+      "query": "Možeš li mi pomoći da dođem do informacija o jednom ključnom zapisu?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "NONE"
+    },
+    {
+      "expected": "get_MileageReports_GroupBy",
+      "query": "Možeš li mi pokazati analizu vožnji organiziranih po različitim klasama?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "trips",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_MonthlyMileagesAssigned_ProjectTo",
+      "query": "Trebam informacije o mjesečnim voznim troškovima koji su povezani s projektom.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "expenses",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_MonthlyMileagesAssigned_ProjectTo",
+      "query": "Kako mogu pristupiti podacima o mjesečnim kilometrima vezanim uz moj projekt?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_MonthlyMileagesAssigned_ProjectTo",
+      "query": "Želim pregledati raspored putnih troškova vezanih uz moj projekt za tekući mjesec.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "expenses",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_MonthlyMileages_Agg",
+      "query": "Tražim informacije o prikupljenim udaljenostima za ovaj plan termina.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_MonthlyMileages_Agg",
+      "query": "Trebam informacije o skupnim prijevoznim sredstvima prema rasporedu.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Partners_ProjectTo",
+      "query": "Kako mogu dobiti pregled stavki vezanih uz naše projekte i suradničke odnose?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Partners_ProjectTo",
+      "query": "Trebam vidjeti sve podatke o suradnicima i aktivnostima.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Partners_ProjectTo",
+      "query": "Zanima me cjelokupni pregled svih suradničkih odnosa i projekata.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PeriodicActivities",
+      "query": "Tražim pregled svih ponavljajućih zadataka, s podrškom za filtriranje.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PeriodicActivities",
+      "query": "Treba mi uvid u sve redovne obrade s opcijama za sortiranje rezultata.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_PeriodicActivities",
+      "query": "Kako mogu pristupiti svim cikličnim zaduženjima i primijeniti filtere?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PeriodicActivities_id_metadata",
+      "query": "Tražim uvid u specifikacije redovnih poslova.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PeriodicActivities_id_metadata",
+      "query": "Možeš li mi pomoći da dobijem sažetak o svojstvima redovitih programa?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PeriodicActivityTypes",
+      "query": "Možeš li mi prikazati sve kategorije redovnih zadataka?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PeriodicActivityTypes",
+      "query": "Zanima me koji su svi tipovi planiranih akcija dostupni.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PeriodicActivityTypes",
+      "query": "Možeš li mi pokazati sve modele procesa na temelju rasporeda?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonOrgUnits",
+      "query": "Želim pregledati sve informacije o ljudima i njihovim institucijama.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonOrgUnits",
+      "query": "Možeš li mi pokazati sve zapise koji se odnose na pojedince i ustanove?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonOrgUnits",
+      "query": "Treba mi pregled svih elemenata koji se tiču članova i njihovih organizacija.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonOrgUnits_Agg",
+      "query": "Treba mi pregled najnižih i najviših rezultata u okviru radnih grupa.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "teams",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonOrgUnits_Agg",
+      "query": "Zanima me koja su ukupna i prosječna mjerila za timove u tvrtki.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "companies",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonOrgUnits_Agg",
+      "query": "Zanima me koji su minimalni i maksimalni rezultati za sve koje pripadaju toj organizaciji.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonOrgUnits_id_metadata",
+      "query": "Mogu li dobiti podatke o karakteristikama određene organizacije?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonOrgUnits_id_metadata",
+      "query": "Mogu li dobiti detalje o podacima za određenu upravnu grupu?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonOrgUnits_id_metadata",
+      "query": "Tražim sažetak podataka za specifičnu organizaciju.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonPeriodicActivities_id",
+      "query": "Mogu li provjeriti stanje vezano uz redovite obveze koje su dodijeljene pojedincu?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonPeriodicActivities_id",
+      "query": "Zanima me koje su ponavljajuće dužnosti predviđene za određenog člana kolektiva.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_PersonPeriodicActivities_id",
+      "query": "Želim provjeriti stanje redovnih obveza za jednog člana tima.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Persons_GroupBy",
+      "query": "Zanima me kako mogu organizirati pojedince na temelju određenih parametara.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Persons_GroupBy",
+      "query": "Želim prikazati članove na osnovu specifičnih kriterija.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Persons_GroupBy",
+      "query": "Trebam prikazati poredak pojedinaca na temelju određenih odrednica.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_SchedulingModels_id_metadata",
+      "query": "Kako mogu pristupiti podacima o određenom hodogramu koristeći njegov jedinstveni identifikator?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Stats_NoMileageSince",
+      "query": "Želim pregledati koja prijevozna sredstva nisu evidentirala vožnje od određenog trenutka.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "trips",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Tags_ProjectTo",
+      "query": "Kako mogu pregledati sve tagove koji pripadaju određenom zadatku?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Tags_ProjectTo",
+      "query": "Želim vidjeti sve etikete povezane s mojim planom aktivnosti.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Tags_ProjectTo",
+      "query": "Tražim sve etikete koje pripadaju određenom projektu.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Tags_id_documents",
+      "query": "Možeš li pokazati sve stavke koje se odnose na taj tag?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_TeamMembers",
+      "query": "Trebam pregledati sve pripadnike ovog kolektiva uz mogućnost sortiranja rezultata.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_TeamMembers",
+      "query": "Zanima me pregled svih sudionika našeg projekta.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_TeamMembers",
+      "query": "Želim dobiti pregled svih sudionika u grupi.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_TeamMembers_id",
+      "query": "Mogu li dobiti pregled podataka o osobi iz našeg kolektiva?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "persons",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_TeamMembers_id",
+      "query": "Mogu li dobiti pregled informacija o osobi unutar kolektiva?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "persons",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_TeamMembers_id",
+      "query": "Možeš li mi reći nešto više o partneru u organizaciji?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "partners",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_TenantPermissions_id_documents_documentId",
+      "query": "Želim saznati status specifične isprave koju imam.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_TenantPermissions_id_documents_documentId",
+      "query": "Želim pogledati status određenog akta koji pripada iznajmljivaču.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_TenantPermissions_id_documents_documentId",
+      "query": "Tražim podatke o privilegijama za određenu ispravu.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Tenants_id_documents",
+      "query": "Molim te da mi prikažeš sve relevantne potvrde za mog iznajmljivača.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Trips_id_metadata",
+      "query": "Interesira me koji su detalji dostupni za ovu specifičnu turu.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_Trips_id_metadata",
+      "query": "Trebam uvid u podatke o toj jedinstvenoj ekspediciji.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_Trips_id_metadata",
+      "query": "Želim saznati više o karakteristikama vezanim za taj aranžman.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "get_VehicleCalendar_id_documents",
+      "query": "Možeš li mi prikazati sve akte koji se odnose na plan termina za motorna sredstva?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_VehicleInputHelper_DistinctMakes",
+      "query": "Tražim detalje o raznim proizvođačima koji se odnose na specifično prijevozno sredstvo.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_VehicleInputHelper_DistinctMakes",
+      "query": "Možeš li mi prikazati sve jedinstvene brendove za određeno prijevozno sredstvo?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_VehicleInputHelper_DistinctMakes",
+      "query": "Zanima me koje su specifične oznake za traženo limuzinsko prijevozno sredstvo.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_VehicleTypes_id_metadata",
+      "query": "Trebam pristup informacijama o specifikacijama za određeno prijevozno sredstvo s danim identifikatorom.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "get_VehiclesHistoricalEntries_ProjectTo",
+      "query": "Kako mogu vidjeti sve evidencije o limuzinama iz povijesnog pregleda projekta?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "patch_Equipment_id",
+      "query": "Možeš li mi pomoći s izmjenom određenih podataka o instrumentu?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "PUT"
+    },
+    {
+      "expected": "patch_SchedulingModels_id",
+      "query": "Tražim mogućnost da modificiram određene detalje u svojoj agendi.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "PUT"
+    },
+    {
+      "expected": "patch_SchedulingModels_id",
+      "query": "Želim unijeti nove detalje u hodogram bez brisanja postojećih informacija.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "POST"
+    },
+    {
+      "expected": "patch_Tenants_id",
+      "query": "Želim izvršiti promjenu podataka vezanih za iznajmljivača.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "PUT"
+    },
+    {
+      "expected": "patch_Tenants_id",
+      "query": "Želio bih unijeti nove podatke za aktivnog iznajmljivača.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "POST"
+    },
+    {
+      "expected": "patch_Tenants_id",
+      "query": "Trebam izvršiti promjene na informacijama vezanim uz korisnika u vezi s najmom.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "persons",
+      "intent": "PUT"
+    },
+    {
+      "expected": "post_Equipment_id_documents",
+      "query": "Želim povezati isprave s određenim motorom.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_Equipment_id_documents",
+      "query": "Zanima me kako mogu uključiti nove potvrde za moje pribore.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "post_Equipment_id_documents",
+      "query": "Molim te da priložiš isprave za određeno motorno sredstvo.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_ExpenseTypes_id_documents",
+      "query": "Možeš li mi pomoći s povezivanjem akta na moju stavku?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "NONE"
+    },
+    {
+      "expected": "post_ExpenseTypes_id_documents",
+      "query": "Tražim način da unesem potvrdu za ovu određenu stavku.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "post_PeriodicActivitiesSchedules_multipatch",
+      "query": "Zanima me kako mogu prilagoditi razne dijelove u hodogramu za redovite sastanke.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "PUT"
+    },
+    {
+      "expected": "post_PeriodicActivitiesSchedules_multipatch",
+      "query": "Trebam izvršiti promjene na nekoliko točaka u hodogramu.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "PUT"
+    },
+    {
+      "expected": "post_PeriodicActivitiesSchedules_multipatch",
+      "query": "Trebam izvršiti promjene na više stavki u hodogramu.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "PUT"
+    },
+    {
+      "expected": "post_SendEmail",
+      "query": "Želim poslati poruku putem elektroničke pošte korisnicima.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_SendEmail",
+      "query": "Trebam poslati potvrde kupcima putem elektronskih poruka.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_SendEmail",
+      "query": "Trebam potvrdu koja će se poslati na e-adrese kupaca.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "post_TenantPermissions",
+      "query": "Želim unijeti nove privilegije za iznajmljivača u sustav.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "POST"
+    },
+    {
+      "expected": "post_TenantPermissions",
+      "query": "Želim unijeti nove privilegije za iznajmljivača.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "POST"
+    },
+    {
+      "expected": "post_TenantPermissions",
+      "query": "Želim postaviti nova pravila za ovlasti unutar sustava.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "POST"
+    },
+    {
+      "expected": "post_TenantPermissions_SetRolesForUser_personId",
+      "query": "Kako mogu dodijeliti ovlasti za iznajmljivača koristeći njegov ID?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_TenantPermissions_SetRolesForUser_personId",
+      "query": "Molim te, odredi autorizacije za iznajmljivača koristeći njegovu ID oznaku.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "vehicles",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "post_Tenants",
+      "query": "Želim unijeti novog iznajmljivača u sustav.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "POST"
+    },
+    {
+      "expected": "post_Tenants",
+      "query": "Tražim način za unos novog iznajmljivača podataka.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "GET"
+    },
+    {
+      "expected": "post_Tenants",
+      "query": "Trebam registrirati novog iznajmljivača u sustavu.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "POST"
+    },
+    {
+      "expected": "post_Tenants_id_documents",
+      "query": "Molim te da registriraš novu potvrdu za iznajmljivača.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "POST"
+    },
+    {
+      "expected": "post_Tenants_id_documents",
+      "query": "Mogu li unijeti novu ispravu za iznajmljivača?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "POST"
+    },
+    {
+      "expected": "post_Tenants_id_documents",
+      "query": "Trebam pridružiti novu ispravu iznajmljivaču.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    },
+    {
+      "expected": "put_Cases_id_documents_documentId",
+      "query": "Trebam ažurirati sadržaj akta koji se odnosi na tu temu.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "PUT"
+    },
+    {
+      "expected": "put_Expenses_id_documents_documentId",
+      "query": "Tražim da se izmijene podaci o potvrdi koja se odnosi na financijski teret.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "PUT"
+    },
+    {
+      "expected": "put_Teams_id_documents_documentId",
+      "query": "Trebam ažurirati informacije o potvrdi na temelju ID kolektiva i ID-a isprave.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "PUT"
+    },
+    {
+      "expected": "put_TenantPermissions_id",
+      "query": "Mogu li ažurirati ovlasti za iznajmljivača u sustavu?",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "PUT"
+    },
+    {
+      "expected": "put_TenantPermissions_id",
+      "query": "Zanima me kako da osvježim privilegije za iznajmljivača u bazi podataka.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "PUT"
+    },
+    {
+      "expected": "put_TenantPermissions_id",
+      "query": "Molim te da ažuriraš privilegije za iznajmljivača.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "PUT"
+    },
+    {
+      "expected": "put_Vehicles_id",
+      "query": "Želim unijeti nove podatke za svoje motorno sredstvo.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "POST"
+    },
+    {
+      "expected": "put_Vehicles_id",
+      "query": "Želim izvršiti kompletnu promjenu informacija vezanih uz moju limuzinu.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "PUT"
+    },
+    {
+      "expected": "put_Vehicles_id",
+      "query": "Trebam obnoviti cijeli set podataka za svoj kombi.",
+      "top5": [],
+      "top1_score": 0.0,
+      "expected_rank": -1,
+      "detected_entity": "",
+      "intent": "UNKNOWN"
+    }
+  ]
+}

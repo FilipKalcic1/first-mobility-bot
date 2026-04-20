@@ -28,7 +28,7 @@ _pii_filter = PIIScrubFilter()
 _stderr_handler = logging.StreamHandler(open(sys.stderr.fileno(), mode='w', encoding='utf-8', closefd=False))
 _stderr_handler.addFilter(_pii_filter)
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO),
     format='%(message)s',  # Simple format since we use structured JSON logs
     handlers=[_stderr_handler],
     force=True  # Override any existing configuration
@@ -63,7 +63,7 @@ from services.tracing import get_tracer, trace_span
 settings = get_settings()
 _tracer = get_tracer("worker")
 
-MAX_CONCURRENT = 5              # 0.5 CPU single-server: 5 concurrent keeps memory low.
+MAX_CONCURRENT = int(os.environ.get("MAX_CONCURRENT", "5"))  # 0.5 CPU single-server default: 5 concurrent
                                 # Bottleneck is LLM RTT (4s), not concurrency. KEDA scales pods if needed.
 MESSAGE_LOCK_TTL = 300          # 5 min - enough for longest LLM calls
 

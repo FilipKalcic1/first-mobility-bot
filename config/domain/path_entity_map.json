@@ -1,0 +1,1364 @@
+{
+  "path_entity_map": {
+    "vehicle": [
+      "vozilo",
+      "vozila"
+    ],
+    "vehicles": [
+      "vozilo",
+      "vozila"
+    ],
+    "car": [
+      "automobil",
+      "automobila"
+    ],
+    "fleet": [
+      "flota",
+      "flote"
+    ],
+    "fleets": [
+      "flota",
+      "flote"
+    ],
+    "asset": [
+      "imovina",
+      "imovine"
+    ],
+    "assets": [
+      "imovina",
+      "imovine"
+    ],
+    "person": [
+      "osoba",
+      "osobe"
+    ],
+    "persons": [
+      "osoba",
+      "osobe"
+    ],
+    "people": [
+      "osoba",
+      "osobe"
+    ],
+    "driver": [
+      "vozač",
+      "vozača"
+    ],
+    "drivers": [
+      "vozač",
+      "vozača"
+    ],
+    "user": [
+      "korisnik",
+      "korisnika"
+    ],
+    "users": [
+      "korisnik",
+      "korisnika"
+    ],
+    "employee": [
+      "zaposlenik",
+      "zaposlenika"
+    ],
+    "employees": [
+      "zaposlenik",
+      "zaposlenika"
+    ],
+    "customer": [
+      "kupac",
+      "kupca"
+    ],
+    "customers": [
+      "kupac",
+      "kupaca"
+    ],
+    "contact": [
+      "kontakt",
+      "kontakta"
+    ],
+    "contacts": [
+      "kontakt",
+      "kontakata"
+    ],
+    "booking": [
+      "rezervacija",
+      "rezervacije"
+    ],
+    "bookings": [
+      "rezervacija",
+      "rezervacije"
+    ],
+    "reservation": [
+      "rezervacija",
+      "rezervacije"
+    ],
+    "reservations": [
+      "rezervacija",
+      "rezervacija"
+    ],
+    "calendar": [
+      "kalendar",
+      "kalendara"
+    ],
+    "appointment": [
+      "termin",
+      "termina"
+    ],
+    "location": [
+      "lokacija",
+      "lokacije"
+    ],
+    "locations": [
+      "lokacija",
+      "lokacija"
+    ],
+    "address": [
+      "adresa",
+      "adrese"
+    ],
+    "zone": [
+      "zona",
+      "zone"
+    ],
+    "zones": [
+      "zona",
+      "zona"
+    ],
+    "region": [
+      "regija",
+      "regije"
+    ],
+    "branch": [
+      "poslovnica",
+      "poslovnice"
+    ],
+    "branches": [
+      "poslovnica",
+      "poslovnica"
+    ],
+    "station": [
+      "stanica",
+      "stanice"
+    ],
+    "depot": [
+      "depo",
+      "depoa"
+    ],
+    "document": [
+      "dokument",
+      "dokumenta"
+    ],
+    "documents": [
+      "dokument",
+      "dokumenata"
+    ],
+    "invoice": [
+      "račun",
+      "računa"
+    ],
+    "invoices": [
+      "račun",
+      "računa"
+    ],
+    "contract": [
+      "ugovor",
+      "ugovora"
+    ],
+    "contracts": [
+      "ugovor",
+      "ugovora"
+    ],
+    "report": [
+      "izvještaj",
+      "izvještaja"
+    ],
+    "reports": [
+      "izvještaj",
+      "izvještaja"
+    ],
+    "log": [
+      "zapis",
+      "zapisa"
+    ],
+    "logs": [
+      "zapis",
+      "zapisa"
+    ],
+    "history": [
+      "povijest",
+      "povijesti"
+    ],
+    "record": [
+      "zapis",
+      "zapisa"
+    ],
+    "maintenance": [
+      "održavanje",
+      "održavanja"
+    ],
+    "service": [
+      "servis",
+      "servisa"
+    ],
+    "repair": [
+      "popravak",
+      "popravka"
+    ],
+    "inspection": [
+      "inspekcija",
+      "inspekcije"
+    ],
+    "damage": [
+      "šteta",
+      "štete"
+    ],
+    "damages": [
+      "šteta",
+      "šteta"
+    ],
+    "accident": [
+      "nesreća",
+      "nesreće"
+    ],
+    "insurance": [
+      "osiguranje",
+      "osiguranja"
+    ],
+    "payment": [
+      "plaćanje",
+      "plaćanja"
+    ],
+    "payments": [
+      "plaćanje",
+      "plaćanja"
+    ],
+    "cost": [
+      "trošak",
+      "troška"
+    ],
+    "costs": [
+      "trošak",
+      "troškova"
+    ],
+    "expense": [
+      "trošak",
+      "troška"
+    ],
+    "expenses": [
+      "trošak",
+      "troškova"
+    ],
+    "fee": [
+      "naknada",
+      "naknade"
+    ],
+    "fees": [
+      "naknada",
+      "naknada"
+    ],
+    "price": [
+      "cijena",
+      "cijene"
+    ],
+    "pricing": [
+      "cjenik",
+      "cjenika"
+    ],
+    "tariff": [
+      "tarifa",
+      "tarife"
+    ],
+    "billing": [
+      "naplata",
+      "naplate"
+    ],
+    "transaction": [
+      "transakcija",
+      "transakcije"
+    ],
+    "status": [
+      "status",
+      "statusa"
+    ],
+    "state": [
+      "stanje",
+      "stanja"
+    ],
+    "mileage": [
+      "kilometraža",
+      "kilometraže"
+    ],
+    "odometer": [
+      "kilometraža",
+      "kilometraže"
+    ],
+    "fuel": [
+      "gorivo",
+      "goriva"
+    ],
+    "battery": [
+      "baterija",
+      "baterije"
+    ],
+    "tire": [
+      "guma",
+      "gume"
+    ],
+    "tires": [
+      "guma",
+      "guma"
+    ],
+    "oil": [
+      "ulje",
+      "ulja"
+    ],
+    "permission": [
+      "dozvola",
+      "dozvole"
+    ],
+    "permissions": [
+      "dozvola",
+      "dozvola"
+    ],
+    "role": [
+      "uloga",
+      "uloge"
+    ],
+    "roles": [
+      "uloga",
+      "uloga"
+    ],
+    "access": [
+      "pristup",
+      "pristupa"
+    ],
+    "group": [
+      "grupa",
+      "grupe"
+    ],
+    "groups": [
+      "grupa",
+      "grupa"
+    ],
+    "team": [
+      "tim",
+      "tima"
+    ],
+    "department": [
+      "odjel",
+      "odjela"
+    ],
+    "equipment": [
+      "oprema",
+      "opreme"
+    ],
+    "accessory": [
+      "dodatak",
+      "dodatka"
+    ],
+    "accessories": [
+      "dodatak",
+      "dodataka"
+    ],
+    "device": [
+      "uređaj",
+      "uređaja"
+    ],
+    "devices": [
+      "uređaj",
+      "uređaja"
+    ],
+    "tracker": [
+      "tracker",
+      "trackera"
+    ],
+    "gps": [
+      "GPS",
+      "GPS-a"
+    ],
+    "telematics": [
+      "telematika",
+      "telematike"
+    ],
+    "category": [
+      "kategorija",
+      "kategorije"
+    ],
+    "categories": [
+      "kategorija",
+      "kategorija"
+    ],
+    "type": [
+      "tip",
+      "tipa"
+    ],
+    "types": [
+      "tip",
+      "tipova"
+    ],
+    "class": [
+      "klasa",
+      "klase"
+    ],
+    "brand": [
+      "marka",
+      "marke"
+    ],
+    "model": [
+      "model",
+      "modela"
+    ],
+    "period": [
+      "period",
+      "perioda"
+    ],
+    "schedule": [
+      "raspored",
+      "rasporeda"
+    ],
+    "shift": [
+      "smjena",
+      "smjene"
+    ],
+    "availability": [
+      "dostupnost",
+      "dostupnosti"
+    ],
+    "slot": [
+      "termin",
+      "termina"
+    ],
+    "notification": [
+      "obavijest",
+      "obavijesti"
+    ],
+    "notifications": [
+      "obavijest",
+      "obavijesti"
+    ],
+    "alert": [
+      "upozorenje",
+      "upozorenja"
+    ],
+    "alerts": [
+      "upozorenje",
+      "upozorenja"
+    ],
+    "message": [
+      "poruka",
+      "poruke"
+    ],
+    "note": [
+      "bilješka",
+      "bilješke"
+    ],
+    "notes": [
+      "bilješka",
+      "bilješki"
+    ],
+    "comment": [
+      "komentar",
+      "komentara"
+    ],
+    "tag": [
+      "oznaka",
+      "oznake"
+    ],
+    "tags": [
+      "oznaka",
+      "oznaka"
+    ],
+    "image": [
+      "slika",
+      "slike"
+    ],
+    "images": [
+      "slika",
+      "slika"
+    ],
+    "photo": [
+      "fotografija",
+      "fotografije"
+    ],
+    "file": [
+      "datoteka",
+      "datoteke"
+    ],
+    "attachment": [
+      "privitak",
+      "privitka"
+    ],
+    "tenant": [
+      "najmodavac",
+      "najmodavca"
+    ],
+    "organization": [
+      "organizacija",
+      "organizacije"
+    ],
+    "company": [
+      "tvrtka",
+      "tvrtke"
+    ],
+    "license": [
+      "licenca",
+      "licence"
+    ],
+    "registration": [
+      "registracija",
+      "registracije"
+    ],
+    "certificate": [
+      "certifikat",
+      "certifikata"
+    ],
+    "policy": [
+      "polica",
+      "police"
+    ],
+    "claim": [
+      "zahtjev",
+      "zahtjeva"
+    ],
+    "request": [
+      "zahtjev",
+      "zahtjeva"
+    ],
+    "order": [
+      "narudžba",
+      "narudžbe"
+    ],
+    "pool": [
+      "bazen",
+      "bazena"
+    ],
+    "trip": [
+      "putovanje",
+      "putovanja"
+    ],
+    "route": [
+      "ruta",
+      "rute"
+    ],
+    "journey": [
+      "vožnja",
+      "vožnje"
+    ],
+    "ride": [
+      "vožnja",
+      "vožnje"
+    ],
+    "transfer": [
+      "transfer",
+      "transfera"
+    ],
+    "pickup": [
+      "preuzimanje",
+      "preuzimanja"
+    ],
+    "dropoff": [
+      "vraćanje",
+      "vraćanja"
+    ],
+    "checkin": [
+      "prijava",
+      "prijave"
+    ],
+    "checkout": [
+      "odjava",
+      "odjave"
+    ],
+    "handover": [
+      "primopredaja",
+      "primopredaje"
+    ],
+    "key": [
+      "ključ",
+      "ključa"
+    ],
+    "keys": [
+      "ključ",
+      "ključeva"
+    ],
+    "card": [
+      "kartica",
+      "kartice"
+    ],
+    "fuelcard": [
+      "kartica za gorivo",
+      "kartice za gorivo"
+    ],
+    "tollcard": [
+      "ENC kartica",
+      "ENC kartice"
+    ],
+    "violation": [
+      "prekršaj",
+      "prekršaja"
+    ],
+    "fine": [
+      "kazna",
+      "kazne"
+    ],
+    "penalty": [
+      "kazna",
+      "kazne"
+    ],
+    "summary": [
+      "sažetak",
+      "sažetka"
+    ],
+    "detail": [
+      "detalj",
+      "detalja"
+    ],
+    "details": [
+      "detalji",
+      "detalja"
+    ],
+    "info": [
+      "informacija",
+      "informacije"
+    ],
+    "information": [
+      "informacija",
+      "informacije"
+    ],
+    "data": [
+      "podaci",
+      "podataka"
+    ],
+    "list": [
+      "lista",
+      "liste"
+    ],
+    "item": [
+      "stavka",
+      "stavke"
+    ],
+    "items": [
+      "stavke",
+      "stavki"
+    ],
+    "entry": [
+      "unos",
+      "unosa"
+    ],
+    "entries": [
+      "unosi",
+      "unosa"
+    ],
+    "event": [
+      "događaj",
+      "događaja"
+    ],
+    "events": [
+      "događaji",
+      "događaja"
+    ],
+    "activity": [
+      "aktivnost",
+      "aktivnosti"
+    ],
+    "activities": [
+      "aktivnosti",
+      "aktivnosti"
+    ],
+    "action": [
+      "akcija",
+      "akcije"
+    ],
+    "task": [
+      "zadatak",
+      "zadatka"
+    ],
+    "tasks": [
+      "zadaci",
+      "zadataka"
+    ],
+    "job": [
+      "posao",
+      "posla"
+    ],
+    "workflow": [
+      "tijek rada",
+      "tijeka rada"
+    ],
+    "process": [
+      "proces",
+      "procesa"
+    ],
+    "settings": [
+      "postavke",
+      "postavki"
+    ],
+    "configuration": [
+      "konfiguracija",
+      "konfiguracije"
+    ],
+    "config": [
+      "konfiguracija",
+      "konfiguracije"
+    ],
+    "preference": [
+      "postavka",
+      "postavke"
+    ],
+    "option": [
+      "opcija",
+      "opcije"
+    ],
+    "options": [
+      "opcije",
+      "opcija"
+    ],
+    "filter": [
+      "filter",
+      "filtera"
+    ],
+    "search": [
+      "pretraga",
+      "pretrage"
+    ],
+    "query": [
+      "upit",
+      "upita"
+    ],
+    "result": [
+      "rezultat",
+      "rezultata"
+    ],
+    "results": [
+      "rezultati",
+      "rezultata"
+    ],
+    "response": [
+      "odgovor",
+      "odgovora"
+    ],
+    "error": [
+      "greška",
+      "greške"
+    ],
+    "warning": [
+      "upozorenje",
+      "upozorenja"
+    ],
+    "audit": [
+      "revizija",
+      "revizije"
+    ],
+    "export": [
+      "izvoz",
+      "izvoza"
+    ],
+    "import": [
+      "uvoz",
+      "uvoza"
+    ],
+    "download": [
+      "preuzimanje",
+      "preuzimanja"
+    ],
+    "upload": [
+      "učitavanje",
+      "učitavanja"
+    ],
+    "sync": [
+      "sinkronizacija",
+      "sinkronizacije"
+    ],
+    "backup": [
+      "sigurnosna kopija",
+      "sigurnosne kopije"
+    ],
+    "archive": [
+      "arhiva",
+      "arhive"
+    ],
+    "version": [
+      "verzija",
+      "verzije"
+    ],
+    "revision": [
+      "revizija",
+      "revizije"
+    ],
+    "change": [
+      "promjena",
+      "promjene"
+    ],
+    "changes": [
+      "promjene",
+      "promjena"
+    ],
+    "update": [
+      "ažuriranje",
+      "ažuriranja"
+    ],
+    "statistics": [
+      "statistika",
+      "statistike"
+    ],
+    "analytics": [
+      "analitika",
+      "analitike"
+    ],
+    "metric": [
+      "metrika",
+      "metrike"
+    ],
+    "metrics": [
+      "metrike",
+      "metrika"
+    ],
+    "dashboard": [
+      "nadzorna ploča",
+      "nadzorne ploče"
+    ],
+    "overview": [
+      "pregled",
+      "pregleda"
+    ],
+    "chart": [
+      "grafikon",
+      "grafikona"
+    ],
+    "graph": [
+      "graf",
+      "grafa"
+    ],
+    "utilization": [
+      "iskorištenost",
+      "iskorištenosti"
+    ],
+    "usage": [
+      "korištenje",
+      "korištenja"
+    ],
+    "consumption": [
+      "potrošnja",
+      "potrošnje"
+    ],
+    "rate": [
+      "stopa",
+      "stope"
+    ],
+    "ratio": [
+      "omjer",
+      "omjera"
+    ],
+    "percentage": [
+      "postotak",
+      "postotka"
+    ],
+    "count": [
+      "broj",
+      "broja"
+    ],
+    "total": [
+      "ukupno",
+      "ukupnog"
+    ],
+    "average": [
+      "prosjek",
+      "prosjeka"
+    ],
+    "minimum": [
+      "minimum",
+      "minimuma"
+    ],
+    "maximum": [
+      "maksimum",
+      "maksimuma"
+    ],
+    "rental": [
+      "najam",
+      "najma"
+    ],
+    "rentals": [
+      "najam",
+      "najmova"
+    ],
+    "rent": [
+      "najam",
+      "najma"
+    ],
+    "rents": [
+      "najam",
+      "najmova"
+    ],
+    "hire": [
+      "najam",
+      "najma"
+    ],
+    "lease": [
+      "leasing",
+      "leasinga"
+    ],
+    "leasing": [
+      "leasing",
+      "leasinga"
+    ],
+    "credit": [
+      "kredit",
+      "kredita"
+    ],
+    "debit": [
+      "zaduženje",
+      "zaduženja"
+    ],
+    "refund": [
+      "povrat",
+      "povrata"
+    ],
+    "refunds": [
+      "povrat",
+      "povrata"
+    ],
+    "cancellation": [
+      "otkazivanje",
+      "otkazivanja"
+    ],
+    "cancel": [
+      "otkazivanje",
+      "otkazivanja"
+    ],
+    "extend": [
+      "produženje",
+      "produženja"
+    ],
+    "extension": [
+      "produženje",
+      "produženja"
+    ],
+    "modify": [
+      "izmjena",
+      "izmjene"
+    ],
+    "modification": [
+      "izmjena",
+      "izmjene"
+    ],
+    "quote": [
+      "ponuda",
+      "ponude"
+    ],
+    "quotes": [
+      "ponuda",
+      "ponuda"
+    ],
+    "estimate": [
+      "procjena",
+      "procjene"
+    ],
+    "offer": [
+      "ponuda",
+      "ponude"
+    ],
+    "offers": [
+      "ponuda",
+      "ponuda"
+    ],
+    "promo": [
+      "promocija",
+      "promocije"
+    ],
+    "promotion": [
+      "promocija",
+      "promocije"
+    ],
+    "promotions": [
+      "promocija",
+      "promocija"
+    ],
+    "coupon": [
+      "kupon",
+      "kupona"
+    ],
+    "coupons": [
+      "kupon",
+      "kupona"
+    ],
+    "voucher": [
+      "vaučer",
+      "vaučera"
+    ],
+    "vouchers": [
+      "vaučer",
+      "vaučera"
+    ],
+    "loyalty": [
+      "lojalnost",
+      "lojalnosti"
+    ],
+    "points": [
+      "bodovi",
+      "bodova"
+    ],
+    "reward": [
+      "nagrada",
+      "nagrade"
+    ],
+    "rewards": [
+      "nagrada",
+      "nagrada"
+    ],
+    "tier": [
+      "razina",
+      "razine"
+    ],
+    "level": [
+      "razina",
+      "razine"
+    ],
+    "membership": [
+      "članstvo",
+      "članstva"
+    ],
+    "member": [
+      "član",
+      "člana"
+    ],
+    "members": [
+      "član",
+      "članova"
+    ],
+    "subscription": [
+      "pretplata",
+      "pretplate"
+    ],
+    "subscriber": [
+      "pretplatnik",
+      "pretplatnika"
+    ],
+    "plan": [
+      "plan",
+      "plana"
+    ],
+    "plans": [
+      "plan",
+      "planova"
+    ],
+    "package": [
+      "paket",
+      "paketa"
+    ],
+    "packages": [
+      "paket",
+      "paketa"
+    ],
+    "addon": [
+      "dodatak",
+      "dodatka"
+    ],
+    "addons": [
+      "dodatak",
+      "dodataka"
+    ],
+    "extra": [
+      "dodatak",
+      "dodatka"
+    ],
+    "extras": [
+      "dodatak",
+      "dodataka"
+    ],
+    "feature": [
+      "značajka",
+      "značajke"
+    ],
+    "features": [
+      "značajka",
+      "značajki"
+    ],
+    "spec": [
+      "specifikacija",
+      "specifikacije"
+    ],
+    "specification": [
+      "specifikacija",
+      "specifikacije"
+    ],
+    "specifications": [
+      "specifikacija",
+      "specifikacija"
+    ],
+    "attribute": [
+      "atribut",
+      "atributa"
+    ],
+    "attributes": [
+      "atribut",
+      "atributa"
+    ],
+    "property": [
+      "svojstvo",
+      "svojstva"
+    ],
+    "properties": [
+      "svojstvo",
+      "svojstava"
+    ],
+    "metadata": [
+      "metapodaci",
+      "metapodataka"
+    ],
+    "meta": [
+      "metapodaci",
+      "metapodataka"
+    ],
+    "custom": [
+      "prilagođeno",
+      "prilagođenog"
+    ],
+    "standard": [
+      "standardno",
+      "standardnog"
+    ],
+    "default": [
+      "zadano",
+      "zadanog"
+    ],
+    "basic": [
+      "osnovno",
+      "osnovnog"
+    ],
+    "premium": [
+      "premium",
+      "premium"
+    ],
+    "vip": [
+      "VIP",
+      "VIP"
+    ],
+    "economy": [
+      "ekonomija",
+      "ekonomije"
+    ],
+    "comfort": [
+      "komfort",
+      "komfora"
+    ],
+    "luxury": [
+      "luksuz",
+      "luksuza"
+    ],
+    "compact": [
+      "kompaktno",
+      "kompaktnog"
+    ],
+    "suv": [
+      "SUV",
+      "SUV-a"
+    ],
+    "van": [
+      "kombi",
+      "kombija"
+    ],
+    "minivan": [
+      "minivan",
+      "minivana"
+    ],
+    "truck": [
+      "kamion",
+      "kamiona"
+    ],
+    "motorcycle": [
+      "motocikl",
+      "motocikla"
+    ],
+    "scooter": [
+      "skuter",
+      "skutera"
+    ],
+    "bike": [
+      "bicikl",
+      "bicikla"
+    ],
+    "electric": [
+      "električno",
+      "električnog"
+    ],
+    "hybrid": [
+      "hibrid",
+      "hibrida"
+    ],
+    "diesel": [
+      "dizel",
+      "dizela"
+    ],
+    "petrol": [
+      "benzin",
+      "benzina"
+    ],
+    "gasoline": [
+      "benzin",
+      "benzina"
+    ],
+    "automatic": [
+      "automatik",
+      "automatika"
+    ],
+    "manual": [
+      "ručni mjenjač",
+      "ručnog mjenjača"
+    ],
+    "transmission": [
+      "mjenjač",
+      "mjenjača"
+    ],
+    "engine": [
+      "motor",
+      "motora"
+    ],
+    "horsepower": [
+      "konjska snaga",
+      "konjske snage"
+    ],
+    "power": [
+      "snaga",
+      "snage"
+    ],
+    "torque": [
+      "okretni moment",
+      "okretnog momenta"
+    ],
+    "cylinder": [
+      "cilindar",
+      "cilindra"
+    ],
+    "displacement": [
+      "obujam motora",
+      "obujma motora"
+    ],
+    "acceleration": [
+      "ubrzanje",
+      "ubrzanja"
+    ],
+    "topspeed": [
+      "maksimalna brzina",
+      "maksimalne brzine"
+    ],
+    "seat": [
+      "sjedalo",
+      "sjedala"
+    ],
+    "seats": [
+      "sjedala",
+      "sjedala"
+    ],
+    "door": [
+      "vrata",
+      "vrata"
+    ],
+    "doors": [
+      "vrata",
+      "vrata"
+    ],
+    "luggage": [
+      "prtljaga",
+      "prtljage"
+    ],
+    "trunk": [
+      "prtljažnik",
+      "prtljažnika"
+    ],
+    "cargo": [
+      "teret",
+      "tereta"
+    ],
+    "capacity": [
+      "kapacitet",
+      "kapaciteta"
+    ],
+    "weight": [
+      "težina",
+      "težine"
+    ],
+    "dimension": [
+      "dimenzija",
+      "dimenzije"
+    ],
+    "dimensions": [
+      "dimenzije",
+      "dimenzija"
+    ],
+    "length": [
+      "dužina",
+      "dužine"
+    ],
+    "width": [
+      "širina",
+      "širine"
+    ],
+    "height": [
+      "visina",
+      "visine"
+    ],
+    "color": [
+      "boja",
+      "boje"
+    ],
+    "colour": [
+      "boja",
+      "boje"
+    ],
+    "interior": [
+      "interijer",
+      "interijera"
+    ],
+    "exterior": [
+      "eksterijer",
+      "eksterijera"
+    ],
+    "warranty": [
+      "garancija",
+      "garancije"
+    ],
+    "guarantee": [
+      "garancija",
+      "garancije"
+    ],
+    "recall": [
+      "opoziv",
+      "opoziva"
+    ],
+    "recalls": [
+      "opoziv",
+      "opoziva"
+    ],
+    "compliance": [
+      "usklađenost",
+      "usklađenosti"
+    ],
+    "emission": [
+      "emisija",
+      "emisije"
+    ],
+    "emissions": [
+      "emisija",
+      "emisija"
+    ],
+    "eco": [
+      "eko",
+      "eko"
+    ],
+    "green": [
+      "zeleno",
+      "zelenog"
+    ],
+    "sustainable": [
+      "održivo",
+      "održivog"
+    ],
+    "carbon": [
+      "ugljik",
+      "ugljika"
+    ],
+    "footprint": [
+      "otisak",
+      "otiska"
+    ]
+  }
+}

@@ -34,20 +34,16 @@ from services.errors import BotError, ConversationError, ErrorCode
 logger = logging.getLogger(__name__)
 _tracer = get_tracer("parameter_manager")
 
-# These tools have Swagger metadata that incorrectly maps context_key for certain params.
-# Instead of hardcoding tool IDs throughout the code, define overrides here.
+# Per-tool parameter overrides in config/per_tool/parameter_overrides.json.
+# Swagger metadata incorrectly maps context_key for some params; these sets
+# let us exclude them from context injection and pass flow_handler values through.
+from services.config_loader import load_json as _load_json_overrides
+_overrides = _load_json_overrides("per_tool", "parameter_overrides.json")
 TOOL_SKIP_CONTEXT_INJECTION: Dict[str, set] = {
-    "post_VehicleCalendar": {"VehicleId", "EntryType", "AssigneeType"},
-    "post_AddMileage": {"VehicleId"},
-    "post_AddCase": {"User", "Subject", "Message"},
+    k: set(v) for k, v in _overrides["skip_context_injection"].items()
 }
-
-# Params that come from flow_handler (not LLM/context), so pass them through directly
 TOOL_FLOW_PARAMS: Dict[str, set] = {
-    "post_VehicleCalendar": {"VehicleId", "AssignedToId", "FromTime", "ToTime",
-                              "EntryType", "AssigneeType", "Description"},
-    "post_AddMileage": {"VehicleId", "Value", "Comment", "Time"},
-    "post_AddCase": {"User", "Subject", "Message"},
+    k: set(v) for k, v in _overrides["flow_params"].items()
 }
 
 

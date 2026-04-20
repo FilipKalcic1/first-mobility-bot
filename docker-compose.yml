@@ -1,22 +1,17 @@
 # =============================================================================
 # MobilityOne WhatsApp Bot - Unified Docker Compose
-# Version: 3.1 - Production Ready with Dual-User Security (No Dashboard)
 #
 # ARCHITECTURE:
-# - bot_net: Bot API + Worker (public facing)
-# - admin_net: Admin API (internal only - no external access!)
-# - db_net: PostgreSQL + Redis (shared)
+# - bot_net: Bot API + Worker (public facing) + Prometheus/Grafana
+# - db_net:  PostgreSQL + Redis (shared)
 #
 # SECURITY:
-# - bot_user: Limited DB access (can't read audit_logs, hallucination_reports)
-# - admin_user: Full DB access (for admin API and migrations)
-# - Network isolation: Admin API on internal-only network
+# - bot_user:   Limited DB access (cannot read audit_logs, hallucination_reports)
+# - admin_user: Full DB access, used only by migrations
 #
 # USAGE:
-#   Development: docker-compose up -d
-#   With Admin:  docker-compose --profile admin up -d
-#
-# NOTE: Admin Dashboard has been removed. Use Admin API directly via HTTP.
+#   docker-compose up -d
+#   docker-compose --profile monitoring up -d   # includes Prometheus + Grafana
 # =============================================================================
 
 services:
@@ -202,51 +197,6 @@ services:
           cpus: '0.5'
           memory: 512M
 
-  # --- Admin API (INTERNAL ONLY - Network Isolated!) ---
-  admin-api:
-    build: .
-    container_name: mobility_admin_api
-    restart: unless-stopped
-    command: ["uvicorn", "admin_api:app", "--host", "0.0.0.0", "--port", "8080"]
-    ports:
-      # SECURITY: Bind to localhost only! Use reverse proxy for external access
-      # NOTE: Default port 8088 to avoid conflict with other services on 8080
-      - "${ADMIN_BIND:-127.0.0.1}:${ADMIN_PORT:-8088}:8080"
-    env_file:
-      - .env
-    environment:
-      # Admin uses full-access user
-      - DATABASE_URL=postgresql+asyncpg://admin_user:${ADMIN_DB_PASSWORD:-admin_password_456}@postgres:5432/mobility_db
-      - ADMIN_DATABASE_URL=postgresql+asyncpg://admin_user:${ADMIN_DB_PASSWORD:-admin_password_456}@postgres:5432/mobility_db
-      - REDIS_URL=redis://redis:6379/0
-      - SERVICE_ROLE=admin
-    volumes:
-      - cache_data:/app/.cache:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      migration:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    networks:
-      - admin_net  # ISOLATED from bot_net!
-      - db_net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-    profiles:
-      - admin
-
-
   # ===========================================================================
   # RELIABILITY
   # ===========================================================================
@@ -292,7 +242,6 @@ services:
       - '--storage.tsdb.retention.time=15d'
     networks:
       - bot_net
-      - admin_net
     profiles:
       - monitoring
 
@@ -312,7 +261,6 @@ services:
       - prometheus
     networks:
       - bot_net
-      - admin_net
     profiles:
       - monitoring
 
@@ -326,14 +274,6 @@ networks:
     ipam:
       config:
         - subnet: 172.28.0.0/16
-
-  # INTERNAL ONLY network (Admin API) - NO external access!
-  admin_net:
-    driver: bridge
-    internal: true
-    ipam:
-      config:
-        - subnet: 172.29.0.0/16
 
   # Database network (shared)
   db_net:

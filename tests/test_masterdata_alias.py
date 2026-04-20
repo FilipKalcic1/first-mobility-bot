@@ -13,7 +13,7 @@ the full bootstrap chain end-to-end:
            and the session context carries TenantId="t-99".
 
 Run:
-    python scripts/migrate_registry_v6.py
+    python scripts/sync_tools.py   # regenerates config/processed_tool_registry.json
     pytest tests/test_masterdata_alias.py -v
 """
 

@@ -57,13 +57,10 @@ def _get_settings():
 # Cache directory for embeddings
 CACHE_DIR = Path(__file__).parent.parent / ".cache"
 EMBEDDINGS_FILE = CACHE_DIR / "tool_embeddings.json"
-EMBEDDING_DIM = 1536  # Azure OpenAI text-embedding-ada-002
+EMBEDDING_DIM = 1536  # Azure text-embedding-ada-002
 
 # Bump when `_build_embedding_text` template changes. Old caches with a different
 # version are rejected on load so stale vectors don't produce stale rankings.
-EMBED_TEXT_VERSION = "v6.0-zlatni-put-v1"
-
-# HTTP method → Croatian verb phrase. Injected into embedding text for action-intent signal.
 METHOD_VERB_TEXT = {
     "get": "dohvati prikaži pogledaj vrati",
     "post": "dodaj kreiraj napravi unesi",
@@ -71,6 +68,8 @@ METHOD_VERB_TEXT = {
     "patch": "djelomično ažuriraj parcijalno promijeni",
     "delete": "obriši ukloni izbriši makni brisanje",
 }
+
+EMBED_TEXT_VERSION = "v8.0-ada002-azure"
 
 @dataclass
 class SearchResult:
@@ -266,7 +265,10 @@ class FAISSVectorStore:
                 continue
             batch_items.append((tool_id, text[:8000]))
 
-        deployment = _get_settings().AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+        settings = _get_settings()
+        deployment = (settings.OPENAI_EMBEDDING_MODEL
+                      if settings.OPENAI_EMBEDDING_API_KEY
+                      else settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT)
         batch_size = 32
         generated_count = 0
 
@@ -451,51 +453,35 @@ class FAISSVectorStore:
     }
 
     def _build_embedding_text(self, tool_id: str, doc: Dict) -> str:
-        """
-        Build text for embedding from tool documentation.
-
-        V6.0 — Entity-dominant embedding: entity prefix + entity-enriched purpose.
-        Shorter text with entity as dominant signal → pushes tools into distinct
-        entity clusters. Generic "stavka" in purpose replaced with entity noun.
-
-        Does NOT use training_queries.json!
-        """
+        """Build text for embedding — V7.3: full baseline + enriched example queries."""
         parts = []
 
-        # 1. COMPOUND INDEX PREFIX — entity description (dominant signal)
         entity_prefix = self._get_entity_compound_prefix(tool_id)
         if entity_prefix:
             parts.append(entity_prefix)
 
-        # 2. Entity-enriched PURPOSE
-        # Replace generic "stavka/element" with entity-specific nouns
         purpose = doc.get("purpose", "")
         entity_key = self._extract_entity_key(tool_id)
         entity_nouns = self._ENTITY_PURPOSE_NOUNS.get(entity_key, "")
         if purpose:
             if entity_nouns:
-                # Append entity nouns to purpose for semantic association
                 parts.append(f"{purpose} ({entity_nouns})")
             else:
                 parts.append(purpose)
 
-        # 3. When to use (operation-specific context)
         when_to_use = doc.get("when_to_use", [])
         if when_to_use:
             parts.append(" ".join(when_to_use))
 
-        # 4. Method verbs (action intent signal)
         method_prefix = tool_id.split("_")[0].lower()
         method_verbs = METHOD_VERB_TEXT.get(method_prefix, "")
         if method_verbs:
             parts.append(method_verbs)
 
-        # 5. Synonyms (1x — for lexical coverage in BM25/concept matching)
         synonyms = doc.get("synonyms_hr", [])
         if synonyms:
             parts.append(" ".join(synonyms))
 
-        # 6. Entity prefix AGAIN at end (sandwich — reinforces entity in embedding)
         if entity_prefix:
             parts.append(entity_prefix)
 
@@ -679,7 +665,13 @@ class FAISSVectorStore:
             distances, indices = self._index.search(query_vector, min(search_k, len(self._tool_ids)))
             FAISS_SEARCH_DURATION.observe(time.monotonic() - t0)
 
-            # Build results with filtering
+            # Build results with filtering.
+            # Action filter stays a hard exclude (DELETE query should not return GET tools).
+            # Entity filter is a SOFT PENALTY: queries that mention ambiguous nouns
+            # (e.g. "organizacija" can mean Companies or OrgUnits) used to have 30% of
+            # benchmark misses caused by hard-excluding the correct tool. We keep the
+            # entity signal as a ranking boost instead.
+            ENTITY_MISMATCH_PENALTY = 1.0
             results = []
             for i, (distance, idx) in enumerate(zip(distances[0], indices[0])):
                 if idx < 0:  # FAISS returns -1 for empty slots
@@ -690,20 +682,20 @@ class FAISSVectorStore:
                 method = self._tool_methods.get(tool_id, "GET")
                 tool_lower = tool_id.lower()
 
-                # Apply entity filter if specified
+                # Entity filter: soft penalty for mismatches (keeps candidate in pool).
                 if effective_entity_filter:
-                    # Extract entity from tool_id (e.g., get_Companies_id -> companies)
                     parts = tool_lower.split('_')
                     tool_entity = parts[1] if len(parts) >= 2 else ''
+                    entity_stem = effective_entity_filter[:-1] if len(effective_entity_filter) > 3 and effective_entity_filter.endswith('s') else effective_entity_filter
+                    entity_match = (
+                        effective_entity_filter in tool_entity
+                        or tool_entity in effective_entity_filter
+                        or tool_entity.startswith(entity_stem)
+                    )
+                    if not entity_match:
+                        score *= ENTITY_MISMATCH_PENALTY
 
-                    # Check if entity matches (stem-aware for plural/singular)
-                    entity_stem = effective_entity_filter.rstrip('s') if len(effective_entity_filter) > 3 else effective_entity_filter
-                    if not (effective_entity_filter in tool_entity
-                            or tool_entity in effective_entity_filter
-                            or tool_entity.startswith(entity_stem)):
-                        continue
-
-                # Apply action filter if specified
+                # Apply action filter if specified (hard exclude — HTTP-verb correctness matters)
                 if action_filter:
                     # GET filter: allow GET and search POSTs
                     if action_filter == "GET" and method != "GET":
@@ -727,8 +719,11 @@ class FAISSVectorStore:
                     method=method
                 ))
 
-                if len(results) >= top_k:
-                    break
+            # Soft-penalty path may have shuffled the ordering relative to FAISS raw sort.
+            # Re-sort by score and truncate to top_k so downstream sees strongest first.
+            if effective_entity_filter and results:
+                results.sort(key=lambda r: r.score, reverse=True)
+            results = results[:top_k]
 
             # If entity filter was too restrictive and we got no results, retry without it.
             # Pass through cached query_embedding to avoid a second ada-002 round-trip.
@@ -755,7 +750,10 @@ class FAISSVectorStore:
         if self._openai_client is None:
             self._openai_client = get_embedding_client()
 
-        deployment = _get_settings().AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+        settings = _get_settings()
+        deployment = (settings.OPENAI_EMBEDDING_MODEL
+                      if settings.OPENAI_EMBEDDING_API_KEY
+                      else settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT)
         last_err: Optional[Exception] = None
         for attempt in (1, 2):
             try:

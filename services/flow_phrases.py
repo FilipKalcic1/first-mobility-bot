@@ -12,68 +12,18 @@ import re
 import logging
 from typing import List, Optional
 
+from services.config_loader import load_json
+
 logger = logging.getLogger(__name__)
 
-# ---
-# PHRASE CATEGORIES
-# ---
+# Phrase tables in config/flow/phrases_hr.json — editable without Python PR.
+_PHRASES = load_json("flow", "phrases_hr.json")
 
-# "Show more" signals - user wants to see additional options within current flow
-SHOW_MORE_PHRASES: List[str] = [
-    "pokaži", "pokazi", "pokaz",
-    "ostala", "ostale", "ostali",
-    "druga", "druge", "drugi", "drugo",
-    "više", "vise", "jos", "još",
-    "sva vozila", "sve vozila",
-    "lista", "popis", "prikazi", "prikaži",
-]
-
-# Confirmation "yes" phrases
-CONFIRM_YES_PHRASES: List[str] = [
-    "da", "potvrdi", "potvrditi", "potvrdeno", "potvrđeno",
-    "ok", "okay", "yes", "oke",
-    "moze", "može", "mozemo", "možemo",
-    "super", "naravno", "svakako", "apsolutno",
-    "slazem se", "slažem se", "vazi", "važi",
-    "idem", "ajde", "ajmo", "idemo",
-    "tocno", "točno", "ispravno", "u redu",
-]
-
-# Confirmation "no" phrases
-CONFIRM_NO_PHRASES: List[str] = [
-    "ne", "nema", "nemoj", "nemam",
-    "odustani", "odustajem", "odustati",
-    "cancel", "no", "nope",
-    "ne zelim", "ne želim",
-    "nikako", "ni slucajno", "ni slučajno",
-    "nista", "ništa",
-    "krivo", "pogresno", "pogrešno",
-    "prekini", "stop", "stani",
-]
-
-# Exit signals - user explicitly wants to leave current flow
-EXIT_SIGNALS: List[str] = [
-    "ne želim", "ne zelim",
-    "necu", "neću", "nećem",
-    "odustani", "odustajem",
-    "zapravo", "ipak",
-    "ne treba", "nemoj",
-    "stani", "stop",
-    "nešto drugo", "nesto drugo",
-    "drugo pitanje",
-    "promijeni", "cancel",
-    "hoću nešto drugo", "hocu nesto drugo",
-    "želim nešto drugo", "zelim nesto drugo",
-]
-
-# Item selection phrases (ordinals)
-ORDINAL_PHRASES: List[str] = [
-    "prvi", "prva", "prvo",
-    "drugi", "druga", "drugo",
-    "treci", "treći", "treca", "treća",
-    "cetvrti", "četvrti",
-    "peti", "peta",
-]
+SHOW_MORE_PHRASES: List[str] = _PHRASES["show_more"]
+CONFIRM_YES_PHRASES: List[str] = _PHRASES["confirm_yes"]
+CONFIRM_NO_PHRASES: List[str] = _PHRASES["confirm_no"]
+EXIT_SIGNALS: List[str] = _PHRASES["exit_signals"]
+ORDINAL_PHRASES: List[str] = _PHRASES["ordinals"]
 
 # GDPR Consent message — shown ONCE before first interaction.
 # User must reply "da", "prihvaćam", or "slažem se" to proceed.
@@ -97,9 +47,9 @@ GDPR_CONSENT_REPEAT = (
     "kako bih mogao nastaviti."
 )
 
-# Keywords that count as consent acceptance
-CONSENT_ACCEPT_KEYWORDS = {"da", "prihvaćam", "prihvacam", "slažem se", "slazem se", "accept", "yes", "pristajem"}
-CONSENT_DECLINE_KEYWORDS = {"ne", "no", "odbijam", "ne prihvaćam", "ne prihvacam"}
+# Consent keywords — also in config/flow/phrases_hr.json
+CONSENT_ACCEPT_KEYWORDS = set(_PHRASES["consent_accept"])
+CONSENT_DECLINE_KEYWORDS = set(_PHRASES["consent_decline"])
 
 # Greeting phrases
 # EU AI Act: Bot MUST self-identify as AI on every greeting interaction.

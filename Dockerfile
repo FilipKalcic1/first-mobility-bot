@@ -60,8 +60,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Create non-root user
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser && \
+# Create non-root user with UID/GID 1000 — matches k8s securityContext
+# (runAsUser/runAsGroup/fsGroup: 1000 in k8s/deployment.yaml).
+RUN groupadd -g 1000 appgroup && useradd -u 1000 -g 1000 -m -s /sbin/nologin appuser && \
     mkdir -p /app/.cache && \
     chown -R appuser:appgroup /app
 

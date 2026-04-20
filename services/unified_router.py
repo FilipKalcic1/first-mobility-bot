@@ -186,13 +186,17 @@ class UnifiedRouter:
         """
         Use UnifiedSearch to find relevant tools and detect ambiguity.
 
-        Now also detects ambiguity in results for disambiguation.
-
         Returns:
             Tuple of (tools_dict, ambiguity_result)
             - tools_dict: {tool_name: description}
             - ambiguity_result: AmbiguityResult if ambiguity detected, else None
+
+        Side effects:
+            Sets self._last_entity_clarification and self._last_entity_candidates
+            when search signals entity clarification is needed.
         """
+        self._last_entity_clarification = False
+        self._last_entity_candidates = None
         if not self._registry or not self._registry.is_ready:
             logger.debug("Registry not ready, using PRIMARY_TOOLS fallback")
             return PRIMARY_TOOLS, None
@@ -201,6 +205,13 @@ class UnifiedRouter:
             # Use UnifiedSearch for consistent results
             unified = get_unified_search()
             unified.set_registry(self._registry)
+            # Wire HyDE dependencies (cache + cost tracking) — optional, fail-open
+            if self._cost_tracker is not None:
+                unified.set_cost_tracker(self._cost_tracker)
+            try:
+                unified.set_redis(await _get_clarify_redis())
+            except Exception:
+                pass
 
             with trace_span(_tracer, "router.unified_search", {
                 "search.top_k": top_k,
@@ -211,6 +222,7 @@ class UnifiedRouter:
                 search_span.set_attribute("search.intent", response.intent.value)
                 if response.detected_entity:
                     search_span.set_attribute("search.detected_entity", response.detected_entity)
+                    trace["detected_entity"] = response.detected_entity
                 if response.results:
                     search_span.set_attribute("search.top_tool", response.results[0].tool_id)
                     search_span.set_attribute("search.top_score", round(response.results[0].score, 3))
@@ -250,11 +262,17 @@ class UnifiedRouter:
                         f"detected_entity={ambiguity_result.detected_entity}"
                     )
 
+                # Capture entity clarification signal from search
+                if getattr(response, 'entity_clarification_needed', False):
+                    self._last_entity_clarification = True
+                    self._last_entity_candidates = getattr(response, 'entity_candidates', None)
+
                 logger.info(
                     f"UnifiedSearch: {len(response.results)} tools "
                     f"(intent={response.intent.value}), "
                     f"total {len(relevant_tools)} with PRIMARY merge, "
-                    f"ambiguous={ambiguity_result.is_ambiguous if ambiguity_result else False}"
+                    f"ambiguous={ambiguity_result.is_ambiguous if ambiguity_result else False}, "
+                    f"entity_clarify={self._last_entity_clarification}"
                 )
                 return relevant_tools, ambiguity_result
 
@@ -352,6 +370,27 @@ class UnifiedRouter:
                     span.set_attribute("routing.clarify.similar_tools_count", len(_amb.similar_tools))
                     span.set_attribute("routing.clarify.similar_tools", ",".join(_amb.similar_tools[:10]))
             ROUTING_DECISIONS.labels(tier=routing_trace.tier.value).inc()
+
+            # Production accuracy log — captures every routing decision for analysis
+            try:
+                _log_entry = json.dumps({
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "query": query[:200],
+                    "action": decision.action.value if hasattr(decision.action, 'value') else str(decision.action),
+                    "tool": decision.tool,
+                    "confidence": round(decision.confidence, 3),
+                    "tier": routing_trace.tier.value,
+                    "entity": trace.get("detected_entity", ""),
+                    "latency_ms": round(latency_ms, 1),
+                    "ambiguous": decision.ambiguity_detected,
+                    "faiss_top": round(routing_trace.top_faiss_score, 3),
+                    "alternatives": trace.get("cp_labels", [])[:5],
+                }, ensure_ascii=False)
+                _redis = await _get_clarify_redis()
+                await _redis.lpush("routing:accuracy_log", _log_entry)
+                await _redis.ltrim("routing:accuracy_log", 0, 4999)
+            except Exception:
+                pass  # Never block routing on logging failure
 
             decision.routing_tier = trace.get("tier", RoutingTier.FULL_SEARCH).value
             return decision
@@ -779,6 +818,37 @@ class UnifiedRouter:
         )
         if trace is not None:
             trace["ambiguity_result"] = ambiguity_result
+
+        # Entity clarification short-circuit: when operation is clear but entity
+        # is unknown, ask the user directly instead of making LLM guess.
+        if self._last_entity_clarification and self._last_entity_candidates:
+            from services.entity_detector import ENTITY_STEMS
+            # Map entity keys to human-readable Croatian names
+            _entity_names = {
+                "vehicles": "vozila", "persons": "zaposlenici", "expenses": "troškovi",
+                "trips": "putovanja", "cases": "slučajevi/štete", "equipment": "oprema",
+                "partners": "partneri", "teams": "timovi", "documents": "dokumenti",
+                "orgunits": "organizacijske jedinice", "costcenters": "troškovni centri",
+                "roles": "uloge", "tags": "oznake", "tenants": "tenanti",
+                "pools": "pool-ovi", "vehicletypes": "tipovi vozila",
+                "equipmenttypes": "tipovi opreme", "persontypes": "tipovi osoba",
+                "casetypes": "tipovi slučajeva", "expensetypes": "tipovi troškova",
+                "triptypes": "tipovi putovanja", "expensegroups": "grupe troškova",
+                "vehiclecalendar": "kalendar vozila", "equipmentcalendar": "kalendar opreme",
+                "vehiclecontracts": "ugovori o vozilima", "vehicleassignments": "dodjele vozila",
+                "periodicactivities": "periodične aktivnosti", "mileagereports": "izvještaji o kilometraži",
+                "metadata": "metapodaci", "lookup": "šifrarnici",
+            }
+            options = [_entity_names.get(e, e) for e in self._last_entity_candidates[:6]]
+            clarification = f"Na što se odnosi vaš upit? ({', '.join(options)})"
+            logger.info(f"ENTITY CLARIFICATION: candidates={self._last_entity_candidates}, question='{clarification}'")
+            return RouterDecision(
+                action=RouterAction.CLARIFY,
+                clarification=clarification,
+                reasoning=f"Entity not detected, FAISS shows multiple candidates: {self._last_entity_candidates}",
+                confidence=0.3,
+                ambiguity_detected=True,
+            )
 
         system_prompt = self._build_router_system_prompt(
             user_context, conversation_state, relevant_tools, ambiguity_result

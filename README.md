@@ -1,184 +1,82 @@
 # MobilityOne WhatsApp Bot
 
-AI-powered fleet management chatbot that connects WhatsApp users to the MobilityOne platform (950+ API endpoints) via Azure OpenAI.
+Croatian-language conversational agent over the MobilityOne fleet API. Receives Infobip WhatsApp webhooks, routes natural-language requests to ~950 backend tools via a hybrid FAISS + BM25 + LLM reranker pipeline, resolves identifier dependencies automatically (Graph Discovery), and replies in Croatian.
 
-![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-3197%20passing-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen)
-![Tools](https://img.shields.io/badge/API%20tools-950+-blueviolet)
-![Top--1 Accuracy](https://img.shields.io/badge/routing%20accuracy-100%25-brightgreen)
+- **Version:** `11.0.2` (see [config.py](config.py))
+- **Runtime:** Python 3.14, FastAPI, asyncio worker
+- **Stores:** PostgreSQL (asyncpg + SQLAlchemy 2.0), Redis (queue + cache + distributed locks)
+- **AI:** Azure OpenAI — `gpt-4o-mini` for routing/reranking, `text-embedding-ada-002` for FAISS
+- **Deployment:** single-pod Kubernetes, 1 CPU / 1 GiB RAM (see [k8s/](k8s/))
 
-## Pregled sustava
+## Repository layout
 
-```
-WhatsApp (Infobip)
-    |
-    v
-FastAPI Webhook (port 8000)          Admin API (port 8080)
-    |                                     |
-    v                                     v
-Redis Stream (inbound)               PostgreSQL
-    |                                 (audit, hallucinations, GDPR)
-    v
-Worker (async processor)
-    |
-    +---> ML Intent Classifier (TF-IDF, <1ms)
-    |         |
-    |    [confidence >= 85%] ---> Fast Path (0 LLM tokena)
-    |         |
-    |    [confidence < 85%]  ---> FAISS Semantic Search (950 tools)
-    |                                  |
-    |                             LLM Routing (gpt-4o-mini)
-    |
-    +---> API Gateway ---> MobilityOne APIs
-    |
-    +---> Response Formatter
-    |
-    v
-Redis List (outbound) ---> WhatsApp (Infobip)
-```
+| Path | Purpose |
+| --- | --- |
+| [main.py](main.py) | FastAPI app (webhook receiver, health, metrics) |
+| [webhook_simple.py](webhook_simple.py) | Infobip HMAC verification + enqueue |
+| [worker.py](worker.py) | Async queue consumer, runs the full routing pipeline |
+| [config.py](config.py) | Pydantic `Settings` — all env vars |
+| [database.py](database.py), [models.py](models.py), [base.py](base.py) | SQLAlchemy engine + ORM |
+| [tool_routing.py](tool_routing.py) | Entry into unified router |
+| [services/](services/) | Routing, retrieval, execution, GDPR, cost tracking, circuit breakers |
+| [services/engine/](services/engine/) | Per-intent handlers (tool, confirmation, hallucination, user, flow) |
+| [services/registry/](services/registry/) | Swagger parsing, tool registry, embedding engine |
+| [services/dependency_resolver/](services/dependency_resolver/) | Graph Discovery over `processed_tool_registry.json` |
+| [config/](config/) | Processed tool registry, documentation, categories, context schemas |
+| [alembic/versions/](alembic/versions/) | DB migrations (001 initial, 002 GDPR consent, 003 ORM alignment) |
+| [k8s/](k8s/) | Kustomize deployment manifests |
+| [tests/](tests/) | pytest suite + benchmarks |
+| [scripts/](scripts/) | Tool sync, embedding generation, documentation helpers |
 
-### Tri procesa
-
-| Proces | Port | Opis |
-|--------|------|------|
-| **main.py** | 8000 | FastAPI webhook - prima WhatsApp poruke, stavlja u Redis Stream |
-| **worker.py** | — | Async procesor - ML routing, API pozivi, slanje odgovora |
-| **admin_api.py** | 8080 | Admin panel - pregled halucinacija, GDPR operacije, audit log |
-
-## Ključne brojke
-
-| Metrika | Vrijednost |
-|---------|-----------|
-| API alata | 950+ (auto-parsed iz OpenAPI specifikacija) |
-| Routing accuracy (Top-1) | **100%** na svih 950 alata |
-| ML Fast Path | ~85% upita (0 LLM poziva) |
-| Intent klasa | 45+ (TF-IDF + Logistic Regression) |
-| Query Type klasa | 12 (_id, _documents, _metadata, _Agg, ...) |
-| Prosječna latencija | 2-3 sekunde (uključuje Azure OpenAI) |
-| FAISS search latencija | 1-5ms |
-| Test suite | 3,197 testova, 88% coverage |
-
-## Quick Start
-
-### Docker Compose (preporučeno)
+## Quickstart (local)
 
 ```bash
-# 1. Kopiraj environment varijable
-cp .env.example .env
-# Popuni DATABASE_URL, REDIS_URL, AZURE_OPENAI_*, MOBILITY_* varijable
+python -m venv .venv && . .venv/Scripts/activate   # Windows: Scripts; Linux/mac: bin
+pip install -r requirements.txt -r requirements-dev.txt
 
-# 2. Pokreni cijeli stack
-docker-compose up -d
-
-# 3. Provjeri zdravlje sustava
-curl http://localhost:8000/ready
-curl http://localhost:8080/ready
-```
-
-### Lokalni development
-
-```bash
-# 1. Instaliraj dependencies
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-# 2. Pokreni migracije
+cp .env.example .env          # fill in DATABASE_URL, REDIS_URL, Azure + Infobip keys
 alembic upgrade head
 
-# 3. Pokreni servise
-make run          # Webhook API (port 8000)
-make run-worker   # Message processor
-make run-admin    # Admin API (port 8080)
+# API (webhook receiver)
+uvicorn main:app --host 0.0.0.0 --port 8000
+
+# Worker (in a second shell)
+python worker.py
 ```
 
-## Development
+Docker alternative: `docker compose up --build` (see [docker-compose.yml](docker-compose.yml)).
+
+## First-time setup of the tool registry
+
+Swagger → processed registry → FAISS embeddings:
 
 ```bash
-make test         # Pokreni svih 3,197 testova
-make coverage     # Testovi + coverage report (minimum 85%)
-make lint         # Ruff linter
-make format       # Auto-format koda
-make check        # lint + test u jednom koraku
+python scripts/sync_tools.py                   # regenerate config/processed_tool_registry.json
+python scripts/generate_tool_embeddings.py     # populate .cache/tool_embeddings.json
 ```
 
-## Struktura projekta
+Re-run `scripts/generate_tool_embeddings.py` whenever tool metadata changes; the worker loads `.cache/tool_embeddings.json` on startup.
 
-```
-.
-├── main.py                    # FastAPI webhook (port 8000)
-├── worker.py                  # Redis Stream consumer + burst mode
-├── admin_api.py               # Admin API (port 8080)
-├── webhook_simple.py          # WhatsApp router + 3-tier DLQ
-├── config.py                  # Pydantic Settings (80+ varijabli)
-├── database.py                # SQLAlchemy async (dual-user security)
-├── models.py                  # ORM modeli (6 tablica)
-├── tool_routing.py            # Intent-to-tool mappings (200+ pravila)
-│
-├── services/                  # Core business logic (50+ modula)
-│   ├── engine/                # Conversation engine (state machine)
-│   ├── registry/              # Tool registry (Swagger parser, FAISS)
-│   ├── context/               # User context management
-│   ├── unified_router.py      # 3-tier routing (ML → CP → LLM)
-│   ├── unified_search.py      # FAISS + BM25 + boost pipeline
-│   ├── intent_classifier.py   # ML intent detection (45+ klasa)
-│   ├── faiss_vector_store.py  # Vektorska pretraga (Ada-002, 1536d)
-│   ├── dynamic_threshold.py   # Entropy-aware decision engine
-│   ├── api_gateway.py         # HTTP klijent (circuit breaker)
-│   ├── gdpr_masking.py        # PII masking + erasure + export
-│   └── ...
-│
-├── config/                    # JSON konfiguracija
-│   ├── tool_documentation.json  # 950 alata s primjerima (1.5MB)
-│   ├── tool_categories.json     # Kategorizacija alata
-│   └── processed_tool_registry.json  # Parsani OpenAPI (2.8MB)
-│
-├── models/                    # ML modeli (TF-IDF, LogReg)
-├── data/training/             # Training podaci
-├── tests/                     # pytest suite (3,197 testova)
-├── scripts/                   # Utility skripte (30+)
-├── k8s/                       # Kubernetes manifesti
-├── docker/                    # Prometheus, Grafana konfiguracija
-├── alembic/                   # Database migracije
-└── docker-compose.yml         # Development stack
+## Tests
+
+```bash
+pytest                                          # full suite
+pytest tests/benchmarks/test_tool_recognition.py  # retrieval benchmark (seed=42)
+PARAPHRASES_PATH=tests/benchmarks/tool_recognition_paraphrases.seed1337.json \
+  pytest tests/benchmarks/test_tool_recognition.py   # held-out seed
 ```
 
-## Environment varijable
+Pre-flight for production pods:
 
-| Varijabla | Opis | Required |
-|-----------|------|----------|
-| `DATABASE_URL` | PostgreSQL connection string | Da |
-| `REDIS_URL` | Redis connection string | Da |
-| `MOBILITY_API_URL` | MobilityOne API base URL | Da |
-| `MOBILITY_AUTH_URL` | OAuth2 token endpoint | Da |
-| `MOBILITY_CLIENT_ID` | OAuth2 client ID | Da |
-| `MOBILITY_CLIENT_SECRET` | OAuth2 client secret | Da |
-| `MOBILITY_TENANT_ID` | Default tenant ID (fallback) | Da |
-| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint | Da |
-| `AZURE_OPENAI_API_KEY` | Azure OpenAI API key | Da |
-| `AZURE_OPENAI_DEPLOYMENT_NAME` | LLM deployment (gpt-4o-mini) | Da |
-| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Embedding deployment (ada-002) | Da |
-| `INFOBIP_API_KEY` | Infobip API key | Ne* |
-| `GDPR_HASH_SALT` | Salt za pseudonimizaciju (min 32 znaka) | Da |
-| `ADMIN_AUTH_TOKEN` | Admin API autentifikacija | Da |
+```bash
+python scripts/verify_production_readiness.py
+```
 
-\* Potrebno za slanje WhatsApp poruka, ne za pokretanje sustava.
+## Related documents
 
-## Health Endpoints
-
-| Endpoint | Servis | Opis |
-|----------|--------|------|
-| `GET /health` | API (8000) | Liveness — DB + Redis + registry |
-| `GET /ready` | API (8000) | Readiness — sve ovisnosti + Redis write test |
-| `GET /health` | Admin (8080) | Liveness — DB + Redis |
-| `GET /ready` | Admin (8080) | Readiness — sve ovisnosti |
-| `GET /metrics` | API (8000) | Prometheus metrike |
-
-## Daljnja dokumentacija
-
-| Dokument | Opis |
-|----------|------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Detaljna tehnička arhitektura |
-| [DEPLOYMENT.md](DEPLOYMENT.md) | Docker Compose + Kubernetes deployment |
-| [SECURITY.md](SECURITY.md) | Sigurnost, GDPR, EU AI Act compliance |
-| [CHANGELOG.md](CHANGELOG.md) | Povijest verzija |
+- [ARCHITECTURE.md](ARCHITECTURE.md) — component map and request lifecycle
+- [DEPLOYMENT.md](DEPLOYMENT.md) — k8s manifests, env vars, sealed secrets
+- [SECURITY.md](SECURITY.md) — threat model, GDPR, hardening
+- [HANDOFF.md](HANDOFF.md) — ownership orientation for new maintainers
+- [CHANGELOG.md](CHANGELOG.md) — notable changes
+- [k8s/README.md](k8s/README.md) — manifest-level details

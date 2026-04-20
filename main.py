@@ -408,6 +408,7 @@ async def health_check():
         checks["status"] = "unhealthy"
         if settings.DEBUG:
             checks["error"] = str(e)
+        return JSONResponse(status_code=503, content=checks)
 
     return checks
 
@@ -467,9 +468,14 @@ async def root():
 @app.get("/metrics")
 async def metrics(request: Request):
     """Prometheus metrics endpoint. Protected in production."""
-    # In production, only allow Prometheus scraper (by IP or token)
+    # In production, require a token via either ?token= (human/kubectl port-forward)
+    # or Authorization: Bearer <token> (Prometheus ServiceMonitor bearerTokenSecret).
     if settings.is_production:
         token = request.query_params.get("token", "")
+        if not token:
+            auth = request.headers.get("authorization", "")
+            if auth.lower().startswith("bearer "):
+                token = auth[7:].strip()
         admin_tokens = []
         for i in range(1, 5):
             env_token = os.environ.get(f"ADMIN_TOKEN_{i}")
@@ -478,7 +484,6 @@ async def metrics(request: Request):
         if not admin_tokens:
             logger.error("ADMIN_TOKENS not configured — denying /metrics access in production")
             return JSONResponse(status_code=503, content={"detail": "Metrics unavailable: admin tokens not configured"})
-        # Constant-time comparison: iterate all tokens to prevent timing oracle
         token_bytes = token.encode()
         valid = False
         for stored in admin_tokens:

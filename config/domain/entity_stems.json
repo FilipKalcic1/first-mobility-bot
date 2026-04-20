@@ -1,0 +1,382 @@
+{
+  "curated_stems": {
+    "vehicletypes": [
+      "tipovi vozil",
+      "tipove vozil",
+      "tip vozil",
+      "tipov vozil",
+      "vrsta vozil",
+      "vrste vozil",
+      "kategorija vozil"
+    ],
+    "vehiclecontracts": [
+      "ugovor vozil",
+      "ugovore o vozil",
+      "ugovor o vozil",
+      "leasing",
+      "najam vozil",
+      "lizing"
+    ],
+    "vehiclecalendar": [
+      "rezervacij",
+      "booking",
+      "kalendar vozil"
+    ],
+    "equipmenttypes": [
+      "tipovi oprem",
+      "tipove oprem",
+      "tip oprem",
+      "tipov oprem",
+      "vrsta oprem",
+      "vrste oprem",
+      "kategorija oprem"
+    ],
+    "equipmentcalendar": [
+      "kalendar oprem",
+      "raspored oprem",
+      "rezervacij oprem",
+      "rezervacij alat",
+      "rezervacij uredaj",
+      "rezervacij uređaj"
+    ],
+    "casetypes": [
+      "tipovi slucaj",
+      "tipove slucaj",
+      "tip slucaj",
+      "tipov slucaj",
+      "vrsta stete",
+      "vrste stete",
+      "kategorija prijav",
+      "tipovi slučaj",
+      "tipove slučaj",
+      "tip slučaj",
+      "tipov slučaj",
+      "vrsta štete",
+      "vrste štete",
+      "tipovi stet",
+      "tipove stet",
+      "tipovi štet",
+      "tipove štet"
+    ],
+    "expensetypes": [
+      "tipovi trosk",
+      "tipove trosk",
+      "tip trosk",
+      "tipov trosk",
+      "vrsta trosk",
+      "vrste trosk",
+      "kategorija trosk",
+      "tipovi trošk",
+      "tipove trošk",
+      "tip trošk",
+      "tipov trošk",
+      "vrsta trošk",
+      "vrste trošk"
+    ],
+    "expensegroups": [
+      "grupa trosk",
+      "grupe trosk",
+      "skupine trosk",
+      "grupa trošk",
+      "grupe trošk",
+      "skupine trošk"
+    ],
+    "periodicactivities": [
+      "periodicn",
+      "periodičn",
+      "servis",
+      "redovn aktiv"
+    ],
+    "schedulingmodels": [
+      "model raspored",
+      "modeli raspored",
+      "modele raspored",
+      "raspored model",
+      "model raspoređ",
+      "modeli raspoređ",
+      "modele raspoređ"
+    ],
+    "mileagereports": [
+      "kilometraz",
+      "kilometraž",
+      "kilometar",
+      "izvjest km",
+      "izvješt km",
+      "km izvjest",
+      "km izvješt",
+      "prijedeni put",
+      "prijeđeni put",
+      "presao kilometar",
+      "prešao kilometar",
+      "analiz voznj",
+      "analiz vožnj",
+      "prijedeni kilometr",
+      "prijeđeni kilometr"
+    ],
+    "costcenters": [
+      "troskovn",
+      "troškovn",
+      "centar troska",
+      "centar troška",
+      "cost center",
+      "mjesto troska",
+      "mjesto troška"
+    ],
+    "personactivitycategories": [
+      "kategorije aktivnosti",
+      "kategorija aktivnost",
+      "kategorije aktivnost",
+      "nadskup aktivnost"
+    ],
+    "personactivitytypes": [
+      "tipovi aktivnosti",
+      "tipove aktivnosti",
+      "vrste aktivnosti",
+      "tip aktivnost",
+      "vrsta aktivnost"
+    ],
+    "personperiodicactivities": [
+      "periodicke aktivnosti",
+      "periodičke aktivnosti",
+      "aktivnosti osobe",
+      "aktivnosti zaposlenika"
+    ],
+    "personorgunits": [
+      "org jedinice osobe",
+      "odjeli zaposlenika"
+    ],
+    "tenantpermissions": [
+      "dozvole tenanta",
+      "korisnicke dozvole",
+      "korisničke dozvole"
+    ],
+    "teammembers": [
+      "clanovi tima",
+      "članovi tima",
+      "clanove tima",
+      "članove tima",
+      "zaposlenici u timu"
+    ],
+    "vehicleassignments": [
+      "dodjele vozila",
+      "dodjela vozil",
+      "tko vozi"
+    ],
+    "documenttypes": [
+      "tipovi dokumen",
+      "tipove dokumen",
+      "tip dokumen",
+      "tipov dokumen",
+      "vrsta dokumen",
+      "vrste dokumen",
+      "kategorija dokumen"
+    ],
+    "companies": [
+      "kompanij",
+      "tvrtk",
+      "firm",
+      "poduzec",
+      "poduzeć"
+    ],
+    "vehicles": [
+      "vozil",
+      "auto",
+      "automobil",
+      "flot",
+      "auti",
+      "kola"
+    ],
+    "persons": [
+      "osob",
+      "korisnik",
+      "zaposlen",
+      "radnik",
+      "voditelj",
+      "djelatnik"
+    ],
+    "expenses": [
+      "trosk",
+      "trosak",
+      "troška",
+      "trošak",
+      "trošk",
+      "izdatak",
+      "racun",
+      "račun",
+      "cijena",
+      "rashod"
+    ],
+    "trips": [
+      "putovanj",
+      "trip",
+      "voznj",
+      "vožnj",
+      "putni"
+    ],
+    "cases": [
+      "slucaj",
+      "slučaj",
+      "steta",
+      "šteta",
+      "kvar",
+      "incident",
+      "prijav"
+    ],
+    "equipment": [
+      "oprem",
+      "uredaj",
+      "uređaj",
+      "inventar",
+      "alat"
+    ],
+    "partners": [
+      "partner",
+      "dobavljac",
+      "dobavljač",
+      "klijent"
+    ],
+    "teams": [
+      "timov",
+      "timsk",
+      " tim ",
+      " tim",
+      "grupa",
+      "ekip"
+    ],
+    "orgunits": [
+      "jedinic",
+      "odjel",
+      "sektor"
+    ],
+    "roles": [
+      "ulog",
+      "rola",
+      "role",
+      "dozvol",
+      "permisij"
+    ],
+    "tags": [
+      "oznaka",
+      "tagov",
+      "tag ",
+      "label"
+    ],
+    "pools": [
+      "pool vozil",
+      "pool",
+      "bazen vozil"
+    ],
+    "tenants": [
+      "tenant",
+      "najmoprimc",
+      "korisnik sustav",
+      "korisnici sustav",
+      "stanar",
+      "zakupac"
+    ],
+    "documents": [
+      "dokument",
+      "prilog",
+      "datoteka",
+      "pdf"
+    ],
+    "metadata": [
+      "metapoda",
+      "metapodat",
+      "metadata",
+      "struktur entitet",
+      "shema entitet",
+      "definicij polj",
+      "field defin"
+    ],
+    "lookup": [
+      "sifrarnik",
+      "šifrarnik",
+      "dropdown",
+      "izbornik",
+      "skraceni popis",
+      "skraćeni popis"
+    ],
+    "triptypes": [
+      "tipovi putovanj",
+      "tipove putovanj",
+      "tip putovanj",
+      "vrsta putovanj",
+      "vrste putovanj",
+      "kategorija putovanj",
+      "tipovi voznj",
+      "tipove voznj",
+      "tipovi vožnj",
+      "tipove vožnj",
+      "vrsta voznj",
+      "vrsta vožnj"
+    ],
+    "persontypes": [
+      "tipovi osob",
+      "tipove osob",
+      "tip osob",
+      "tipov osob",
+      "vrsta osob",
+      "vrste osob",
+      "kategorija osob",
+      "tipovi zaposlen",
+      "tipove zaposlen",
+      "tip zaposlen",
+      "vrsta zaposlen"
+    ],
+    "periodicactivitytypes": [
+      "tipovi periodicn",
+      "tipovi periodičn",
+      "tipove periodicn",
+      "tipove periodičn",
+      "tip periodicn",
+      "tip periodičn",
+      "vrsta periodicn",
+      "vrsta periodičn",
+      "tipovi servis",
+      "tipove servis",
+      "vrsta servis"
+    ],
+    "persondata": [
+      "moj profil",
+      "moji podac",
+      "moje podac",
+      "o meni",
+      "moj broj",
+      "moje informacij"
+    ],
+    "settings": [
+      "postavk",
+      "konfiguraci",
+      "podesavanj",
+      "podešavanj"
+    ],
+    "stats": [
+      "statistik",
+      "analitik",
+      "metrik",
+      "izvjestaj",
+      "izvještaj"
+    ],
+    "dashboarditems": [
+      "nadzorn",
+      "dashboard",
+      "kontroln ploc",
+      "kontrolnu ploc",
+      "nadzorna ploc",
+      "nadzornu ploc"
+    ],
+    "demo": [
+      "demonstraci",
+      "demo prikaz",
+      "primjer funkci"
+    ],
+    "periodicactivitiesschedules": [
+      "raspored aktivnost",
+      "rasporedi aktivnost",
+      "termin aktivnost",
+      "plan aktivnost",
+      "agenda aktivnost"
+    ]
+  }
+}
