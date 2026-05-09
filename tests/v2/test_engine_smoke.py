@@ -144,7 +144,7 @@ class _FakeDomainPicker:
     def __init__(self, decision: DomainDecision):
         self._decision = decision
 
-    async def pick(self, query, persona="driver", is_known=True, recent_turns=None):
+    async def pick(self, query, is_known=True, recent_turns=None):
         return self._decision
 
 
@@ -152,7 +152,7 @@ class _FakeScopedPicker:
     def __init__(self, decision: ScopedDecision):
         self._decision = decision
 
-    async def pick(self, query, domain_id, persona="driver", recent_turns=None):
+    async def pick(self, query, domain_id, recent_turns=None):
         return self._decision
 
     def tkb_entry_for(self, tool_id):

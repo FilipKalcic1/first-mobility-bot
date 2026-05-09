@@ -210,8 +210,7 @@ class UnifiedResponder:
 
         # L3 — retrieve top-K candidate tools via FAISS over anchors
         try:
-            persona = (identity_summary or {}).get("persona", "driver")
-            candidates = await self._retriever(query, persona, top_k)
+            candidates = await self._retriever(query, top_k)
         except Exception as e:  # noqa: BLE001
             logger.warning("Retriever failed: %s", e)
             return UnifiedDecision(error=f"retriever_error:{type(e).__name__}")

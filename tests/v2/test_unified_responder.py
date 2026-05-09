@@ -25,7 +25,7 @@ class _FakeLLM:
         return type("R", (), {"choices": [_Choice(self._response)]})()
 
 
-async def _stub_retriever(query, persona, k):
+async def _stub_retriever(query, k):
     return [
         {
             "tool_id": "get_MasterData",
@@ -60,7 +60,7 @@ async def test_picks_tool_from_candidates():
         '"clarify_question":null,"clarify_options":[],"reasoning":"snapshot pita","confidence":0.95}'
     )
     r = UnifiedResponder(fake, "gpt-4o-mini", retriever=_stub_retriever)
-    out = await r.respond("kolika km", identity_summary={"persona": "driver"})
+    out = await r.respond("kolika km", identity_summary={})
     assert out.tool_id == "get_MasterData"
     assert out.needs_confirm is False
     assert "TotalKm" in (out.response_text or "")
@@ -74,7 +74,7 @@ async def test_drops_hallucinated_tool_id():
         '"response_text":null,"reasoning":"hallucinated","confidence":0.9}'
     )
     r = UnifiedResponder(fake, "gpt-4o-mini", retriever=_stub_retriever)
-    out = await r.respond("obriši nešto", identity_summary={"persona": "manager"})
+    out = await r.respond("obriši nešto", identity_summary={})
     assert out.tool_id is None
     assert out.error == "hallucinated_tool_id"
 
@@ -108,7 +108,7 @@ async def test_handles_llm_exception():
 
 @pytest.mark.asyncio
 async def test_no_candidates_returns_error():
-    async def _empty(query, persona, k):
+    async def _empty(query, k):
         return []
 
     fake = _FakeLLM('{"tool_id": null}')
