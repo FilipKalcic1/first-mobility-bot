@@ -13,7 +13,7 @@ frontier models. The new shape:
     UnifiedResponder — ONE LLM call given:
       - top-30 tool schemas (compact)
       - recent conversation turns (multi-turn context)
-      - user identity context (persona, vehicle, tenant)
+      - user identity context (vehicle, tenant)
       - instruction: pick tool + fill params + format Croatian response
       ↓
     L6 mutation gate (existing, untouched)

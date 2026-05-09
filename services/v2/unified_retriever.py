@@ -8,8 +8,7 @@ Pulls intent_summary + returns from TKB if available; otherwise from
 registry.purpose / parameters.
 
 This is the ONLY pre-LLM gate — narrows 950 candidates to top-30 via
-embedding similarity, persona filter applied. Cheap (~50ms per query
-once anchor index is warm).
+embedding similarity. Cheap (~50ms per query once anchor index is warm).
 """
 from __future__ import annotations
 

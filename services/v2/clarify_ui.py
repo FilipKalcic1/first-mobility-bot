@@ -44,7 +44,6 @@ class ClarifyOptions:
 def build_clarify_options(
     candidates: list,
     max_cards: int = 3,
-    persona: Optional[str] = None,  # noqa: ARG001 — reserved for future per-persona phrasing
 ) -> ClarifyOptions:
     """Build top-3 cards from RecognitionResult candidates.
 
