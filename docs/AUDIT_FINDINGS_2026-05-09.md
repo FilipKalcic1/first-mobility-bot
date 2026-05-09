@@ -548,3 +548,41 @@ If Filip willing to act on static-only model:
 ### Status
 
 This finding is the **audit's honest self-boundary**. Static analysis approach was efficient for finding F1-F5, but cannot replace live measurement for performance/accuracy validation.
+
+---
+
+## Post-audit cleanup execution log
+
+### 2026-05-09 — Phase 0 (F5 quick fixes)
+
+- F5.1 turn_number bug — **RESOLVED**. process_message refactored into wrapper + _dispatch_message; redundant inline appends in dormant V3/Unified/Tool-Use paths removed. 722→714 tests (8 token_budget tests dropped per F5.2). All green.
+- F5.2 token_budget orphan — **RESOLVED**. services/v2/token_budget.py + tests/v2/test_token_budget.py deleted. tests/v2/test_architecture.py KNOWN_MODULES + tenant_rate_limit invariant updated. 213 LOC + 8 tests removed.
+
+### 2026-05-09 — Phase 2 (Role simplification, Filip Option A)
+
+Per `docs/ROLE_SIMPLIFICATION_INVENTORY.md` Phase 1 inventory + Filip Option A directive:
+
+**Manager-tier removal:**
+- `_MANAGER_FRIENDLY_PREFIXES` constant dropped from registry.py (~33 LOC)
+- Manager branch dropped from `tool_matches_audience` (~3 LOC)
+- `test_audience_manager_includes_driver_plus_fleet_finance_org` test dropped
+- `auto_enrich_tkb.py` manager import + persona dict dropped
+
+**Token scope dead infrastructure:**
+- `MOBILITY_SCOPE` field dropped from config.py
+- `self.scope` + scope payload sending dropped from token_manager.py (~5 LOC)
+
+**Comments/docstrings updated:**
+- registry.py top docstring (removed "manager-surface" misleading claim)
+- registry.py `tool_matches_audience` docstring (binary persona reality)
+- executor.py confused-deputy comment (clarified defensive vs functional)
+- domain_scoped_picker.py `_tools_in_domain` docstring (binary + V3 dormant note)
+
+**Test verification:** 725 pass / 0 fail.
+
+**Items NOT touched per Filip rules:**
+- V3 modules persona logic (preserved per "leave V3 dormant alone")
+- `_persona()` function itself (production-active)
+- `_DRIVER_FRIENDLY_PREFIXES` (production-active driver filter)
+- Pivot docs (READ_FIRST, DEPLOY_PLAYBOOK, FINAL_4_VERDICT, FILIP_HANDOFF, FILIP_LEGAL) — preserved per "DO NOT touch pivot docs"
+- Decorative telemetry persona logging — out of Option A scope
