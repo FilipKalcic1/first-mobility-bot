@@ -1,6 +1,0 @@
-1. Ako korisnik traži "NAJNOVIJE" ili "LATEST" - odaberi alat s "Latest" u imenu
-2. Ako korisnik traži "DOKUMENT" nekog entiteta - odaberi alat s "_documents" ili "_documentId"
-3. Ako korisnik traži "METAPODATKE" - odaberi alat s "_metadata"
-4. Ako korisnik traži "POTPUNO ZAMIJENI" - odaberi PUT, ne PATCH
-5. Ako korisnik traži "DJELOMIČNO AŽURIRAJ" - odaberi PATCH, ne PUT
-6. Ako korisnik traži "VIŠE STAVKI ODJEDNOM" - odaberi "_multipatch"
