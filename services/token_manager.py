@@ -52,7 +52,6 @@ class TokenManager:
         self.auth_url = _get_settings().MOBILITY_AUTH_URL
         self.client_id = _get_settings().MOBILITY_CLIENT_ID
         self.client_secret = _get_settings().MOBILITY_CLIENT_SECRET
-        self.scope = _get_settings().MOBILITY_SCOPE
 
         self._cache_key = "mobility:access_token"
         self._http_client: Optional[httpx.AsyncClient] = None
@@ -154,11 +153,6 @@ class TokenManager:
             "grant_type": "client_credentials",
             "audience": "none"
         }
-
-        # Add scope if configured
-        if self.scope:
-            payload["scope"] = self.scope
-            logger.debug(f"Requesting token with scope: {self.scope}")
 
         headers = {
             "Content-Type": "application/x-www-form-urlencoded"
