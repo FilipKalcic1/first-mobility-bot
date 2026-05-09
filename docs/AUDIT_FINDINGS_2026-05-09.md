@@ -568,9 +568,11 @@ Per `docs/ROLE_SIMPLIFICATION_INVENTORY.md` Phase 1 inventory + Filip Option A d
 - `test_audience_manager_includes_driver_plus_fleet_finance_org` test dropped
 - `auto_enrich_tkb.py` manager import + persona dict dropped
 
-**Token scope dead infrastructure:**
-- `MOBILITY_SCOPE` field dropped from config.py
-- `self.scope` + scope payload sending dropped from token_manager.py (~5 LOC)
+**Token scope dead infrastructure (REVERTED 2026-05-09):**
+- ~~`MOBILITY_SCOPE` field dropped from config.py~~ — REVERTED, field restored
+- ~~`self.scope` + scope payload sending dropped from token_manager.py~~ — REVERTED in commit `aa54de9`
+
+**Reason for revert:** Filip clarified that OAuth2 scope is **required by the auth server** to issue a valid token. The audit reasoning ("scope sent in request but never extracted from response = dead") was wrong — scope is server-side functional at request time, not client-side at response time. Removing scope from request can cause auth server to reject token issuance, breaking the entire bot/backend interaction at L0. **F2 sub-pattern "dead infrastructure" did not apply here.**
 
 **Comments/docstrings updated:**
 - registry.py top docstring (removed "manager-surface" misleading claim)

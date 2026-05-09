@@ -46,14 +46,22 @@ These have clear code citation + justification supporting removal without behavi
 
 **⚠️ FILIP CONSTRAINT:** Original prompt says *"Preserve audience tags for now (cheap insurance for future role layer)"*. Removing `_MANAGER_FRIENDLY_PREFIXES` removes that insurance. **Decision needed: drop OR keep as future scaffolding.**
 
-### Group B: Token scope dead infrastructure
+### Group B: Token scope — **RECLASSIFIED 2026-05-09 — FUNCTIONAL, NOT DEAD**
+
+**Original (incorrect) classification:**
 
 | File:line | Code | Rationale | Rating |
 |---|---|---|---|
-| [token_manager.py:55](services/token_manager.py#L55) | `self.scope = _get_settings().MOBILITY_SCOPE` | Loaded but only ever sent in REQUEST (never extracted from RESPONSE). | 9/10 |
-| [token_manager.py:159-161](services/token_manager.py#L159-L161) | `if self.scope: payload["scope"] = self.scope` | Sends scope in token request, response is ignored. | 8/10 |
+| ~~[token_manager.py:55](services/token_manager.py#L55)~~ | ~~`self.scope = _get_settings().MOBILITY_SCOPE`~~ | ~~Loaded but only ever sent in REQUEST (never extracted from RESPONSE).~~ | ~~9/10~~ |
+| ~~[token_manager.py:159-161](services/token_manager.py#L159-L161)~~ | ~~`if self.scope: payload["scope"] = self.scope`~~ | ~~Sends scope in token request, response is ignored.~~ | ~~8/10~~ |
 
-**Cleanup option:** Drop `MOBILITY_SCOPE` env var + scope-sending logic. **Risk:** if backend ever requires scope to issue token, breaks. Conservative recommendation: keep, document as "request-only scope". Low cleanup priority.
+**Correction (per Filip 2026-05-09):** The OAuth2 scope IS functional infrastructure — it is **required** for the auth server to issue a valid token. Without it, `client_credentials` request may be rejected or token returned with insufficient permissions, breaking the entire bot/backend interaction at L0 (token acquisition is the FIRST step of every API call).
+
+The original audit reasoning ("response scope never extracted = dead") was wrong: scope's purpose is server-side at request time, not client-side at response time. The auth server uses the scope param to determine what permissions to grant the issued token.
+
+**Status:** Token scope removal was attempted in commit `d5a984b`, reverted in `aa54de9` after Filip's correction. Token scope handling **restored to original state**.
+
+**Lesson:** F2 sub-pattern "outdated doc facts" applies to *static doc claims*. F2 sub-pattern "dead infrastructure" applies to *unreferenced code*. OAuth scope is neither — it's referenced AND functional, just functional in a way the audit (looking only at response-side) didn't immediately recognize.
 
 ### Group C: Hardcoded persona literals (non-`_persona()` call sites)
 
@@ -226,8 +234,8 @@ Reason: Original prompt explicitly says "preserve audience tags for now". Aggres
 | Update registry.py top docstring (remove "manager-surface" claim) | [services/v2/registry.py](services/v2/registry.py) | ✅ done |
 | Update `tool_matches_audience` docstring (binary persona reality) | [services/v2/registry.py](services/v2/registry.py) | ✅ done |
 | Drop manager prefix import + persona dict | [scripts/auto_enrich_tkb.py](scripts/auto_enrich_tkb.py) | ✅ done |
-| Drop `MOBILITY_SCOPE` field | [config.py](config.py) | ✅ done |
-| Drop `self.scope = ...` + scope payload addition | [services/token_manager.py](services/token_manager.py) | ✅ done |
+| ~~Drop `MOBILITY_SCOPE` field~~ | [config.py](config.py) | ❌ **REVERTED** — required by token_manager.py |
+| ~~Drop `self.scope = ...` + scope payload addition~~ | [services/token_manager.py](services/token_manager.py) | ❌ **REVERTED** (`aa54de9`) — required for OAuth token issuance |
 | Update executor.py confused-deputy comment | [services/v2/executor.py](services/v2/executor.py) | ✅ done |
 | Update domain_scoped_picker.py docstring | [services/v2/domain_scoped_picker.py](services/v2/domain_scoped_picker.py) | ✅ done |
 
