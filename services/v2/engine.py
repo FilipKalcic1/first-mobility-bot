@@ -23,13 +23,10 @@ engine never crashes — it returns a Croatian fallback message instead.
 from __future__ import annotations
 
 import logging
-import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
-from services.v2 import (
-    confidence_gate, formatter, mutation_gate,
-)
+from services.v2 import formatter, mutation_gate
 from services.v2.flow_engine import (
     FlowEngine, FlowStateStore, FLOWS,
     OUTCOME_CANCELLED, OUTCOME_DONE, OUTCOME_EXECUTE,
@@ -40,12 +37,12 @@ from services.v2.intent_type import (
     IntentTypeClassifier, KIND_FLOW_REQUEST, KIND_QUESTION_ABOUT_SELF,
 )
 from services.v2.driver_basics import DriverBasicsAnchor
-from services.v2.driver_quick_path import DriverQuickPath, QuickPathHit
-from services.v2.recognition import RecognitionEngine
-from services.v2.domain_picker import DomainPicker
-from services.v2.domain_scoped_picker import DomainScopedToolPicker
+from services.router.catalog_scoper import CatalogScoper
+from services.router.llm_router import LLMRouter
+from services.formatter.llm_formatter import LLMFormatter
 from services.v2.telemetry import (
-    TelemetryEvent, TelemetryLogger, hash_phone, set_request_context,
+    TelemetryEvent, TelemetryLogger,
+    get_negation_flag, set_negation_flag, set_request_context,
 )
 import uuid as _uuid
 from services.v2.pii_scrubber import PIIScrubber
@@ -53,23 +50,30 @@ from services.v2.rate_limiter import RateLimiter
 from services.v2.special_intents import detect_special_intent
 from services.v2.executor import ToolExecutor
 from services.v2.pending_mutation import (
-    PendingMutationStore, STAGE_DOUBLE_FIRST, STAGE_DOUBLE_SECOND,
+    PendingMutationStore,
     STAGE_SINGLE, parse_reply,
 )
-from services.v2.pending_clarify import PendingClarifyStore
+from services.v2.pending_clarify import (
+    PendingClarifyStore,
+    STAGE_ACTION as PENDING_STAGE_ACTION,
+    STAGE_ACTION_GLOBAL as PENDING_STAGE_ACTION_GLOBAL,
+    STAGE_TOOL as PENDING_STAGE_TOOL,
+)
+from services.v2.pending_params import PendingParams, PendingParamsStore
+from services.v2.optional_extractor import OptionalParamExtractor
+from services.v2.api_error_translator import ApiErrorTranslator
+from services.v2.param_labeler import ParamLabeler
+from services.v2 import param_ui
 from services.v2.conversation_history import (
     ConversationHistoryStore, ConversationTurn,
 )
-from services.v2.query_normalizer import QueryNormalizer, NormalizedQuery
-from services.v2.unified_responder import UnifiedResponder, UnifiedDecision
-from services.v2.tool_use_responder import ToolUseResponder, ToolUseResult
 from services.v2 import crisis_detector
-from services.v2 import output_sanitizer
 from services.v2 import input_sanitizer
 from services.v2 import multi_intent_detector
-from services.v2 import reference_resolver
 from services.v2 import negation_handler
 from services.v2 import meta_intents
+from services.v2 import clarify_ui
+from services.v2.gdpr_audit import GdprAuditStore
 
 logger = logging.getLogger(__name__)
 
@@ -81,56 +85,64 @@ class V2Engine:
     identity: IdentityContext
     intent_type: IntentTypeClassifier
     basics: DriverBasicsAnchor
-    recognition: RecognitionEngine
+    router: LLMRouter
+    formatter_llm: LLMFormatter
     flow_engine: FlowEngine
     flow_store: FlowStateStore
     executor: ToolExecutor
     pending_mut_store: PendingMutationStore
-    # L2 deterministic driver quick-path (real-corpus-driven regex routing).
-    # Optional: if None, layer is skipped. When provided, runs after L1
-    # special intents and before L2a intent type — short-circuits ~80%
-    # of driver traffic to MasterData fields with 0 LLM cost.
-    quick_path: Optional[DriverQuickPath] = None
     # Telemetry sink for production observability (active learning input).
     # Optional: if None, no logging. Failures here NEVER block user request.
     telemetry: Optional[TelemetryLogger] = None
-    # V3 hierarchical router (Stage 1 + Stage 2). When provided AND
-    # the V2_USE_V3_ROUTER env flag is set, replaces the L3
-    # RecognitionEngine + L5 confidence_gate path with the V3 flow:
-    #   Stage 1: domain picker → top-3 of 9 domains (rich descriptions)
-    #   Stage 2: tool picker within chosen domain (~20-80 candidates)
-    # Empirical: +21pp domain accuracy on objective 100-q benchmark.
-    # Default OFF — opt-in via flag, 0 risk to existing path.
-    domain_picker: Optional[DomainPicker] = None
-    scoped_picker: Optional[DomainScopedToolPicker] = None
     # Top-3 cards UX state — persists candidates between turns so user's
-    # "1"/"2"/"3"/"ne" reply maps to the correct tool. When None, Top-3
-    # cards still render but user must re-issue query verbosely on choice.
+    # "1"/"2"/"3"/"ne" reply maps to the correct tool.
     pending_clarify_store: Optional[PendingClarifyStore] = None
-    # Multi-turn context — last 3-5 turns passed to V3 pickers so the
-    # router can resolve follow-ups like "a prošli mjesec" referencing
-    # the previous turn's tool intent. Optional; pickers gracefully
-    # accept empty list.
+    # Multi-turn context — last 3-5 turns. Optional.
     conversation_history_store: Optional[ConversationHistoryStore] = None
-    # L1.5 Query Normalizer — rewrites formal/manager queries into
-    # canonical natural form before V3 router. Closes the adversarial
-    # paraphrase gap (where Stage 1 collapses on vocab-stripped input).
-    # Optional; if None, V3 router runs on raw query.
-    query_normalizer: Optional[QueryNormalizer] = None
-    # Unified LLM Responder — replaces V3 multi-stage routing with ONE
-    # frontier-LLM call that does routing + param filling + response
-    # generation given top-30 retrieved candidates. When provided AND
-    # V2_USE_UNIFIED_RESPONDER=1 env flag is set, fully bypasses V3
-    # DomainPicker → DomainScopedToolPicker chain. See
-    # services/v2/unified_responder.py for rationale.
-    unified_responder: Optional[UnifiedResponder] = None
-    # Real tool_use 2-pass loop — Pass 1 picks tool, executor runs API,
-    # Pass 2 LLM sees real JSON and writes natural Croatian response.
-    # No template fill, no field_hint guess, no placeholder replace.
-    # Edge cases (null fields, empty lists, errors) handled natively.
-    # Opt-in via V2_USE_TOOL_USE=1; takes precedence over Unified and V3
-    # when wired. See services/v2/tool_use_responder.py.
-    tool_use_responder: Optional[ToolUseResponder] = None
+    # GDPR + handover audit log. Optional: if None, side_effects are skipped
+    # with a loud warning (better than silently lying to the user).
+    gdpr_audit_store: Optional[GdprAuditStore] = None
+    # operation_id → intent_summary map for the clarify-cards UX. Built
+    # once at factory time from tool_knowledge_base.json. Used by the
+    # FALLBACK handler to render top-3 candidates with human-readable
+    # descriptions. Empty dict disables clarify-card rendering (engine
+    # falls back to the generic text fallback message).
+    tkb_intents: dict = field(default_factory=dict)
+    # Per-(tenant, persona) catalog narrowing (Phase E 2026-05-16). When
+    # None, router sees the full 950-tool catalog (legacy behavior). When
+    # set, every route() call passes tool_filter so anchor + LLM see only
+    # ~50-150 candidates relevant to this user's role+tenant.
+    catalog_scoper: Optional[CatalogScoper] = None
+    # Param-asking state (Filip 2026-05-17): persists collected/remaining
+    # params between turns when the engine asks for missing required (or
+    # opted-in optional) values. None = feature disabled (skip param ask).
+    pending_params_store: Optional[PendingParamsStore] = None
+    # tool_id → {param_name: param_def_dict}. Built once at factory time
+    # from the same registry the router uses. Used to (a) compute missing
+    # required params, (b) list optional params, (c) parse user answers
+    # by `param_type`. Empty dict disables param-asking entirely.
+    tool_parameters: dict = field(default_factory=dict)
+    # LLM extractor for OPTIONAL params (Filip 2026-05-17). When set, the
+    # engine collects all optionals in ONE turn from a free-text reply
+    # instead of iterating one-by-one. None = degrade to "skip all optionals"
+    # after user reply (no iteration fallback — Filip rejected that UX).
+    optional_extractor: Optional[OptionalParamExtractor] = None
+    # LLM translator for 4xx API errors (Faza 2 Filip 2026-05-17). Converts
+    # raw API error body into a Croatian WhatsApp message ("Nedostaje datoteka",
+    # "Nemaš ovlasti", etc) instead of generic "Tehnički problem". None =
+    # always show generic message (safe default for tests without LLM).
+    api_error_translator: Optional[ApiErrorTranslator] = None
+    # LLM-generated Croatian labels for tool parameters (Faza 3 Filip 2026-05-17).
+    # Replaces curated PARAM_LABELS dict — works for ANY param in any of the
+    # 950 tools via 3-tier resolution (preloaded JSON → Redis cache → LLM).
+    # None = fall back to humanize_param_name (ugly but functional).
+    param_labeler: Optional[ParamLabeler] = None
+    # op_ids whose registry metadata is incomplete (MISSING_BODY or
+    # LIKELY_MISSING_BODY from scripts/audit_registry_body_schemas.py).
+    # When a tool from this set hits the mutation gate confirm, the bot
+    # prefixes a Croatian warn line so user knows it may fail with 422.
+    # Filip 2026-05-17 Faza 9. Empty set = no warn ever (safe default).
+    risky_tool_ids: set = field(default_factory=set)
 
     # ---- Internal helpers (Tier-A simplification 2026-05-08) ----
     @classmethod
@@ -141,14 +153,6 @@ class V2Engine:
         return {
             "tenant_id": identity.tenant_id,
         }
-
-    @staticmethod
-    def _stage_from_decision(decision: str) -> str:
-        """Map mutation_gate decision → pending stage. DOUBLE confirms
-        require an extra "TRAJNO" word; everything else is SINGLE."""
-        if decision == mutation_gate.DECISION_DOUBLE:
-            return STAGE_DOUBLE_FIRST
-        return STAGE_SINGLE
 
     async def process_message_chunked(
         self, phone: str, query: str,
@@ -197,12 +201,16 @@ class V2Engine:
         # F5.1 fix: append every turn to conversation_history so
         # turn_number increments across turns. Best-effort — never blocks
         # the user response on telemetry persistence.
+        # Faza 12.1 (Filip 2026-05-18): PII-scrub query before persisting.
+        # Without this, OIB/IBAN/phone in user text leaks into Redis cache
+        # under v2_conv_history:{phone} for 30 min — GDPR breach.
         if self.conversation_history_store is not None and response:
             try:
+                scrubbed_user = self.pii.scrub(query).scrubbed_text
                 await self.conversation_history_store.append(
                     phone,
                     ConversationTurn(
-                        user=query[:200],
+                        user=scrubbed_user[:200],
                         bot=response[:200],
                     ),
                 )
@@ -221,18 +229,28 @@ class V2Engine:
         # ---- L-1 Rate Limiter ----
         rl = await self.rate_limiter.check(phone)
         if not rl.allowed:
+            await self._log_telemetry(kind="layer_exit:rate_limit")
             return rl.user_message
 
         # ---- L0.5 PII Scrubber ----
         scrubbed = self.pii.scrub(query)
         safe_query = scrubbed.scrubbed_text
+        # Persist the redaction kinds (NOT the original values) so the
+        # operator can answer "did the bot ever see an OIB on date X".
+        # In-memory scrubbed.redactions is per-request only — without
+        # this telemetry write there is no audit trail.
+        if scrubbed.redactions:
+            await self._log_telemetry(
+                kind="pii_redacted",
+                redactions=[r.kind for r in scrubbed.redactions],
+            )
 
         # ---- Negation flag (Damir-feedback signal) ----
         # User explicitly says "nije točno" → mark this turn so the bot
         # operator can spot wrong-routing patterns in KQL. Exact match
         # only; no heuristics, no synonym lists. Phrase is taught by
         # the formatter hint appended to read/mutate execute responses.
-        self._current_is_negation = (
+        set_negation_flag(
             safe_query.strip().casefold() == "nije točno"
         )
 
@@ -244,7 +262,6 @@ class V2Engine:
         if sanitized.should_block:
             await self._log_telemetry(
                 kind="input_blocked",
-                phone_hash=hash_phone(phone),
                 tenant_id="",
                 query="(blocked for privacy)",
                 extra={
@@ -258,6 +275,26 @@ class V2Engine:
         # ---- L0 Identity ----
         identity = await self.identity.resolve(phone)
 
+        # ---- Pending param-collection continuation? ----
+        # If we asked for a missing required param (or offered optionals) last
+        # turn, this message is the answer. Run BEFORE pending_mutation /
+        # pending_clarify so "R-123" or "ne" is interpreted as a param value /
+        # optional-skip, NOT a confirm or a clarify pick.
+        if self.pending_params_store is not None:
+            pending_p = await self.pending_params_store.load(phone)
+            if pending_p is not None:
+                response = await self._resolve_pending_params(
+                    phone, pending_p, safe_query, identity,
+                )
+                if response is not None:
+                    await self._log_telemetry(
+                        kind="layer_exit:pending_params_resolved",
+                        tenant_id=identity.tenant_id or "",
+                    )
+                    return response
+                # _resolve_pending_params returned None → state already
+                # cleared, treat current message as fresh query.
+
         # ---- Pending mutation continuation? ----
         # If a confirm prompt is outstanding for this phone, the user's
         # next message is the reply to it. Must run BEFORE flow / L1 /
@@ -265,6 +302,10 @@ class V2Engine:
         # new request.
         pending = await self.pending_mut_store.load(phone)
         if pending is not None:
+            await self._log_telemetry(
+                kind="layer_exit:pending_mutation_continuation",
+                tenant_id=identity.tenant_id or "",
+            )
             return await self._continue_pending_mutation(
                 phone, pending, safe_query, identity,
             )
@@ -280,6 +321,10 @@ class V2Engine:
                     phone, pending_cl, safe_query, identity,
                 )
                 if resolved is not None:
+                    await self._log_telemetry(
+                        kind="layer_exit:pending_clarify_resolved",
+                        tenant_id=identity.tenant_id or "",
+                    )
                     return resolved
                 # User typed something else — clear stale pending and
                 # treat current message as new query
@@ -297,17 +342,33 @@ class V2Engine:
                     phone[-4:], existing_flow.flow_name,
                 )
             else:
+                await self._log_telemetry(
+                    kind="layer_exit:flow_continuation",
+                    tenant_id=identity.tenant_id or "",
+                    extra={"flow_name": existing_flow.flow_name},
+                )
                 return await self._continue_flow(
-                    phone, existing_flow, safe_query
+                    phone, existing_flow, safe_query, identity=identity,
                 )
 
         # ---- L0.7 Crisis detection (ETHICAL OBLIGATION) ----
-        # MUST run before special intents and routing. Drivers are a
-        # high-stress profession; bot must redirect to crisis hotline
-        # (Plavi telefon 116 123) on suicidal/self-harm signals and NOT
-        # continue to fleet API calls. False-positive rate is near-zero
-        # (deterministic Croatian phrase patterns + false-positive guards
-        # for figurative usage like "ubit ću tu lozinku").
+        # MUST be the FIRST inline-detection layer — before negation/multi/meta —
+        # so a query like "ne želim više živjeti, otkaži rezervaciju" hits crisis
+        # response, not negation handler. Drivers are a high-stress profession;
+        # bot must redirect to crisis hotline (Plavi telefon 116 123) on
+        # suicidal/self-harm signals and NOT continue to fleet API calls.
+        # False-positive rate is near-zero (deterministic Croatian phrase
+        # patterns + figurative-usage guards like "ubit ću tu lozinku").
+        crisis = crisis_detector.detect(safe_query)
+        if crisis.detected:
+            await self._log_telemetry(
+                kind="crisis_signal",
+                tenant_id=identity.tenant_id or "",
+                query="(scrubbed for privacy)",  # do NOT log raw text
+                extra={"severity": crisis.severity},
+            )
+            return crisis.response
+
         # ---- L0.75 Standalone negation handler ----
         # User says "nemoj rezervirati" / "ne, otkaži, odustajem" without
         # an active pending state. Acknowledge politely instead of
@@ -318,7 +379,6 @@ class V2Engine:
         if neg.detected:
             await self._log_telemetry(
                 kind="negation_standalone",
-                phone_hash=hash_phone(phone),
                 tenant_id=identity.tenant_id or "",
                 query=safe_query,
             )
@@ -326,42 +386,30 @@ class V2Engine:
 
         # ---- L0.8 Multi-intent detection ----
         # If user packed 2+ intents in one msg ("pokaži km i rezerviraj
-        # sutra"), V3/Unified can only handle one. Render clarify prompt
+        # sutra"), router can only handle one. Render clarify prompt
         # asking which goes first. See services/v2/multi_intent_detector.
         multi = multi_intent_detector.detect(safe_query)
         if multi.detected:
             await self._log_telemetry(
                 kind="multi_intent",
-                phone_hash=hash_phone(phone),
                 tenant_id=identity.tenant_id or "",
                 query=safe_query,
                 extra={"parts": multi.parts[:3]},
             )
             return multi.clarify_message
 
-        # ---- L0.85 Meta-intents (self-reference / handoff / bug report / OOS) ----
-        # "tko si ti" / "hoću pravog čovjeka" / "kako si" — answered inline,
-        # no LLM/API call. See services/v2/meta_intents.py.
+        # ---- L0.85 Meta-intents (self-reference / bug report / OOS) ----
+        # "tko si ti" / "kako si" — answered inline, no LLM/API call.
+        # NOTE: handoff/handover triggers handled by L1 special_intents
+        # (which carries the queue_human_handover side-effect).
         meta = meta_intents.detect(safe_query)
         if meta.detected:
             await self._log_telemetry(
                 kind=f"meta_intent:{meta.kind}",
-                phone_hash=hash_phone(phone),
                 tenant_id=identity.tenant_id or "",
                 query=safe_query,
             )
             return meta.response
-
-        crisis = crisis_detector.detect(safe_query)
-        if crisis.detected:
-            await self._log_telemetry(
-                kind="crisis_signal",
-                phone_hash=hash_phone(phone),
-                tenant_id=identity.tenant_id or "",
-                query="(scrubbed for privacy)",  # do NOT log raw text
-                extra={"severity": crisis.severity},
-            )
-            return crisis.response
 
         # ---- L1 Special Intents ----
         special = detect_special_intent(
@@ -369,8 +417,20 @@ class V2Engine:
             is_first_contact=identity.is_first_contact,
             first_name=identity.first_name,
             vehicle_name=identity.vehicle_name,
+            licence_plate=identity.licence_plate,
+            last_mileage=identity.last_mileage,
+            company_name=identity.company_name,
         )
         if special is not None:
+            # Dispatch side_effects BEFORE returning. GDPR delete/export
+            # and human-handover need an audit-trail entry — without it,
+            # the "queued in 48h" message we send the user is a lie.
+            await self._handle_special_side_effects(special, identity)
+            await self._log_telemetry(
+                kind=f"layer_exit:special_intent:{special.intent}",
+                tenant_id=identity.tenant_id or "",
+                query=safe_query,
+            )
             return special.response
 
         # ---- L1.5 Unknown phone gate ----
@@ -381,7 +441,6 @@ class V2Engine:
         if not identity.is_known and not identity.is_first_contact:
             await self._log_telemetry(
                 kind="unknown_phone_gate",
-                phone_hash=hash_phone(phone),
                 tenant_id="",
                 query=safe_query,
             )
@@ -392,123 +451,9 @@ class V2Engine:
                 "Kad to bude gotovo, javim ti se opet."
             )
 
-        # ---- L2 Driver Quick-Path (regex deterministic, BEFORE LLM routes) ----
-        # Real-corpus-driven: ~40% of driver traffic matches one of the
-        # patterns in config/driver_quick_path.json (km, registracija,
-        # tablica, marka, model, expiry dates, reservations, ...).
-        # 0 LLM cost, ~50ms latency, deterministic accuracy.
-        # CRITICAL: must run BEFORE V3/Unified/ToolUse routes, otherwise
-        # short canonical queries pay 3 LLM calls when they could pay 0.
-        if self.quick_path is not None:
-            qp_hit = self.quick_path.match(safe_query)
-            if qp_hit is not None:
-                qp_response = await self._handle_quick_path_hit(
-                    qp_hit, identity, safe_query,
-                )
-                if qp_response is not None:
-                    await self._log_telemetry(
-                        kind="quick_path_hit",
-                        phone_hash=hash_phone(phone),
-                        tenant_id=identity.tenant_id or "",
-                        query=safe_query,
-                        tool_picked=qp_hit.tool_id,
-                        executed_tool=qp_hit.tool_id,
-                        executed_success=True,
-                        extra={
-                            "pattern_id": qp_hit.pattern_id,
-                            "kind": qp_hit.kind,
-                            "field": qp_hit.field,
-                        },
-                    )
-                    return qp_response
-
-        # ---- Tool-Use Loop Responder (opt-in, highest precedence) ----
-        # When V2_USE_TOOL_USE=1 AND tool_use_responder is wired, runs the
-        # 2-pass tool_use loop: LLM picks tool → execute API → LLM sees
-        # real JSON and writes natural Croatian response. Mutation gate
-        # intercepts BEFORE Pass 1 fires the tool by short-circuiting the
-        # injected executor. See services/v2/tool_use_responder.py.
-        if (
-            os.environ.get("V2_USE_TOOL_USE", "0") == "1"
-            and self.tool_use_responder is not None
-        ):
-            recent_turns: list[dict] = []
-            if self.conversation_history_store is not None:
-                recent_turns = await self.conversation_history_store.load(phone)
-            tu_response = await self._tool_use_route(
-                phone, safe_query, identity, recent_turns=recent_turns,
-            )
-            if tu_response is not None:
-                # F5.1: outer process_message wrapper appends to conversation_history.
-                return tu_response
-
-        # ---- Unified Responder (opt-in via flag) ----
-        # When V2_USE_UNIFIED_RESPONDER=1 AND unified_responder is wired,
-        # bypasses V3 hierarchical chain. ONE LLM call does routing +
-        # param filling + response generation. Architecture pivot
-        # 2026-05-07.
-        if (
-            os.environ.get("V2_USE_UNIFIED_RESPONDER", "0") == "1"
-            and self.unified_responder is not None
-        ):
-            recent_turns: list[dict] = []
-            if self.conversation_history_store is not None:
-                recent_turns = await self.conversation_history_store.load(phone)
-            unified_response = await self._unified_route(
-                phone, safe_query, identity, recent_turns=recent_turns,
-            )
-            if unified_response is not None:
-                # F5.1: outer process_message wrapper appends to conversation_history.
-                return unified_response
-
-        # ---- V3 Hierarchical Router (opt-in via flag) ----
-        # When V2_USE_V3_ROUTER=1 AND domain_picker is wired, the engine
-        # bypasses L3 RecognitionEngine + L5 confidence_gate and uses
-        # V3 Stage 1 + Stage 2 instead. Mutation gate (L6), anti-loop,
-        # telemetry — all UNCHANGED, still enforced.
-        if (
-            os.environ.get("V2_USE_V3_ROUTER", "0") == "1"
-            and self.domain_picker is not None
-            and self.scoped_picker is not None
-        ):
-            recent_turns: list[dict] = []
-            if self.conversation_history_store is not None:
-                recent_turns = await self.conversation_history_store.load(phone)
-            # L0.9 reference resolver — handle "a što s onim drugim" follow-ups.
-            ref = reference_resolver.resolve(safe_query, recent_turns)
-            if ref.detected and ref.clarify_question:
-                return ref.clarify_question
-            v3_query = ref.rewritten_query if ref.detected and ref.rewritten_query else safe_query
-            # L1.5 — normalize formal queries into canonical form. Cheap
-            # skip-gate suppresses LLM call for short/canonical inputs.
-            normalized: Optional[NormalizedQuery] = None
-            if self.query_normalizer is not None:
-                normalized = await self.query_normalizer.normalize(safe_query)
-                if not normalized.error and not normalized.skipped:
-                    # Pass canonical+original combined to V3 pickers
-                    v3_query = normalized.both_for_routing
-                    await self._log_telemetry(
-                        kind="v3_query_normalized",
-                        phone_hash=hash_phone(phone),
-                        tenant_id=identity.tenant_id or "",
-                        query=safe_query,
-                        extra={
-                            "canonical": normalized.canonical,
-                            "style": normalized.style,
-                            "intent_action": normalized.intent_action,
-                            "intent_entity": normalized.intent_entity,
-                        },
-                    )
-            v3_response = await self._v3_route(
-                phone, v3_query, identity, recent_turns=recent_turns,
-            )
-            if v3_response is not None:
-                # F5.1: outer process_message wrapper appends to conversation_history.
-                return v3_response
-
-        # NOTE: L2 quick-path moved BEFORE routing branches above (line ~305).
-        # Falling through here means quick-path didn't match → continue to
-        # L2a intent classifier.
+        # Dormant V2_USE_TOOL_USE / V2_USE_UNIFIED_RESPONDER / V2_USE_V3_ROUTER
+        # branches removed 2026-05-12. The new L3 LLM router (Phase 4) will
+        # replace the recognition + confidence_gate path entirely.
 
         # ---- L2a Intent Type ----
         itype = await self.intent_type.classify(safe_query)
@@ -517,6 +462,11 @@ class V2Engine:
         if itype.kind == KIND_QUESTION_ABOUT_SELF and identity.is_known:
             basics_match = await self.basics.match(safe_query)
             if basics_match.matched:
+                await self._log_telemetry(
+                    kind="layer_exit:driver_basics_match",
+                    tenant_id=identity.tenant_id or "",
+                    query=safe_query,
+                )
                 return self._format_basics(identity, safe_query)
 
         # ---- Flow request? Start flow directly ----
@@ -525,616 +475,47 @@ class V2Engine:
             if flow_name and flow_name in FLOWS:
                 return await self._start_flow(phone, flow_name, identity)
 
-        # ---- L3 Recognition ----
-        identity_summary = self._identity_summary(identity)
-        recognized = await self.recognition.recognize(
-            safe_query, identity_summary=identity_summary,
-        )
-
-        # ---- L5 Confidence Gate ----
-        gate = confidence_gate.decide(recognized, identity.is_known)
-
-        await self._log_telemetry(
-            kind="recognize_and_gate",
-            phone_hash=hash_phone(phone),
-            tenant_id=identity.tenant_id or "",
-            query=safe_query,
-            tool_picked=recognized.tool_id,
-            anchor_top1=(
-                recognized.candidates[0].tool_id
-                if recognized.candidates else None
-            ),
-            anchor_score=recognized.anchor_score or 0.0,
-            llm_confidence=recognized.llm_confidence or 0.0,
-            candidates_top5=[c.tool_id for c in (recognized.candidates or [])][:5],
-            gate_decision=gate.decision,
-            gate_reason=gate.log_reason,
-            error=recognized.error,
-        )
-
-        if gate.decision == confidence_gate.DECISION_FALLBACK:
-            return gate.fallback_message
-
-        # Flow detected by recognition?
-        if recognized.flow_name and recognized.flow_name in FLOWS:
-            return await self._start_flow(phone, recognized.flow_name, identity)
-
-        # ---- L6 Mutation Gate ----
-        method = self.executor.method_of(recognized.tool_id) or "GET"
-        mut = mutation_gate.decide_mutation(
-            tool_id=recognized.tool_id,
-            method=method,
-            params=recognized.params,
-            last_known_values={"last_mileage": identity.last_mileage},
-            entity_label=identity.vehicle_name or "zapis",
-        )
-        if mut.decision != mutation_gate.DECISION_AUTO:
-            # Persist what we want to execute on user "Da" so the next
-            # turn finds it and runs it, not re-classifies the reply.
-            stage = (
-                STAGE_DOUBLE_FIRST
-                if mut.decision == mutation_gate.DECISION_DOUBLE
-                else STAGE_SINGLE
-            )
-            await self.pending_mut_store.save(
-                phone,
-                tool_id=recognized.tool_id,
-                params=recognized.params,
-                stage=stage,
-            )
-            return self._render_confirm_pending(mut)
-
-        # ---- L7 Executor ----
-        exec_result = await self.executor.execute(
-            tool_id=recognized.tool_id,
-            params=recognized.params,
-            identity_summary=self._minimal_identity(identity),
-        )
-
-        if exec_result.circuit_open:
-            return exec_result.error
-        if not exec_result.success:
-            # Internal error code (e.g. "http_500", "timeout") goes to log
-            # only — user gets a generic Croatian message.
-            logger.warning(
-                "executor failure tool=%s err=%s",
-                recognized.tool_id, exec_result.error,
+        # ---- Model A: Universal action picker (Filip direktiva 2026-05-17) ----
+        # Direct LLM auto-execute is gone — router accuracy isn't trustworthy
+        # enough. Every message that wasn't caught by an earlier layer
+        # (crisis/welcome/flow/basics/...) now goes through the 3-turn cascade:
+        #   Turn 1 (this turn): save original query, render action picker
+        #   Turn 2: user picks action → scoped L3 router → render tool picker
+        #   Turn 3: user picks tool → mutation gate → execute (or confirm-Da)
+        if self.pending_clarify_store is None:
+            # Stripped-down test setups without clarify store: degrade to a
+            # generic "tell me more" reply rather than auto-execute. Production
+            # always wires the store (see make_v2_engine_for_production).
+            await self._log_telemetry(
+                kind="layer_exit:no_clarify_store",
+                tenant_id=identity.tenant_id or "",
+                query=safe_query,
             )
             return (
-                "Tehnički problem. Pokušaj ponovo za nekoliko trenutaka."
+                "Nisam siguran kako pomoći. Reci jasnije što tražiš "
+                "(npr. 'kolika mi je km', 'rezerviraj sutra', 'obriši rezervaciju 123')."
             )
 
-        # ---- L8 Formatter ----
-        result = formatter.format_response(
-            template_id=recognized.template_id,
-            api_response_data=exec_result.data,
-            field_hint=None,
-            extra_context={"entity_label": identity.vehicle_name or "rezultata"},
+        action_options = clarify_ui.build_action_picker_global()
+        await self.pending_clarify_store.save(
+            phone,
+            candidates=[],  # filled after user picks action (Turn 2 → scoped router)
+            original_query=safe_query,
+            stage=PENDING_STAGE_ACTION_GLOBAL,
         )
-        return result.text
+        await self._log_telemetry(
+            kind="clarify_action_global_shown",
+            tenant_id=identity.tenant_id or "",
+            query=safe_query,
+        )
+        return clarify_ui.render_text(
+            action_options,
+            header="Što želiš učiniti?",
+        )
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-
-    async def _tool_use_route(
-        self,
-        phone: str,
-        query: str,
-        identity: IdentitySnapshot,
-        recent_turns: Optional[list[dict]] = None,
-    ) -> Optional[str]:
-        """Real tool_use 2-pass loop entry. Mutation gate intercepts
-        BEFORE the API actually fires by shimming the executor passed to
-        the responder.
-
-        Returns response string from LLM Pass 2, or None to fall through
-        to V3/V2 path (only on hard errors).
-        """
-        identity_summary = {
-            "first_name": identity.first_name,
-            "vehicle_name": identity.vehicle_name,
-            "last_mileage": identity.last_mileage,
-            "tenant_id": identity.tenant_id,
-            # F1 fix: pass IDs so the LLM can fill personId/vehicleId
-            # params concretely instead of emitting placeholders that
-            # runtime back-fills blind.
-            "person_id": identity.person_id,
-            "vehicle_id": identity.vehicle_id,
-        }
-
-        # Capture mutation interception: when responder's executor runs,
-        # check method first. If mutating, save pending state and return
-        # a sentinel result so Pass 2 LLM produces a confirm-style reply.
-        intercepted: dict = {"saved_pending": False, "tool_id": None, "params": None}
-
-        async def _gated_executor(tool_id: str, params: dict, _ident: dict):
-            from types import SimpleNamespace
-            method = self.executor.method_of(tool_id) or "GET"
-            mut = mutation_gate.decide_mutation(
-                tool_id=tool_id, method=method, params=params,
-                last_known_values={"last_mileage": identity.last_mileage},
-                entity_label=identity.vehicle_name or "zapis",
-            )
-            if mut.decision != mutation_gate.DECISION_AUTO:
-                stage_kind = self._stage_from_decision(mut.decision)
-                await self.pending_mut_store.save(
-                    phone, tool_id=tool_id, params=params, stage=stage_kind,
-                )
-                intercepted["saved_pending"] = True
-                intercepted["tool_id"] = tool_id
-                intercepted["params"] = params
-                # Return sentinel — Pass 2 will see this and write a
-                # confirm-style HR message. We override that with our
-                # canonical confirm prompt below.
-                return SimpleNamespace(
-                    success=False,
-                    data={"_mutation_pending": True, "tool": tool_id, "params": params},
-                    error="mutation_pending_confirm",
-                    circuit_open=False,
-                )
-            # Read path — execute normally
-            return await self.executor.execute(
-                tool_id=tool_id, params=params,
-                identity_summary=self._minimal_identity(identity),
-            )
-
-        # Per-call executor injection — preserves architecture
-        # invariant (no private attribute swap across modules).
-        result = await self.tool_use_responder.respond(
-            query=query,
-            identity_summary=identity_summary,
-            recent_turns=recent_turns or [],
-            top_k=30,
-            executor=_gated_executor,
-        )
-
-        await self._log_telemetry(
-            kind="tool_use_decision",
-            phone_hash=hash_phone(phone),
-            tenant_id=identity.tenant_id or "",
-            query=query,
-            tool_picked=result.tool_called,
-            extra={
-                "trace": result.reasoning_trace,
-                "needs_clarify": result.needs_clarify,
-                "error": result.error,
-                "intercepted_mutation": intercepted["saved_pending"],
-            },
-        )
-
-        if result.error and not intercepted["saved_pending"]:
-            # Hard error — fall through to V3 path
-            return None
-
-        # If mutation was intercepted, override LLM response with our
-        # canonical confirm prompt (deterministic for safety per CLAUDE.md §1.3).
-        if intercepted["saved_pending"]:
-            from services.v2 import mutation_gate as mg
-            method = self.executor.method_of(intercepted["tool_id"]) or "POST"
-            mut = mg.decide_mutation(
-                tool_id=intercepted["tool_id"],
-                method=method,
-                params=intercepted["params"] or {},
-                last_known_values={"last_mileage": identity.last_mileage},
-                entity_label=identity.vehicle_name or "zapis",
-            )
-            return self._render_confirm_pending(mut)
-
-        return result.response_text
-
-    async def _unified_route(
-        self,
-        phone: str,
-        query: str,
-        identity: IdentitySnapshot,
-        recent_turns: Optional[list[dict]] = None,
-    ) -> Optional[str]:
-        """Unified LLM Responder path — ONE LLM call for routing + params
-        + response generation. Replaces V3 hierarchical chain.
-
-        Returns response string, or None to fall through to V3/V2 path
-        (when LLM errors out).
-
-        Mutation gate (L6) STILL absolute — UnifiedResponder may set
-        needs_confirm=true; engine renders confirm prompt and persists
-        pending mutation, just like V3.
-        """
-        identity_summary = {
-            "first_name": identity.first_name,
-            "vehicle_name": identity.vehicle_name,
-            "last_mileage": identity.last_mileage,
-            "tenant_id": identity.tenant_id,
-            # F1 fix: pass IDs so the LLM can fill personId/vehicleId
-            # params concretely instead of emitting placeholders that
-            # runtime back-fills blind.
-            "person_id": identity.person_id,
-            "vehicle_id": identity.vehicle_id,
-        }
-
-        decision = await self.unified_responder.respond(
-            query=query,
-            identity_summary=identity_summary,
-            recent_turns=recent_turns or [],
-            top_k=30,
-        )
-
-        await self._log_telemetry(
-            kind="unified_decision",
-            phone_hash=hash_phone(phone),
-            tenant_id=identity.tenant_id or "",
-            query=query,
-            tool_picked=decision.tool_id,
-            extra={
-                "confidence": decision.confidence,
-                "needs_confirm": decision.needs_confirm,
-                "needs_clarify": decision.needs_clarify,
-                "reasoning": decision.reasoning[:200],
-                "error": decision.error,
-            },
-        )
-
-        if decision.error or not decision.tool_id:
-            # Fall through to V3 / V2 paths
-            return None
-
-        # Clarify request → return question to user
-        if decision.needs_clarify and decision.clarify_question:
-            return decision.clarify_question
-
-        # Mutation gate (CLAUDE.md §1.3 absolute)
-        method = self.executor.method_of(decision.tool_id) or "GET"
-        mut = mutation_gate.decide_mutation(
-            tool_id=decision.tool_id,
-            method=method,
-            params=decision.params,
-            last_known_values={"last_mileage": identity.last_mileage},
-            entity_label=identity.vehicle_name or "zapis",
-        )
-        if mut.decision != mutation_gate.DECISION_AUTO:
-            stage_kind = self._stage_from_decision(mut.decision)
-            await self.pending_mut_store.save(
-                phone,
-                tool_id=decision.tool_id,
-                params=decision.params,
-                stage=stage_kind,
-            )
-            return self._render_confirm_pending(mut)
-
-        # Read-only execute
-        exec_result = await self.executor.execute(
-            tool_id=decision.tool_id,
-            params=decision.params,
-            identity_summary=self._minimal_identity(identity),
-        )
-        if exec_result.circuit_open:
-            return exec_result.error
-        if not exec_result.success:
-            logger.warning(
-                "unified executor failure tool=%s err=%s",
-                decision.tool_id, exec_result.error,
-            )
-            return "Tehnički problem. Pokušaj ponovo za nekoliko trenutaka."
-
-        # If LLM provided response_text with placeholders, fill them.
-        # Otherwise fall back to default formatter.
-        if decision.response_text:
-            filled = self._fill_response_placeholders(
-                decision.response_text, exec_result.data,
-            )
-            return filled
-
-        result = formatter.format_response(
-            template_id=None,
-            api_response_data=exec_result.data,
-            field_hint=None,
-            extra_context={"entity_label": identity.vehicle_name or "rezultata"},
-        )
-        return result.text
-
-    @staticmethod
-    def _fill_response_placeholders(template: str, data: dict) -> str:
-        """Replace {field_name} placeholders in LLM-generated response with
-        actual values from API response. Missing fields render as '-'.
-        Defensive: never raises, never leaks raw exceptions to user.
-        """
-        if not data or not isinstance(data, dict):
-            return template
-        try:
-            import re
-            def _repl(m):
-                key = m.group(1).strip()
-                # Support nested keys like {Vehicle.Plate}
-                cur = data
-                for part in key.split("."):
-                    if isinstance(cur, dict) and part in cur:
-                        cur = cur[part]
-                    else:
-                        cur = None
-                        break
-                if cur is None:
-                    return "-"
-                if isinstance(cur, (int, float)):
-                    return f"{cur:,}".replace(",", " ")
-                return str(cur)
-            return re.sub(r"\{([^{}]+)\}", _repl, template)
-        except (re.error, AttributeError, TypeError) as e:
-            # C5 fix: narrowed from bare except. Regex failure or callback
-            # type error are the only expected failures here. Log so we
-            # surface broken templates instead of silently emitting raw
-            # `{placeholder}` text to the user.
-            logger.warning(
-                "template fill failed (returning raw template): %s", e,
-            )
-            return template
-
-    async def _v3_route(
-        self,
-        phone: str,
-        query: str,
-        identity: IdentitySnapshot,
-        recent_turns: Optional[list[dict]] = None,
-    ) -> Optional[str]:
-        """V3 hierarchical routing path: Stage 1 (domain) → Stage 2 (tool).
-
-        Returns response string, or None to fall through to V2 path
-        (when V3 fails or is uncertain enough that legacy is safer).
-
-        Stage 1: pick top-3 of 9 domains. If special_intents → return polite
-        response (greeting, English fallback, OOS personal — handled inline).
-        If confident: route to Stage 2.
-        If not confident: render Top-3 cards via clarify_ui (NOT YET fully
-        wired — currently falls through to V2 for low confidence).
-
-        Stage 2: pick tool within chosen domain. Run mutation gate.
-        Execute via L7. Format via L8.
-        """
-        s1 = await self.domain_picker.pick(
-            query, recent_turns=recent_turns,
-        )
-
-        await self._log_telemetry(
-            kind="v3_stage1",
-            phone_hash=hash_phone(phone),
-            tenant_id=identity.tenant_id or "",
-            query=query,
-            tool_picked=None,
-            extra={
-                "top_picks": [
-                    {"domain": h.domain_id, "conf": h.confidence}
-                    for h in s1.top_picks
-                ],
-                "is_confident": s1.is_confident,
-                "needs_user_confirm": s1.needs_user_confirm,
-            },
-        )
-
-        if s1.error or not s1.top_domain:
-            # V3 failed; let V2 try
-            return None
-
-        # special_intents domain → handle inline (greeting/english/OOS)
-        if s1.top_domain.domain_id == "special_intents":
-            # Inline polite responses without API calls.
-            q_lower = query.lower()
-            if any(w in q_lower for w in ("bok", "pozdrav", "zdravo", "ćao", "cao", "dobar dan")):
-                return "Bok! Kako vam mogu pomoći?"
-            if any(w in q_lower for w in ("hello", "hi ", "hey", "where is", "i need", "tell me", "give me", "thanks")):
-                return (
-                    "Bok! Koristim hrvatski jezik. Možeš li pitati na hrvatskom?\n\n"
-                    "Npr.: \"koja je moja registracija\", "
-                    "\"kolika je moja kilometraža\", \"moje rezervacije\"."
-                )
-            if "ime" in q_lower or "zovem" in q_lower or "telefon" in q_lower:
-                return (
-                    "Tvoje osobne podatke ne mogu prikazati — to su privatni "
-                    "podaci. Mogu li pomoći s vozilom ili rezervacijom?"
-                )
-            if "obriš" in q_lower and ("profil" in q_lower or "account" in q_lower or "nalog" in q_lower):
-                return (
-                    "Brisanje korisničkog profila nije dostupno preko bota. "
-                    "Kontaktiraj svog administratora."
-                )
-            return "Razumio sam, ali ne mogu odgovoriti na to. Pokušaj drugačije ili kontaktiraj managera."
-
-        # Low Stage-1 confidence → ASK USER which domain (Top-3 cards UX).
-        # This is the "korisnik nosi smart load" mechanism Filip described:
-        # bot is not silent, not wrong — it asks ONE clarification with
-        # 3 button-friendly options. Empirical projection: clarify-rescuable
-        # = 95% domain accuracy after one user tap.
-        if not s1.is_confident:
-            top3 = s1.top_picks[:3] if s1.top_picks else []
-            if len(top3) >= 2:
-                # Persist as DOMAIN-pick candidates. Resolver reroutes
-                # into Stage 2 of the chosen domain on user tap.
-                domain_cards = [
-                    {
-                        "kind": "domain",
-                        "domain_id": h.domain_id,
-                        "label": h.label,
-                        "tool_id": "",  # filled after Stage 2
-                        "original_query": query,
-                    }
-                    for h in top3
-                ]
-                if self.pending_clarify_store is not None:
-                    await self.pending_clarify_store.save(
-                        phone, candidates=domain_cards, original_query=query,
-                    )
-
-                lines = ["Razumio sam da ti treba nešto vezano uz:"]
-                emoji = ["1️⃣", "2️⃣", "3️⃣"]
-                for i, h in enumerate(top3):
-                    lines.append(f"  {emoji[i]} {h.label}")
-                lines.append("  ❌ Nešto drugo")
-                lines.append("")
-                lines.append("Odgovori brojem (1, 2, 3) ili 'ne'.")
-                await self._log_telemetry(
-                    kind="v3_clarify_top3",
-                    phone_hash=hash_phone(phone),
-                    tenant_id=identity.tenant_id or "",
-                    query=query,
-                    extra={
-                        "top_picks": [
-                            {"domain": h.domain_id, "conf": h.confidence}
-                            for h in top3
-                        ],
-                    },
-                )
-                return "\n".join(lines)
-            # Single weak pick — let V2 handle it
-            return None
-
-        # Stage 2: pick tool within chosen domain
-        s2 = await self.scoped_picker.pick(
-            query, s1.top_domain.domain_id,
-            recent_turns=recent_turns,
-        )
-
-        await self._log_telemetry(
-            kind="v3_stage2",
-            phone_hash=hash_phone(phone),
-            tenant_id=identity.tenant_id or "",
-            query=query,
-            tool_picked=s2.top_pick.tool_id if s2.top_pick else None,
-            extra={
-                "domain": s1.top_domain.domain_id,
-                "is_mutating": s2.is_mutating,
-                "needs_clarify": s2.needs_clarify,
-            },
-        )
-
-        # Stage 2 MEDIUM confidence (0.5 ≤ conf < 0.85) AND multiple
-        # plausible candidates → render Tool-Top-3 cards as PRIMARY UX.
-        # User picks 1/2/3 → engine maps via pending_clarify_store and
-        # executes. Empirical projection: turns 64% strict → ~85% effective.
-        if (
-            not s2.error and s2.top_pick
-            and not s2.has_high_confidence
-            and len(s2.top_picks) >= 2
-            and s2.top_pick.confidence >= 0.5
-        ):
-            # Build candidate cards with intent_summary from TKB if available
-            cards = []
-            for pick in s2.top_picks[:3]:
-                tkb_entry = (
-                    self.scoped_picker.tkb_entry_for(pick.tool_id) or {}
-                    if self.scoped_picker else {}
-                )
-                summary = tkb_entry.get("intent_summary") or pick.reasoning or pick.tool_id
-                cards.append({
-                    "tool_id": pick.tool_id,
-                    "label": summary[:80],
-                    "field_hint": pick.field_hint,
-                    "params": {},
-                })
-
-            if self.pending_clarify_store is not None:
-                await self.pending_clarify_store.save(
-                    phone, candidates=cards, original_query=query,
-                )
-
-            await self._log_telemetry(
-                kind="v3_stage2_clarify_top3",
-                phone_hash=hash_phone(phone),
-                tenant_id=identity.tenant_id or "",
-                query=query,
-                extra={
-                    "candidates": [
-                        {"tool": c["tool_id"], "label": c["label"]}
-                        for c in cards
-                    ],
-                },
-            )
-
-            lines = ["Razumio sam, ali nisam 100% siguran. Što ti treba:"]
-            emoji = ["1️⃣", "2️⃣", "3️⃣"]
-            for i, c in enumerate(cards):
-                lines.append(f"  {emoji[i]} {c['label']}")
-            lines.append("  ❌ Ništa od toga — reci drugačije")
-            lines.append("")
-            lines.append("Odgovori brojem (1, 2, 3) ili 'ne'.")
-            return "\n".join(lines)
-
-        if s2.error or not s2.top_pick or not s2.has_high_confidence:
-            # V3 Stage 2 failed or uncertain (and no Top-3 viable); fall to V2
-            return None
-
-        # Need clarify? Render question, save state for next turn.
-        if s2.needs_clarify and s2.clarify_question:
-            return s2.clarify_question
-
-        # Got a confident tool → run mutation gate + execute directly.
-        # NEVER bypass mutation gate — that's CLAUDE.md §1.3 invariant.
-        chosen_tool = s2.top_pick.tool_id
-        method = self.executor.method_of(chosen_tool) or "GET"
-        # Build minimal params dict — Stage 2 didn't extract params yet.
-        # If params are missing for a mutating tool, mutation gate will
-        # surface this as out-of-range / missing required → confirm gate.
-        params: dict = {}
-        if s2.top_pick.field_hint:
-            params["field_hint"] = s2.top_pick.field_hint
-
-        mut = mutation_gate.decide_mutation(
-            tool_id=chosen_tool,
-            method=method,
-            params=params,
-            last_known_values={"last_mileage": identity.last_mileage},
-            entity_label=identity.vehicle_name or "zapis",
-        )
-        if mut.decision != mutation_gate.DECISION_AUTO:
-            stage_kind = self._stage_from_decision(mut.decision)
-            await self.pending_mut_store.save(
-                phone,
-                tool_id=chosen_tool,
-                params=params,
-                stage=stage_kind,
-            )
-            await self._log_telemetry(
-                kind="v3_mutation_gate",
-                phone_hash=hash_phone(phone),
-                tenant_id=identity.tenant_id or "",
-                query=query,
-                tool_picked=chosen_tool,
-                mutation_decision=mut.decision,
-            )
-            return self._render_confirm_pending(mut)
-
-        # Read-only execute (only GETs hit AUTO).
-        exec_result = await self.executor.execute(
-            tool_id=chosen_tool,
-            params=params,
-            identity_summary=self._minimal_identity(identity),
-        )
-
-        await self._log_telemetry(
-            kind="v3_execute",
-            phone_hash=hash_phone(phone),
-            tenant_id=identity.tenant_id or "",
-            query=query,
-            executed_tool=chosen_tool,
-            executed_success=bool(exec_result.success),
-        )
-
-        if exec_result.circuit_open:
-            return exec_result.error
-        if not exec_result.success:
-            logger.warning(
-                "v3 executor failure tool=%s err=%s",
-                chosen_tool, exec_result.error,
-            )
-            # Fall through to V2 — maybe its anchor cosine finds something
-            # the LLM-picked tool couldn't deliver.
-            return None
-
-        # Format with field_hint preserved for slicing.
-        result = formatter.format_response(
-            template_id=None,
-            api_response_data=exec_result.data,
-            field_hint=s2.top_pick.field_hint,
-            extra_context={"entity_label": identity.vehicle_name or "rezultata"},
-        )
-        return result.text
 
     async def _log_telemetry(self, **kwargs) -> None:
         """Best-effort structured log. Never raises — failures swallowed.
@@ -1198,10 +579,7 @@ class V2Engine:
         # Inject is_negation flag (set by process_message entry on
         # exact-match "nije točno"). Default False if no request in
         # flight (e.g. background task logging).
-        kwargs.setdefault(
-            "is_negation",
-            getattr(self, "_current_is_negation", False),
-        )
+        kwargs.setdefault("is_negation", get_negation_flag())
         try:
             await self.telemetry.log(TelemetryEvent(**kwargs))
         except Exception as e:  # noqa: BLE001 — telemetry must not affect user
@@ -1214,36 +592,50 @@ class V2Engine:
                 logger.debug("telemetry log dropped: %s", e)
             return
 
-    async def _handle_quick_path_hit(
-        self,
-        hit: QuickPathHit,
-        identity: IdentitySnapshot,
-        query: str,
-    ) -> Optional[str]:
-        """Resolve a deterministic L2 quick-path hit.
+    async def _handle_special_side_effects(
+        self, special, identity: IdentitySnapshot,
+    ) -> None:
+        """Dispatch the side_effects tuple of a SpecialIntentMatch.
 
-        Returns response string for the user, OR None to fall through to
-        L2a/L3 (e.g. tool requires data we can't serve from identity cache).
+        GDPR delete/export and human-handover require an audit-trail entry.
+        Without it, the "queued in 48h" message the user receives is a lie.
+        Failures are logged but never block the user-facing response.
         """
-        # Terminal responses (English fallback / polite refusal): always
-        # return immediately. Bot must NEVER stay silent on these.
-        if hit.is_terminal_response:
-            return hit.response_text or (
-                "Razumio sam, ali ne mogu odgovoriti na to. Pokušaj drugačije "
-                "ili kontaktiraj managera."
+        if not special.side_effects:
+            return
+        if self.gdpr_audit_store is None:
+            logger.warning(
+                "side_effects fired but gdpr_audit_store is None — "
+                "audit trail missing for actions=%s, phone=%s",
+                [se.get("action") for se in special.side_effects],
+                identity.phone,
             )
-
-        # Tool hit: serve from cached MasterData when possible (zero API call,
-        # zero latency beyond regex match). If hit.field is set, format that
-        # specific field; otherwise full snapshot.
-        if hit.is_actionable and hit.tool_id == "get_MasterData" and identity.is_known:
-            return self._format_basics(identity, hit.field or query)
-
-        # For other tools (VehicleCalendar, MileageReports), defer to the
-        # full L3 → L7 path which knows how to make the API call. Returning
-        # None tells process_message to continue normal routing — the regex
-        # match still ensured we DETECTED the right intent without LLM.
-        return None
+            return
+        from services.v2.telemetry import _correlation_id_var
+        cid = _correlation_id_var.get() or ""
+        for se in special.side_effects:
+            action = se.get("action") or ""
+            try:
+                if action in ("audit_log_gdpr_delete", "audit_log_gdpr_export"):
+                    await self.gdpr_audit_store.record_gdpr_request(
+                        action=action,
+                        tenant_id=identity.tenant_id,
+                        phone=identity.phone,
+                        person_id=identity.person_id,
+                        correlation_id=cid,
+                    )
+                elif action == "queue_human_handover":
+                    await self.gdpr_audit_store.record_handover_request(
+                        tenant_id=identity.tenant_id,
+                        phone=identity.phone,
+                        person_id=identity.person_id,
+                        correlation_id=cid,
+                    )
+                else:
+                    logger.warning("unknown side_effect action=%s — skipping", action)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("side_effect dispatch failed (%s): %s — action=%s",
+                               type(e).__name__, e, action)
 
     def _format_basics(
         self, identity: IdentitySnapshot, query: str,
@@ -1309,6 +701,7 @@ class V2Engine:
 
     async def _continue_flow(
         self, phone: str, state, user_input: str,
+        identity: Optional[IdentitySnapshot] = None,
     ) -> str:
         outcome = self.flow_engine.handle(state, user_input)
 
@@ -1330,14 +723,29 @@ class V2Engine:
             return outcome.response or "Odustao sam."
 
         if outcome.kind == OUTCOME_EXECUTE:
-            await self.flow_store.clear(phone)
+            # ORCH-1 fix (Filip 2026-05-20): pass real tenant identity, not {}.
+            # executor.execute refuses tenant-scoped tools with missing_tenant_id
+            # if identity_summary lacks tenant_id — which silently broke ALL
+            # flows (booking/mileage/case) end-to-end after the user confirmed.
+            identity_summary = (
+                self._minimal_identity(identity) if identity is not None else {}
+            )
             exec_result = await self.executor.execute(
                 tool_id=outcome.tool_id,
                 params=outcome.params,
-                identity_summary={},
+                identity_summary=identity_summary,
             )
             if not exec_result.success:
-                return f"Akcija nije uspjela: {exec_result.error}"
+                # ORCH-4 fix: do NOT clear flow state on failure — keep it so
+                # the user can retry the confirm instead of losing all progress.
+                # (Previously state was cleared before execute → fail = dead flow.)
+                translated = await self._render_execution_failure(
+                    exec_result, outcome.tool_id,
+                    generic=f"Akcija nije uspjela: {exec_result.error}",
+                )
+                return translated
+            # Success → now safe to clear flow state.
+            await self.flow_store.clear(phone)
             r = formatter.format_response(
                 template_id="mutation_success",
                 api_response_data=exec_result.data,
@@ -1351,153 +759,626 @@ class V2Engine:
 
         return "Postupak."
 
-    def _render_confirm_pending(self, mut) -> str:
-        if mut.decision == mutation_gate.DECISION_DOUBLE:
-            return mut.double_first_message
-        return mut.confirm_message
+    _RISKY_WARN_HR = (
+        "Napomena: ovaj alat je nedovoljno opisan u sustavu i možda neće "
+        "raditi iz prve. Ako javi grešku, kontaktiraj managera.\n\n"
+    )
+
+    def _render_confirm_pending(self, mut, tool_id: str = "") -> str:
+        base = mut.confirm_message
+        if tool_id and tool_id in self.risky_tool_ids:
+            return self._RISKY_WARN_HR + base
+        return base
+
+    _GENERIC_EXECUTION_FAILURE = (
+        "Tehnički problem. Pokušaj ponovo za nekoliko trenutaka."
+    )
+
+    async def _render_execution_failure(
+        self, exec_result, tool_id: str,
+        generic: Optional[str] = None,
+    ) -> str:
+        """Convert a failed ExecutionResult into a Croatian message.
+
+        For 4xx with a body, try the LLM translator (returns Croatian
+        explanation user can act on). For 5xx, missing body, or translator
+        failure → fall back to the generic message.
+
+        Filip 2026-05-17 Faza 2: replaces blanket "Tehnički problem" with
+        actionable explanations like "Nedostaje datoteka." / "Nemaš ovlasti."
+        """
+        fallback = generic or self._GENERIC_EXECUTION_FAILURE
+        if self.api_error_translator is None:
+            return fallback
+        status = getattr(exec_result, "status_code", None)
+        body = getattr(exec_result, "error_body", None)
+        if status is None or body is None:
+            return fallback
+        try:
+            tool_intent = (self.tkb_intents or {}).get(tool_id, "")
+            translated = await self.api_error_translator.translate(
+                status_code=status,
+                response_body=body,
+                tool_id=tool_id,
+                tool_intent=tool_intent,
+            )
+        except Exception as e:  # noqa: BLE001 — never let translator break caller
+            logger.warning("api_error_translator unexpected error: %s", e)
+            return fallback
+        return translated or fallback
 
     async def _resolve_pending_clarify(
         self, phone: str, pending, user_input: str,
         identity: IdentitySnapshot,
     ) -> Optional[str]:
         """Map user's reply ('1' / '2' / '3' / 'ne') to one of the saved
-        Top-3 candidates. Returns response if resolved; None to fall
-        through to fresh routing (user typed a brand new query).
+        candidates. Three stages exist (Filip 2026-05-17 Model A):
 
-        Candidate format expected: list of dicts with at least 'tool_id',
-        'label' and optional 'description'. Saved when V3 Stage 2 had
-        medium confidence and engine rendered choice cards.
+          stage=action_global → Model A Turn 2: user picked one of 4 universal
+                          actions (POGLEDATI/UNIJETI/IZMIJENITI/IZBRISATI).
+                          Run scoped L3 router on original_query (method +
+                          persona + drop_internal), render top-3 tool picker.
+          stage=action  → Legacy fallback-context picker: candidates already
+                          retrieved by L3 but mixed-method. Filter by chosen
+                          action's methods, then either resolve directly (1
+                          left) or render tool picker (2+ left).
+          stage=tool    → User picks specific tool. Mutation gate then execute.
+
+        Returns response if resolved; None to fall through to fresh routing
+        (user typed a brand new query).
         """
         text = (user_input or "").strip().lower()
 
-        # Negative reply: cancel clarify, fall through
+        # Negative reply: cancel clarify, fall through (applies to both stages)
         if text in {"ne", "nista", "ništa", "drugo", "❌", "x", "n"}:
             await self.pending_clarify_store.clear(phone)
             return "U redu, reci drugačije što tražiš."
 
         # Numeric pick: 1/2/3 (or with emoji 1️⃣ 2️⃣ 3️⃣)
+        # NOTE: "drugo" is INTENTIONALLY excluded (despite meaning "second"
+        # in Croatian) because it also belongs to the negative-reply set
+        # ("something else / cancel"). Treating it as a cancel-only token
+        # avoids the ambiguity where user typing "drugo" thinking "the
+        # second option" gets silently cancelled. User picking #2 types "2".
         digit_map = {
             "1": 0, "2": 1, "3": 2,
             "1️⃣": 0, "2️⃣": 1, "3️⃣": 2,
-            "prvo": 0, "drugo": 1, "treće": 2, "trece": 2,
+            "prvo": 0, "treće": 2, "trece": 2,
         }
         idx = digit_map.get(text)
         if idx is None:
             # Word-boundary check for short emoji-only or first-char digit
             if text and text[0] in "123":
                 idx = int(text[0]) - 1
-        if idx is None or idx >= len(pending.candidates):
-            return None  # not a valid pick — re-route as new query
 
-        chosen = pending.candidates[idx]
-        await self.pending_clarify_store.clear(phone)
+        stage = getattr(pending, "stage", PENDING_STAGE_TOOL)
 
-        # DOMAIN-pick path — user chose a domain from Stage 1 cards.
-        # Re-run Stage 2 within that domain using original query, render
-        # tool-Top-3 cards or execute confidently.
-        if chosen.get("kind") == "domain" and chosen.get("domain_id"):
-            domain_id = chosen["domain_id"]
-            original = chosen.get("original_query") or pending.original_query
-            if self.scoped_picker is None:
-                return None
-            s2 = await self.scoped_picker.pick(
-                original, domain_id,
+        # ---- Stage: universal action picker (Model A Turn 2) ----
+        # User picked POGLEDATI/UNIJETI/IZMIJENITI/IZBRISATI on Turn 1.
+        # Resolve action → allowed HTTP methods, run scoped L3 router on
+        # the ORIGINAL query, then render top-3 tool picker (Turn 3 input).
+        if stage == PENDING_STAGE_ACTION_GLOBAL:
+            action_options = clarify_ui.build_action_picker_global()
+            if idx is None or idx >= len(action_options.cards):
+                return None  # invalid pick — fall through, treat as fresh query
+
+            chosen_label = action_options.cards[idx].short_label
+            allowed_methods = clarify_ui.methods_for_action_label(chosen_label)
+
+            # Silent filters: chosen action's methods + internal blacklist + persona.
+            # Faza 14 (Filip 2026-05-19): persona filter RESTORED with HIERARCHY.
+            # Driver-tier user sees 18 tools (just driver scope). Manager-tier
+            # sees driver+manager (245). Admin sees all user-facing (481).
+            # Backend ACL (MobilityOne 403) remains the security boundary —
+            # this filter is purely a routing-accuracy aid (narrower candidate
+            # set = better cosine + LLM disambiguation).
+            # Note: identity.persona defaults to "driver" if no per-tenant
+            # personas.json override exists — see services/v2/identity.py.
+            tool_filter: Optional[frozenset[str]] = None
+            if self.catalog_scoper is not None:
+                tool_filter = self.catalog_scoper.scope(
+                    tenant_id=identity.tenant_id,
+                    persona=identity.persona,
+                    methods=frozenset(allowed_methods) if allowed_methods else None,
+                    drop_internal=True,
+                )
+
+            identity_summary = self._identity_summary(identity)
+            recent_turns: list[dict] = []
+            if self.conversation_history_store is not None:
+                try:
+                    recent_turns = await self.conversation_history_store.load(phone)
+                except Exception:  # noqa: BLE001
+                    recent_turns = []
+
+            route_result = await self.router.route(
+                query=pending.original_query or "",
+                identity_summary=identity_summary,
+                conversation_history=recent_turns,
+                tool_filter=tool_filter,
             )
-            if s2.error or not s2.top_pick:
+
+            await self._log_telemetry(
+                kind="clarify_action_global_resolved",
+                tenant_id=identity.tenant_id or "",
+                query=pending.original_query or "",
+                tool_picked=route_result.tool_id,
+                candidates_top5=[
+                    tid for tid, _ in (route_result.top_candidates or [])
+                ][:5],
+                extra={"action": chosen_label},
+            )
+
+            top_cands = list(route_result.top_candidates or [])[:3]
+            if not top_cands:
+                await self.pending_clarify_store.clear(phone)
                 return (
-                    "Razumio sam domenu, ali nisam siguran o kojem alatu se "
-                    "radi. Pokušaj opisati specifičnije."
+                    f"Nisam našao prikladan alat za '{chosen_label}' "
+                    f"za tvoj upit. Reci drugačije što tražiš."
                 )
-            # If high-conf direct execute; if medium → render tool cards
-            if s2.has_high_confidence:
-                tool_id = s2.top_pick.tool_id
-                method = self.executor.method_of(tool_id) or "GET"
-                params = {}
-                mut = mutation_gate.decide_mutation(
-                    tool_id=tool_id, method=method, params=params,
-                    last_known_values={"last_mileage": identity.last_mileage},
-                    entity_label=identity.vehicle_name or "zapis",
+
+            # Build top-3 cards via the public helper (handles label/desc
+            # rendering identically to the L5 fallback path).
+            tool_options = clarify_ui.build_from_router_candidates(
+                top_cands,
+                tkb_lookup=lambda tid: self.tkb_intents.get(tid, ""),
+            )
+            if not tool_options.cards:
+                await self.pending_clarify_store.clear(phone)
+                return None
+
+            # Preserve router's parsed params ONLY on the candidate the router
+            # picked as top-1 — picking a different candidate means router was
+            # wrong; that tool has a different schema and the params don't apply.
+            router_top = route_result.tool_id
+            router_params = route_result.params or {}
+            enriched = [
+                {
+                    "tool_id": c.tool_id,
+                    "method": (self.executor.method_of(c.tool_id) or "GET").upper(),
+                    "short_label": c.short_label,
+                    "description": c.description,
+                    "params": (
+                        dict(router_params) if c.tool_id == router_top else {}
+                    ),
+                    "field_hint": pending.original_query or None,
+                }
+                for c in tool_options.cards
+            ]
+
+            await self.pending_clarify_store.save(
+                phone,
+                candidates=enriched,
+                original_query=pending.original_query,
+                stage=PENDING_STAGE_TOOL,
+            )
+            return clarify_ui.render_text(
+                tool_options,
+                header=f"Razumio sam jedno od ovog ({chosen_label}):",
+            )
+
+        # ---- Stage: action picker (Step 1 of legacy fallback-context clarify) ----
+        if stage == PENDING_STAGE_ACTION:
+            # Build action options the same way we did when saving — needed
+            # to know which label corresponds to which numeric pick.
+            action_options = clarify_ui.build_action_picker(pending.candidates)
+            if idx is None or idx >= len(action_options.cards):
+                return None  # not a valid action pick — re-route as new query
+
+            chosen_label = action_options.cards[idx].short_label
+            allowed_methods = clarify_ui.methods_for_action_label(chosen_label)
+
+            filtered = [
+                c for c in pending.candidates
+                if (c.get("method") or "").upper() in allowed_methods
+            ]
+
+            if not filtered:
+                # No candidate matches — shouldn't happen if action picker
+                # was built from the same set, but defensive.
+                await self.pending_clarify_store.clear(phone)
+                return None
+
+            if len(filtered) == 1:
+                # Single tool in chosen action → skip Step 2, resolve directly
+                await self.pending_clarify_store.clear(phone)
+                chosen = filtered[0]
+            else:
+                # Multiple tools → save Step 2 pending + render tool picker
+                tool_options = clarify_ui.ClarifyOptions(
+                    cards=[
+                        clarify_ui.ClarifyCard(
+                            index=i,
+                            tool_id=c["tool_id"],
+                            short_label=c.get("short_label") or c["tool_id"],
+                            description=c.get("description") or "",
+                        )
+                        for i, c in enumerate(filtered, start=1)
+                    ],
                 )
-                if mut.decision != mutation_gate.DECISION_AUTO:
-                    stage = (
-                        STAGE_DOUBLE_FIRST
-                        if mut.decision == mutation_gate.DECISION_DOUBLE
-                        else STAGE_SINGLE
-                    )
-                    await self.pending_mut_store.save(
-                        phone, tool_id=tool_id, params=params, stage=stage,
-                    )
-                    return self._render_confirm_pending(mut)
-                exec_result = await self.executor.execute(
-                    tool_id=tool_id, params=params,
-                    identity_summary=self._minimal_identity(identity),
-                )
-                if not exec_result.success:
-                    return "Tehnički problem. Pokušaj ponovo."
-                result = formatter.format_response(
-                    template_id=None, api_response_data=exec_result.data,
-                    field_hint=s2.top_pick.field_hint,
-                    extra_context={"entity_label": identity.vehicle_name or "rezultata"},
-                )
-                return result.text
-            # Stage 2 medium confidence → render tool cards
-            tool_cards = []
-            for pick in s2.top_picks[:3]:
-                tkb_entry = (
-                    self.scoped_picker.tkb_entry_for(pick.tool_id) or {}
-                )
-                summary = tkb_entry.get("intent_summary") or pick.reasoning or pick.tool_id
-                tool_cards.append({
-                    "tool_id": pick.tool_id,
-                    "label": summary[:80],
-                    "field_hint": pick.field_hint,
-                    "params": {},
-                })
-            if self.pending_clarify_store is not None:
                 await self.pending_clarify_store.save(
-                    phone, candidates=tool_cards, original_query=original,
+                    phone,
+                    candidates=filtered,
+                    original_query=pending.original_query,
+                    stage=PENDING_STAGE_TOOL,
                 )
-            lines = [f"Razumio sam ({domain_id}). Što ti treba:"]
-            emoji = ["1️⃣", "2️⃣", "3️⃣"]
-            for i, c in enumerate(tool_cards):
-                lines.append(f"  {emoji[i]} {c['label']}")
-            lines.append("  ❌ Ništa od toga — pišem drugačije")
-            lines.append("")
-            lines.append("Odgovori brojem (1, 2, 3) ili 'ne'.")
-            return "\n".join(lines)
+                return clarify_ui.render_text(
+                    tool_options,
+                    header=f"Razumio sam jedno od ovog ({chosen_label}):",
+                )
+        else:
+            # ---- Stage: tool picker (Step 2, or single-step direct clarify) ----
+            if idx is None or idx >= len(pending.candidates):
+                return None  # not a valid pick — re-route as new query
+            chosen = pending.candidates[idx]
+            await self.pending_clarify_store.clear(phone)
 
         # If chosen is a tool — run mutation gate then execute.
         tool_id = chosen.get("tool_id")
         if not tool_id:
             return "Nešto je krenulo krivo s odabirom. Pokušaj opet."
 
-        method = self.executor.method_of(tool_id) or "GET"
         params = chosen.get("params") or {}
+
+        # Param-asking gate (Filip 2026-05-17): before mutation_gate, check
+        # whether the chosen tool has any required user_input params we don't
+        # yet have. If yes, persist pending_params + ask. If all required
+        # filled but optional exist, offer them. Otherwise fall through to
+        # the existing mutation gate / execute path.
+        param_response = await self._maybe_start_param_collection(
+            phone, tool_id, params, pending.original_query,
+        )
+        if param_response is not None:
+            return param_response
+
+        method = self.executor.method_of(tool_id) or "GET"
         mut = mutation_gate.decide_mutation(
             tool_id=tool_id, method=method, params=params,
             last_known_values={"last_mileage": identity.last_mileage},
             entity_label=identity.vehicle_name or "zapis",
         )
         if mut.decision != mutation_gate.DECISION_AUTO:
-            stage = (
-                STAGE_DOUBLE_FIRST
-                if mut.decision == mutation_gate.DECISION_DOUBLE
-                else STAGE_SINGLE
-            )
             await self.pending_mut_store.save(
-                phone, tool_id=tool_id, params=params, stage=stage,
+                phone, tool_id=tool_id, params=params, stage=STAGE_SINGLE,
             )
-            return self._render_confirm_pending(mut)
+            return self._render_confirm_pending(mut, tool_id=tool_id)
 
         exec_result = await self.executor.execute(
             tool_id=tool_id, params=params,
             identity_summary=self._minimal_identity(identity),
         )
         if not exec_result.success:
-            return "Tehnički problem. Pokušaj ponovo za nekoliko trenutaka."
+            return await self._render_execution_failure(exec_result, tool_id)
         result = formatter.format_response(
             template_id=None, api_response_data=exec_result.data,
             field_hint=chosen.get("field_hint"),
+            extra_context={"entity_label": identity.vehicle_name or "rezultata"},
+        )
+        return result.text
+
+    # ------------------------------------------------------------------
+    # Param-asking (Filip 2026-05-17) — Required + optional collection
+    # ------------------------------------------------------------------
+
+    def _compute_missing_required(
+        self, tool_id: str, collected: dict,
+    ) -> list:
+        """Required user_input params that are not yet in `collected`.
+
+        Mirrors the logic in llm_router._compute_missing_required, but
+        reads from V2Engine.tool_parameters (which the factory populated
+        from the same registry). Returns a stable-ordered list.
+        """
+        spec = self.tool_parameters.get(tool_id) or {}
+        missing = []
+        for pname, pdef in spec.items():
+            if not isinstance(pdef, dict):
+                continue
+            if not pdef.get("required"):
+                continue
+            src = (pdef.get("dependency_source") or "user_input").lower()
+            if src != "user_input":
+                continue
+            if pname in collected and collected[pname] not in (None, ""):
+                continue
+            missing.append(pname)
+        return missing
+
+    def _compute_optional(
+        self, tool_id: str, collected: dict,
+    ) -> list:
+        """Optional user_input params not yet collected. Used to offer
+        the user a chance to fill them after required are done."""
+        spec = self.tool_parameters.get(tool_id) or {}
+        optional = []
+        for pname, pdef in spec.items():
+            if not isinstance(pdef, dict):
+                continue
+            if pdef.get("required"):
+                continue
+            src = (pdef.get("dependency_source") or "user_input").lower()
+            if src != "user_input":
+                continue
+            if pname in collected and collected[pname] not in (None, ""):
+                continue
+            optional.append(pname)
+        return optional
+
+    # Param types the optional offer + LLM extractor can reliably handle from
+    # Croatian free-text. Array/object are EXCLUDED because LLM tool-use
+    # routinely returns a string ("filtered by status") instead of a
+    # schema-valid structure (`[{"field": "Status", "value": "..."}]`),
+    # which the API then rejects with 400/422 ("Tehnički problem" for the user).
+    # 278/950 tools have at least one array/object optional — for those, we
+    # silently send the call without the structured filter; the API uses its
+    # default (no filter / all rows / etc.) which is the right behavior for
+    # a conversational WhatsApp bot.
+    _FRIENDLY_PARAM_TYPES = frozenset({"string", "integer", "number", "boolean"})
+
+    def _user_friendly_optionals(
+        self, tool_id: str, collected: dict,
+    ) -> list:
+        """Like _compute_optional but skips array/object types that LLM
+        extract cannot reliably structure from Croatian free-text."""
+        spec = self.tool_parameters.get(tool_id) or {}
+        return [
+            p for p in self._compute_optional(tool_id, collected)
+            if (spec.get(p) or {})
+                .get("param_type", "string").lower()
+                in self._FRIENDLY_PARAM_TYPES
+        ]
+
+    async def _label_for(
+        self, tool_id: str, param_name: str,
+        param_def: Optional[dict] = None,
+    ) -> Optional[str]:
+        """Resolve Croatian label for a single param. Returns None if no
+        labeler wired or LLM/cache miss — caller falls back to humanize."""
+        if self.param_labeler is None:
+            return None
+        tool_intent = (self.tkb_intents or {}).get(tool_id, "")
+        try:
+            return await self.param_labeler.label_for(
+                param_name=param_name,
+                param_def=param_def,
+                tool_id=tool_id,
+                tool_intent=tool_intent,
+            )
+        except Exception as e:  # noqa: BLE001 — never let labeler break caller
+            logger.warning("param_labeler unexpected error: %s", e)
+            return None
+
+    async def _labels_for(
+        self, tool_id: str, param_names: list,
+    ) -> dict:
+        """Resolve Croatian labels for many params (optional offer flow).
+        Returns dict {param_name: label} — missing keys mean labeler
+        returned None for that param; caller falls back to humanize."""
+        if self.param_labeler is None or not param_names:
+            return {}
+        spec = self.tool_parameters.get(tool_id) or {}
+        out: dict = {}
+        for pname in param_names:
+            label = await self._label_for(tool_id, pname, spec.get(pname))
+            if label:
+                out[pname] = label
+        return out
+
+    async def _maybe_start_param_collection(
+        self, phone: str, tool_id: str, collected: dict,
+        original_query: str,
+    ) -> Optional[str]:
+        """Decide whether the chosen tool needs to ask for missing params.
+
+        Returns:
+          None      → no asking needed; caller proceeds to mutation gate.
+          str       → response to send the user; pending_params has been
+                      saved (or it's the final optional-offer message).
+        """
+        if self.pending_params_store is None or not self.tool_parameters:
+            return None  # feature disabled / no registry → skip
+        missing = self._compute_missing_required(tool_id, collected)
+        optionals = self._user_friendly_optionals(tool_id, collected)
+        if not missing and not optionals:
+            return None  # nothing to ask, fall through
+
+        if missing:
+            await self.pending_params_store.save(
+                phone,
+                PendingParams(
+                    phone=phone, tool_id=tool_id,
+                    collected=dict(collected),
+                    required_remaining=list(missing),
+                    optional_remaining=list(optionals),
+                    optional_offered=False,
+                    original_query=original_query,
+                ),
+            )
+            first = missing[0]
+            pdef = (self.tool_parameters.get(tool_id) or {}).get(first)
+            label = await self._label_for(tool_id, first, pdef)
+            return param_ui.render_param_question(
+                first, pdef, label_override=label,
+            )
+
+        # No required missing, but there ARE optionals — offer them.
+        await self.pending_params_store.save(
+            phone,
+            PendingParams(
+                phone=phone, tool_id=tool_id,
+                collected=dict(collected),
+                required_remaining=[],
+                optional_remaining=list(optionals),
+                optional_offered=True,
+                original_query=original_query,
+            ),
+        )
+        overrides = await self._labels_for(tool_id, optionals)
+        return param_ui.render_optional_offer(
+            optionals, label_overrides=overrides,
+        )
+
+    async def _resolve_pending_params(
+        self, phone: str, pending: PendingParams, user_input: str,
+        identity: IdentitySnapshot,
+    ) -> Optional[str]:
+        """Handle one turn of param collection.
+
+        Flow:
+          1. Cancel? clear + acknowledge.
+          2. Awaiting optional-offer answer (Filip 2026-05-17 LLM extract):
+             - 'ne' / negative → skip all optionals, finalize.
+             - anything else → ONE LLM extract over the offered set →
+               merge whatever LLM filled (possibly nothing) → finalize.
+             No more iteration — single shot.
+          3. Otherwise it's an answer to a required param question:
+             a. parse by registry param_type. None → re-ask.
+             b. store in collected, drop from required_remaining.
+             c. more required → ask next.
+             d. required drained + optionals exist + not offered → offer.
+             e. otherwise → finalize (mutation gate / execute).
+
+        Returns response string, OR None when the message doesn't fit
+        the expected shape (clears state, falls through to fresh routing).
+        """
+        text = (user_input or "").strip()
+
+        # 1. Explicit cancel — abort whole collection regardless of stage.
+        if param_ui.is_cancel(text):
+            await self.pending_params_store.clear(phone)
+            return "U redu, odustajem."
+
+        tool_id = pending.tool_id
+        spec = self.tool_parameters.get(tool_id) or {}
+
+        # 2. Awaiting answer to the optional-offer prompt.
+        if (
+            pending.optional_offered
+            and not pending.required_remaining
+            and pending.optional_remaining
+        ):
+            if param_ui.is_negative(text):
+                # User skipped optionals — finalize with required-only.
+                pending.optional_remaining = []
+                await self.pending_params_store.clear(phone)
+                return await self._finalize_after_params(
+                    phone, pending, identity,
+                )
+
+            # Free-text reply — single LLM extract over the offered set.
+            # No iteration. LLM returns dict subset; we merge and finalize.
+            # If extractor missing or LLM returns {} → execute with required
+            # only (degraded UX, not a crash).
+            if self.optional_extractor is not None:
+                spec_subset = {
+                    p: spec.get(p, {}) for p in pending.optional_remaining
+                }
+                try:
+                    extracted = await self.optional_extractor.extract(
+                        text, spec_subset,
+                    )
+                except Exception as e:  # noqa: BLE001 — defensive belt-and-braces
+                    logger.warning(
+                        "optional_extractor raised (should be silent): %s", e,
+                    )
+                    extracted = {}
+                if extracted:
+                    pending.collected.update(extracted)
+                await self._log_telemetry(
+                    kind="optional_extract_done",
+                    tenant_id=identity.tenant_id or "",
+                    tool_picked=tool_id,
+                    extra={
+                        "offered": list(pending.optional_remaining),
+                        "filled": list(extracted.keys()),
+                    },
+                )
+            await self.pending_params_store.clear(phone)
+            return await self._finalize_after_params(phone, pending, identity)
+
+        # 3. Answer to a required param question (one-by-one collection).
+        if not pending.required_remaining:
+            # Defensive — shouldn't happen since branch 2 handles the only
+            # other state. Clear and fall through to fresh routing.
+            await self.pending_params_store.clear(phone)
+            return None
+
+        param_name = pending.required_remaining[0]
+        pdef = spec.get(param_name) or {}
+        value = param_ui.parse_param_value(text, pdef)
+        if value is None:
+            # Re-ask (don't advance) — keep state intact.
+            label = await self._label_for(tool_id, param_name, pdef)
+            return param_ui.render_param_reask(
+                param_name, pdef, label_override=label,
+            )
+
+        # Store + advance.
+        pending.collected[param_name] = value
+        pending.required_remaining.pop(0)
+
+        # 3a. More required → ask next.
+        if pending.required_remaining:
+            await self.pending_params_store.save(phone, pending)
+            nxt = pending.required_remaining[0]
+            nxt_pdef = spec.get(nxt)
+            label = await self._label_for(tool_id, nxt, nxt_pdef)
+            return param_ui.render_param_question(
+                nxt, nxt_pdef, label_override=label,
+            )
+
+        # 3b. Required drained; optionals exist and not yet offered.
+        if pending.optional_remaining and not pending.optional_offered:
+            pending.optional_offered = True
+            await self.pending_params_store.save(phone, pending)
+            overrides = await self._labels_for(
+                tool_id, pending.optional_remaining,
+            )
+            return param_ui.render_optional_offer(
+                pending.optional_remaining, label_overrides=overrides,
+            )
+
+        # 3c. Required drained, no optionals or already offered → finalize.
+        # ORCH-5 fix (Filip 2026-05-20): clear AFTER finalize succeeds, not
+        # before. If finalize raises (e.g. Redis save of pending_mutation
+        # fails), the user keeps their collected params and can retry instead
+        # of silently losing all progress.
+        result = await self._finalize_after_params(phone, pending, identity)
+        await self.pending_params_store.clear(phone)
+        return result
+
+    async def _finalize_after_params(
+        self, phone: str, pending: PendingParams,
+        identity: IdentitySnapshot,
+    ) -> str:
+        """All params collected → run mutation gate (confirm or auto) +
+        execute. Mirrors the tail of `_resolve_pending_clarify`."""
+        tool_id = pending.tool_id
+        # Strip internal markers before sending to executor.
+        params = {
+            k: v for k, v in pending.collected.items()
+            if not k.startswith("__")
+        }
+        method = self.executor.method_of(tool_id) or "GET"
+        mut = mutation_gate.decide_mutation(
+            tool_id=tool_id, method=method, params=params,
+            last_known_values={"last_mileage": identity.last_mileage},
+            entity_label=identity.vehicle_name or "zapis",
+        )
+        if mut.decision != mutation_gate.DECISION_AUTO:
+            await self.pending_mut_store.save(
+                phone, tool_id=tool_id, params=params, stage=STAGE_SINGLE,
+            )
+            return self._render_confirm_pending(mut, tool_id=tool_id)
+        exec_result = await self.executor.execute(
+            tool_id=tool_id, params=params,
+            identity_summary=self._minimal_identity(identity),
+        )
+        if not exec_result.success:
+            return await self._render_execution_failure(exec_result, tool_id)
+        result = formatter.format_response(
+            template_id=None, api_response_data=exec_result.data,
+            field_hint=pending.original_query or None,
             extra_context={"entity_label": identity.vehicle_name or "rezultata"},
         )
         return result.text
@@ -1508,9 +1389,8 @@ class V2Engine:
     ) -> str:
         """Apply user's reply to a saved confirm-dialog state.
 
-        Outcomes:
+        Outcomes (single-confirm policy, Filip 2026-05-16):
           execute   → run the mutation, clear state
-          advance   → DOUBLE-stage 1 passed; ask for "TRAJNO" stage 2
           cancel    → user said no; clear state
           ambiguous → re-prompt; keep state
         """
@@ -1519,19 +1399,6 @@ class V2Engine:
         if action == "cancel":
             await self.pending_mut_store.clear(phone)
             return "U redu, odustajem."
-
-        if action == "advance":
-            # DOUBLE confirm: stage 1 (Da) → stage 2 (require TRAJNO)
-            await self.pending_mut_store.save(
-                phone,
-                tool_id=pending.tool_id,
-                params=pending.params,
-                stage=STAGE_DOUBLE_SECOND,
-            )
-            return (
-                "Za potvrdu ovog TRAJNOG brisanja upiši riječ "
-                "TRAJNO velikim slovima."
-            )
 
         if action == "ambiguous":
             # Multi-pending guard (#66): if user sent something that
@@ -1570,18 +1437,61 @@ class V2Engine:
         import time as _t
         pending_age_s = max(0.0, _t.time() - (pending.created_at or 0.0))
         STALE_WARN_THRESHOLD = 90.0
-        if pending_age_s > STALE_WARN_THRESHOLD and pending.stage == STAGE_SINGLE:
-            # Bump to DOUBLE-style re-confirm requiring TRAJNO/POTVRDA word
+        if pending_age_s > STALE_WARN_THRESHOLD:
+            # Refresh TTL on a stale pending and re-prompt with warning.
+            # Keeps single-confirm policy (Filip 2026-05-16) — no escalation
+            # to a stronger re-confirm stage, just a fresh ask.
             await self.pending_mut_store.save(
                 phone,
                 tool_id=pending.tool_id,
                 params=pending.params,
-                stage=STAGE_DOUBLE_FIRST,
+                stage=STAGE_SINGLE,
             )
             return (
                 f"Tvoja potvrda je stara ({int(pending_age_s)} sek). "
-                "Za sigurnost: napiši još jednom 'Da' ili otkaži."
+                "Za sigurnost: napiši još jednom 'Da' ili 'Ne' za otkaz."
             )
+
+        # ---- Bug #1 fix (Faza 3 Filip 2026-05-17): re-validate identity ----
+        # Before execute, re-resolve identity if pending is >30s old. If
+        # tenant_id changed (admin re-assigned the phone, or user_mappings
+        # was updated), DON'T blindly execute against stale context — that
+        # would route the action into the wrong tenant. Clear pending and
+        # ask the user to repeat.
+        STALE_REVALIDATE_THRESHOLD = 30.0
+        if pending_age_s > STALE_REVALIDATE_THRESHOLD:
+            try:
+                fresh_identity = await self.identity.resolve(phone)
+            except Exception as e:  # noqa: BLE001 — fall through if resolve fails
+                logger.warning("stale-confirm identity revalidate failed: %s", e)
+                fresh_identity = identity
+            # ORCH-6 fix (Filip 2026-05-20): also abort if vehicle_id changed,
+            # not just tenant_id. The confirm message showed the OLD vehicle
+            # ("Upisat ću X km na vozilo Golf"); if the phone was reassigned to
+            # a different vehicle mid-confirm, blindly executing would write the
+            # mutation against the wrong vehicle. Same safety rationale as tenant.
+            tenant_changed = fresh_identity.tenant_id != identity.tenant_id
+            vehicle_changed = (
+                identity.vehicle_id is not None
+                and fresh_identity.vehicle_id is not None
+                and fresh_identity.vehicle_id != identity.vehicle_id
+            )
+            if tenant_changed or vehicle_changed:
+                await self.pending_mut_store.clear(phone)
+                logger.warning(
+                    "stale confirm aborted: %s changed for phone=%s "
+                    "(tenant %s→%s, vehicle %s→%s)",
+                    "tenant" if tenant_changed else "vehicle", phone[-4:],
+                    identity.tenant_id, fresh_identity.tenant_id,
+                    identity.vehicle_id, fresh_identity.vehicle_id,
+                )
+                return (
+                    "Konfiguracija ti se promijenila u međuvremenu. "
+                    "Pošalji upit ponovo da nastavim s ispravnim podacima."
+                )
+            # Use fresh snapshot for execute (vehicle_name, last_mileage,
+            # etc. may have changed even if tenant didn't).
+            identity = fresh_identity
 
         # action == "execute"
         # CRITICAL FIX (idempotency #1, 0-error tolerance):
@@ -1612,9 +1522,12 @@ class V2Engine:
                 )
                 # NOTE: pending stays — user can retry by replying "Da" again.
                 # No clear() here.
-                return (
-                    "Tehnički problem prilikom izvršavanja akcije. "
-                    "Pokušaj ponovo."
+                return await self._render_execution_failure(
+                    exec_result, pending.tool_id,
+                    generic=(
+                        "Tehnički problem prilikom izvršavanja akcije. "
+                        "Pokušaj ponovo."
+                    ),
                 )
             # Success — clear pending so the next "Da" doesn't replay it.
             await self.pending_mut_store.clear(phone)
@@ -1646,6 +1559,57 @@ class V2EngineBundle:
     conversation_history: Optional["ConversationHistoryStore"] = None
     pending_mutation: Optional["PendingMutationStore"] = None
     pending_clarify: Optional["PendingClarifyStore"] = None
+    pending_params: Optional["PendingParamsStore"] = None
+    gdpr_audit: Optional["GdprAuditStore"] = None
+
+
+def _log_config_freshness(registry_path, tool_data_path) -> None:
+    """Emit one structured log line covering the two routing-data configs.
+
+    Post Phase 2 consolidation, the bot reads from a single tool_data.json
+    that's derived from processed_tool_registry.json. If sync_tools.py
+    regenerates the registry but build_tool_data.py / regenerate_tool_data.py
+    isn't re-run, tool_data.json is stale and the router operates on an
+    obsolete tool catalog.
+
+    This helper surfaces that staleness in production logs the moment the
+    engine boots. Best-effort: never raises (Docker volume mtime quirks
+    shouldn't crash startup). Grep production logs for `config_freshness`
+    or `tool_data_stale=True` to spot drift.
+    """
+    try:
+        from datetime import datetime, timezone
+
+        def _stat(p):
+            s = p.stat()
+            return s.st_mtime, datetime.fromtimestamp(s.st_mtime, tz=timezone.utc).isoformat()
+
+        reg_ts, reg_iso = _stat(registry_path)
+        td_ts, td_iso = _stat(tool_data_path)
+        now = datetime.now(tz=timezone.utc).timestamp()
+
+        tool_data_stale = reg_ts > td_ts
+
+        logger.info(
+            "config_freshness "
+            "registry_mtime=%s tool_data_mtime=%s "
+            "tool_data_stale=%s "
+            "tool_data_age_days=%.1f registry_age_days=%.1f",
+            reg_iso, td_iso,
+            tool_data_stale,
+            (now - td_ts) / 86400.0,
+            (now - reg_ts) / 86400.0,
+        )
+
+        if tool_data_stale:
+            logger.warning(
+                "tool_data.json is STALE relative to registry — new tools may "
+                "have no metadata and won't be retrieved correctly. "
+                "FIX: python scripts/build_tool_data.py "
+                "(or scripts/regenerate_tool_data.py for full LLM regen)"
+            )
+    except Exception as e:  # noqa: BLE001 — observability must never block startup
+        logger.warning("config_freshness check failed (%s): %s", type(e).__name__, e)
 
 
 async def make_v2_engine_for_production(
@@ -1658,32 +1622,12 @@ async def make_v2_engine_for_production(
     """Build a fully-wired V2Engine from infrastructure that main.lifespan
     has already constructed.
 
-    Construction is conservative:
-      - Lightweight layer guards (rate limiter, PII, intent type, flows,
-        executor, pending stores, conversation history, quick path) are
-        always instantiated.
-      - V3 hierarchical router (domain_picker + scoped_picker) is wired
-        when its config files exist; otherwise left None and engine
-        falls back to the recognition path. RecognitionEngine itself
-        is NOT yet wired here (1381 LOC, complex anchor/cache loading
-        path) — when V3 is unavailable the engine returns its safe
-        fallback message rather than crashing.
-      - Failures during initialize() are logged and re-raised. The
-        caller decides whether v2 init failure should fail the whole
-        lifespan or just disable V2 traffic.
-
     Stores returned in the bundle are the same instances the engine uses,
     so cache-invalidation operations affect the live engine state.
     """
     from services.openai_client import (
         get_openai_client, get_embedding_client,
     )
-    from services.v2.driver_quick_path import DriverQuickPath
-    from services.v2.unified_responder import UnifiedResponder
-    from services.v2.tool_use_responder import ToolUseResponder
-    from services.v2.unified_retriever import UnifiedRetriever
-    from services.v2 import hallucination_guard
-    from pathlib import Path as _Path
 
     llm_client = get_openai_client()
     embedder = get_embedding_client()
@@ -1700,7 +1644,11 @@ async def make_v2_engine_for_production(
     # --- Required (always) ---
     rate_limiter = RateLimiter(redis_client)
     pii = PIIScrubber()
-    identity = IdentityContext(redis_client, gateway, settings)
+    # Wire the tenant_resolver so identity can lazy-onboard new phones into
+    # user_mappings on first successful Persons resolve. Tests pass None.
+    from services.tenant_resolver import get_tenant_resolver
+    _tenant_resolver = await get_tenant_resolver()
+    identity = IdentityContext(redis_client, gateway, settings, tenant_resolver=_tenant_resolver)
     intent_type = IntentTypeClassifier(llm_client, deployment)
     basics = DriverBasicsAnchor(embedder)
     flow_engine = FlowEngine(flows=FLOWS)
@@ -1717,119 +1665,183 @@ async def make_v2_engine_for_production(
 
     # --- Optional but always cheap ---
     pending_clarify = PendingClarifyStore(redis_client)
+    pending_params = PendingParamsStore(redis_client)
+    optional_extractor = OptionalParamExtractor(
+        llm_client=llm_client, deployment_name=deployment,
+    )
+    api_error_translator = ApiErrorTranslator(
+        llm_client=llm_client, deployment_name=deployment,
+        redis_client=redis_client,
+    )
+    # Pre-generated Croatian param labels (built by
+    # scripts/generate_param_labels.py). File is optional; if missing, the
+    # labeler skips the preload tier and uses Redis cache → LLM fallback.
+    preloaded_labels: dict = {}
+    try:
+        from pathlib import Path as _Path
+        labels_path = _Path(__file__).resolve().parents[2] / "config" / "param_labels_hr.json"
+        if labels_path.exists():
+            import json as _json
+            preloaded_labels = _json.loads(labels_path.read_text(encoding="utf-8"))
+    except Exception as e:  # noqa: BLE001 — preload is optional
+        logger.warning("failed to load param_labels_hr.json: %s", e)
+    param_labeler = ParamLabeler(
+        llm_client=llm_client, deployment_name=deployment,
+        redis_client=redis_client, preloaded=preloaded_labels,
+    )
+    # Risky-tool set (Filip 2026-05-17 Faza 9). Generated by
+    # scripts/audit_registry_body_schemas.py from the registry. Missing file
+    # = empty set = no warn ever (safe).
+    risky_tool_ids: set = set()
+    try:
+        risky_path = _Path(__file__).resolve().parents[2] / "config" / "risky_tools.json"
+        if risky_path.exists():
+            risky_data = _json.loads(risky_path.read_text(encoding="utf-8"))
+            risky_tool_ids = set(risky_data.get("missing_body") or []) | set(
+                risky_data.get("likely_missing_body") or []
+            )
+    except Exception as e:  # noqa: BLE001 — optional config
+        logger.warning("failed to load risky_tools.json: %s", e)
     conv_history = ConversationHistoryStore(redis_client)
+    gdpr_audit = GdprAuditStore(redis_client)
 
-    quick_path: Optional[DriverQuickPath] = None
-    try:
-        quick_path = DriverQuickPath()
-        quick_path.load()  # idempotent; raises only on missing config
-    except Exception as e:  # noqa: BLE001
-        logger.warning("DriverQuickPath load failed (continuing without): %s", e)
-        quick_path = None
+    # --- L3 LLM Router + L8 LLM Formatter (Phase 4 rewrite) ---
+    # AnchorIndex embeds all anchor phrases once (cached to disk by content
+    # fingerprint). ToolSchemaBuilder maps registry → OpenAI tools=[] schema.
+    # LLMRouter runs anchor top-50 → gpt-4o-mini tool-call. LLMFormatter
+    # turns backend JSON into Croatian replies (no per-tool templates).
+    import json as _json
+    from pathlib import Path as _Path
 
-    # --- V3 hierarchical router (Stage 1 + Stage 2) — opt-in via flag,
-    # but we attempt construction so engine is ready when V2_USE_V3_ROUTER
-    # is set on the env. Construction failures degrade gracefully to None
-    # (engine.process_message routes through recognition fallback then).
-    domain_picker_obj: Optional[DomainPicker] = None
-    scoped_picker_obj: Optional[DomainScopedToolPicker] = None
+    from services.router.anchor_index import AnchorIndex
+    from services.router.tool_schema_builder import ToolSchemaBuilder
+
+    repo_root = _Path(__file__).resolve().parents[2]
+    tool_data_path = repo_root / "config" / "tool_data.json"
+    registry_json_path = repo_root / "config" / "processed_tool_registry.json"
+    anchor_cache_path = repo_root / "tests" / "benchmarks" / "router_anchor_cache.json"
+
+    # SINGLE SOURCE OF TRUTH (Phase 2 of data consolidation, 2026-05-15).
+    # tool_data.json union-merges what used to be three fragmented files:
+    #   processed_tool_registry.json + tool_knowledge_base.json + tool_anchor_enrichments.json
+    # The factory derives the legacy shapes that downstream consumers (router,
+    # schema builder, anchor index) still expect. Once those consumers are
+    # also migrated (Phase 3), the registry-shape view here can go away too.
+    #
+    # Faza 11.1+11.3 (Filip 2026-05-18): fail-fast s razumljivom porukom ako
+    # je file missing/corrupt — raw FileNotFoundError/JSONDecodeError teško
+    # debugira u produkciji jer ide kroz worker startup chain.
+    if not tool_data_path.exists():
+        raise RuntimeError(
+            f"tool_data.json not found at {tool_data_path}. "
+            "Bot cannot start without registry — run scripts/sync_tools.py."
+        )
     try:
-        repo_root = _Path(__file__).resolve().parents[2]
-        domains_path = repo_root / "config" / "tool_domains.json"
-        rich_docs = repo_root / "config" / "rich_tool_docs.json"
-        if domains_path.exists():
-            domain_picker_obj = DomainPicker(
-                llm_client=llm_client,
-                deployment_name=deployment,
-                domains_path=domains_path,
-            )
-            domain_picker_obj.load()
-            scoped_picker_obj = DomainScopedToolPicker(
-                llm_client=llm_client,
-                deployment_name=deployment,
-                registry=tool_registry,
-                domain_picker=domain_picker_obj,
-                rich_docs_path=rich_docs if rich_docs.exists() else None,
-            )
-            scoped_picker_obj.load()
+        tool_data = _json.loads(tool_data_path.read_text(encoding="utf-8"))
+    except _json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"tool_data.json corrupted at {tool_data_path}: {e}. "
+            "Re-generate via scripts/sync_tools.py."
+        ) from e
+    tool_entries = tool_data.get("tools")
+    if not isinstance(tool_entries, dict) or not tool_entries:
+        raise RuntimeError(
+            f"tool_data.json at {tool_data_path}: 'tools' key missing or empty. "
+            "Re-generate via scripts/sync_tools.py."
+        )
+    _sample_tool = next(iter(tool_entries.values()))
+    _required_keys = {"method", "path", "intent_summary"}
+    _missing = _required_keys - set(_sample_tool.keys() if isinstance(_sample_tool, dict) else [])
+    if _missing:
+        raise RuntimeError(
+            f"tool_data.json at {tool_data_path}: sample tool missing keys {_missing}. "
+            "Schema is incomplete — re-generate via scripts/sync_tools.py."
+        )
+
+    # Derive REGISTRY-shape ({"tools": [list-of-tool-dicts]}). The router +
+    # schema_builder iterate over this list.
+    registry_dict = {
+        "tools": list(tool_entries.values()),
+        "dependency_graph": tool_data.get("dependency_graph") or [],
+    }
+
+    # Derive TKB-shape ({op_id: {intent_summary, use_when, do_not_use_when, method}}).
+    # tool_schema_builder._build_one() reads these per tool.
+    tkb_dict = {
+        op_id: {
+            "intent_summary": entry.get("intent_summary", ""),
+            "use_when": entry.get("use_when") or [],
+            "do_not_use_when": entry.get("do_not_use_when") or [],
+            "method": entry.get("method", "GET"),
+        }
+        for op_id, entry in tool_entries.items()
+    }
+
+    # Derive ANCHORS-shape ({op_id: [phrase, ...]}) for AnchorIndex.
+    anchors_dict = {
+        op_id: list(entry.get("anchors") or [])
+        for op_id, entry in tool_entries.items()
+        if entry.get("anchors")
+    }
+
+    # Flat operation_id → intent_summary map for the clarify-cards UX.
+    tkb_intents_index = {
+        op_id: entry.get("intent_summary", "")
+        for op_id, entry in tool_entries.items()
+    }
+
+    # operation_id → {param_name: param_def} for param-asking. Engine reads
+    # `required`, `dependency_source`, `param_type`, `description` per param
+    # to compute missing required + render Croatian questions.
+    tool_parameters_index = {
+        op_id: (entry.get("parameters") or {})
+        for op_id, entry in tool_entries.items()
+    }
+
+    _log_config_freshness(registry_json_path, tool_data_path)
+
+    async def _embed_fn(texts: list[str]) -> list[list[float]]:
+        r = await embedder.embeddings.create(
+            input=texts,
+            model=settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
+        )
+        return [d.embedding for d in r.data]
+
+    anchor_index = AnchorIndex(
+        anchors_data=anchors_dict,
+        cache_path=anchor_cache_path,
+        embedding_deployment=settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
+    )
+    schema_builder = ToolSchemaBuilder.from_registry(registry_dict)
+    router = LLMRouter(
+        anchor_index=anchor_index,
+        schema_builder=schema_builder,
+        registry=registry_dict,
+        tkb=tkb_dict,
+        llm_client=llm_client,
+        embed_fn=_embed_fn,
+        deployment_name=deployment,
+    )
+    try:
+        await router.initialize()
     except Exception as e:  # noqa: BLE001
         logger.warning(
-            "V3 router init failed (engine will fall back): %s", e,
-        )
-        domain_picker_obj = None
-        scoped_picker_obj = None
-
-    # --- Recognition (per-tool anchor + LLM Judge) ---
-    # 1381 LOC retrieval engine. async initialize() builds the anchor
-    # index from the tool registry (cached on first build, ~10-30s).
-    # When initialize() fails (no embedder credentials, anchor cache
-    # corruption, etc.) we fall back to a stub so the engine still
-    # constructs and the rest of v2 traffic can proceed via quick-path
-    # / V3 / unified.
-    recognition_obj: object
-    try:
-        recognition_real = RecognitionEngine(
-            embedder=embedder,
-            llm_client=llm_client,
-            deployment_name=deployment,
-            tool_registry=tool_registry,
-        )
-        await recognition_real.initialize()
-        recognition_obj = recognition_real
-    except Exception as e:  # noqa: BLE001
-        logger.warning(
-            "RecognitionEngine initialize failed (using stub): %s", e,
+            "LLMRouter initialize failed (engine will return errors): %s", e,
         )
 
-        class _StubRecognition:
-            async def recognize(self, *_args, **_kwargs):
-                from services.v2.recognition import RecognitionResult
-                return RecognitionResult(
-                    tool_id=None,
-                    rationale="recognition initialize failed",
-                    error="recognition_init_failed",
-                )
+    formatter_llm = LLMFormatter(
+        llm_client=llm_client,
+        deployment_name=deployment,
+        registry=registry_dict,
+        pii_scrubber=pii,
+    )
 
-        recognition_obj = _StubRecognition()
-
-    # --- UnifiedResponder + ToolUseResponder (opt-in via env flags) ---
-    # Both share a UnifiedRetriever that adapts the (now-initialized)
-    # RecognitionEngine into a top-K candidates feed. Constructed only
-    # if recognition is real (stub recognition produces no candidates).
-    unified_resp: Optional[UnifiedResponder] = None
-    tool_use_resp: Optional[ToolUseResponder] = None
-    try:
-        if isinstance(recognition_obj, RecognitionEngine):
-            retriever = UnifiedRetriever(
-                recognition_engine=recognition_obj,
-                registry=tool_registry,
-            )
-            unified_resp = UnifiedResponder(
-                llm_client=llm_client,
-                deployment_name=deployment,
-                retriever=retriever,
-            )
-
-            async def _executor_adapter(tool_id, params, identity_summary):
-                return await executor.execute(
-                    tool_id=tool_id, params=params,
-                    identity_summary=identity_summary,
-                )
-
-            tool_use_resp = ToolUseResponder(
-                llm_client=llm_client,
-                deployment_name=deployment,
-                retriever=retriever,
-                default_executor=_executor_adapter,
-                sanitize_fn=output_sanitizer.sanitize,
-                hallucination_check_fn=hallucination_guard.check,
-            )
-    except Exception as e:  # noqa: BLE001
-        logger.warning(
-            "Unified/ToolUse responders init failed: %s", e,
-        )
-        unified_resp = None
-        tool_use_resp = None
+    # Phase E scoper — narrows the 950-tool catalog per (tenant, persona)
+    # before anchor retrieval. Reads tenant configs under config/tenants/.
+    catalog_scoper = CatalogScoper(
+        tool_data=tool_data,
+        tenants_dir=repo_root / "config" / "tenants",
+    )
 
     engine = V2Engine(
         rate_limiter=rate_limiter,
@@ -1837,19 +1849,24 @@ async def make_v2_engine_for_production(
         identity=identity,
         intent_type=intent_type,
         basics=basics,
-        recognition=recognition_obj,  # type: ignore[arg-type]
+        router=router,
+        formatter_llm=formatter_llm,
         flow_engine=flow_engine,
         flow_store=flow_store,
         executor=executor,
         pending_mut_store=pending_mut,
-        quick_path=quick_path,
         telemetry=telemetry,
-        domain_picker=domain_picker_obj,
-        scoped_picker=scoped_picker_obj,
         pending_clarify_store=pending_clarify,
         conversation_history_store=conv_history,
-        unified_responder=unified_resp,
-        tool_use_responder=tool_use_resp,
+        gdpr_audit_store=gdpr_audit,
+        tkb_intents=tkb_intents_index,
+        catalog_scoper=catalog_scoper,
+        pending_params_store=pending_params,
+        tool_parameters=tool_parameters_index,
+        optional_extractor=optional_extractor,
+        api_error_translator=api_error_translator,
+        param_labeler=param_labeler,
+        risky_tool_ids=risky_tool_ids,
     )
 
     return V2EngineBundle(
@@ -1858,4 +1875,6 @@ async def make_v2_engine_for_production(
         conversation_history=conv_history,
         pending_mutation=pending_mut,
         pending_clarify=pending_clarify,
+        pending_params=pending_params,
+        gdpr_audit=gdpr_audit,
     )
