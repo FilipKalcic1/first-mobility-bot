@@ -108,20 +108,47 @@ def _agg(forms: dict) -> str:
     return f"Vraća agregirane vrijednosti za {forms['pl_acc']}."
 
 
+def _get_one_by_id(forms: dict) -> str:
+    return f"Vraća jedan {forms['sg_acc']} po ID-u."
+
+
+def _update_doc_meta(forms: dict) -> str:
+    return f"Ažurira metapodatke dokumenta za {forms['sg_acc']}."
+
+
+def _fleet_update(forms: dict) -> str:
+    return f"Ažurira jedan {forms['sg_acc']} u sustavu."
+
+
 # Map of duplicate intent_summary → rewrite function.
 # Add new entries here if registry regen produces new generic templates.
 DUPLICATE_TEMPLATES: dict[str, callable] = {
     "Postavlja dokument kao zadani za entitet.": _set_as_default,
     "Vraća metapodatke entiteta s određenim ID-jem.": _metadata_by_id,
     "Vraća metapodatke entiteta prema zadanom ID-u.": _metadata_by_id,
+    "Vraća metapodatke entiteta s određenim ID-om.": _metadata_by_id,
+    "Vraća metapodatke entiteta s određenom primarnom ključnom vrijednošću.": _metadata_by_id,
+    "Vraća metapodatke entiteta s određenim primarnim ključem.": _metadata_by_id,
     "Djelomično ažurira više stavki u sustavu.": _multipatch,
     "Djelomično ažurira više stavki odjednom.": _multipatch,
     "Djelomično ažurira stavku u sustavu.": _partial_update_one,
+    "Djelomično ažurira stavku prema zadanom ID-u.": _partial_update_one,
     "Ovaj alat briše stavku na temelju primarnog ključa (id).": _delete_by_id,
     "Dohvaća sve stavke prema parametrima učitavanja.": _list_with_filters,
     "Dohvaća sve stavke na temelju parametara učitavanja.": _list_with_filters,
+    "Dohvaća sve stavke prema parametrima učitavanja s projekcijom rezultata.": _list_with_filters,
     "Alat omogućuje brisanje više stavki prema filtriranim kriterijima.": _delete_by_criteria,
+    "Alat omogućuje brisanje više stavki prema filter kriterijima.": _delete_by_criteria,
+    "Alat omogućuje brisanje više stavki prema zadanim kriterijima.": _delete_by_criteria,
+    "Alat briše više stavki prema zadanim kriterijima.": _delete_by_criteria,
+    "Ovaj alat briše više stavki prema zadanim kriterijima.": _delete_by_criteria,
+    "Alat briše više stavki na temelju njihovih primarnih ključeva.": _delete_by_criteria,
     "Alat vraća agregirane vrijednosti na temelju zadanih filtara.": _agg,
+    "Vraća pojedinačni zapis na temelju primarnog ključa.": _get_one_by_id,
+    "Vraća pojedinačni zapis temeljen na ID-u.": _get_one_by_id,
+    "Ažurira informacije o dokumentu na temelju ID-a entiteta i dokumenta.": _update_doc_meta,
+    "Ažurira informacije o dokumentu u sustavu MobilityOne.": _update_doc_meta,
+    "Ažurira stavku u sustavu za upravljanje flotom.": _fleet_update,
 }
 
 
