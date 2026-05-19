@@ -55,7 +55,6 @@ except Exception:
         """Sentinel — never raised; safe fallback when redis.exceptions unavailable."""
 
 from config import get_settings
-from database import AsyncSessionLocal
 from services.rag_scheduler import RAGScheduler, get_rag_scheduler
 from services.errors import ConversationError, ErrorCode
 from services.tracing import get_tracer, trace_span
@@ -96,18 +95,12 @@ HEALTH_REPORT_INTERVAL = 60     # Every minute
 STREAM_BLOCK_MS = 1000          # 1s blocking read
 MEMORY_WARNING_MB = 800         # Warn when memory exceeds this
 
-# Burst mode settings (for KEDA ScaledJob)
-# When BURST_MODE=true, worker exits after MAX_MESSAGES or BURST_IDLE_TIMEOUT
 # Enable tracemalloc for production memory monitoring (low overhead: ~3MB, <2% CPU)
 # Only stores 1 frame per allocation to minimize cost
 tracemalloc = None  # Lazy: only import if enabled
 if os.environ.get("TRACEMALLOC", "").lower() in ("true", "1", "yes"):
     import tracemalloc
     tracemalloc.start(1)
-
-BURST_MODE = os.environ.get("BURST_MODE", "").lower() in ("true", "1", "yes")
-BURST_MAX_MESSAGES = int(os.environ.get("MAX_MESSAGES", "100"))
-BURST_IDLE_TIMEOUT = int(os.environ.get("BURST_IDLE_TIMEOUT", "300"))  # 5 min
 
 
 def get_memory_usage_mb() -> float:
@@ -205,7 +198,14 @@ class Worker:
     def __init__(self):
         self.redis: Optional[aioredis.Redis] = None
         self.shutdown = GracefulShutdown()
-        self.consumer_name = f"worker_{int(datetime.now(timezone.utc).timestamp())}"
+        # EDGE-1 fix (Filip 2026-05-20): timestamp alone collides if two
+        # workers start in the same second → same consumer_name → XREADGROUP
+        # competes for the same messages, breaking ordering. PID + random
+        # suffix guarantees uniqueness across concurrent worker boots.
+        self.consumer_name = (
+            f"worker_{int(datetime.now(timezone.utc).timestamp())}"
+            f"_{os.getpid()}_{random.randint(0, 9999):04d}"
+        )
         self.group_name = "workers"
 
         # Rate limiting
@@ -217,7 +217,7 @@ class Worker:
         # Singleton services
         self._gateway = None
         self._registry = None
-        self._message_engine = None
+        self._v2_engine = None
         self._whatsapp_service = None
 
         # Per-request services
@@ -234,29 +234,24 @@ class Worker:
         self._duplicates_skipped = 0
         self._start_time = None
 
-        # Burst mode (KEDA ScaledJob: process N messages then exit)
-        self._burst_mode = BURST_MODE
-        self._burst_max_messages = BURST_MAX_MESSAGES
-        self._burst_idle_timeout = BURST_IDLE_TIMEOUT
-        self._last_message_time: Optional[float] = None  # For idle timeout
-
         # Concurrency control
         self._semaphore = asyncio.Semaphore(MAX_CONCURRENT)
         self._processing_locks: Dict[str, asyncio.Lock] = {}
         self._lock_access_times: Dict[str, float] = {}
         self._lock_cleanup_interval = 100   # Clean every N messages
         self._lock_max_age_sec = 300         # Remove locks idle > 5 min
+        # Guard for the lock-dict mutations themselves. Two concurrent
+        # _handle_message coroutines could otherwise race on the
+        # `if sender not in self._processing_locks` → insert / evict
+        # path and corrupt the dict state. This lock is held only for
+        # the brief read-or-create window, never around user work.
+        self._lock_dict_guard = asyncio.Lock()
 
     async def start(self):
         self._start_time = datetime.now(timezone.utc)
-        self._last_message_time = time.time()
         log("info", "worker_starting", {
             "consumer": self.consumer_name,
             "max_concurrent": MAX_CONCURRENT,
-            "burst_mode": self._burst_mode,
-            **({"burst_max_messages": self._burst_max_messages,
-                "burst_idle_timeout_sec": self._burst_idle_timeout}
-               if self._burst_mode else {})
         })
 
         self._setup_signals()
@@ -445,7 +440,6 @@ class Worker:
         from services.queue_service import QueueService
         from services.cache_service import CacheService
         from services.context_service import ContextService
-        from services.message_engine import MessageEngine
         from services.whatsapp_service import WhatsAppService
 
         self._gateway = APIGateway(redis_client=self.redis)
@@ -470,9 +464,6 @@ class Worker:
                 tools_count = len(self._registry.tools)
                 log("info", "registry_ready", {"tools": tools_count})
 
-                # Publish tools count to Redis for API metrics endpoint
-                await self.redis.set(settings.REDIS_STATS_KEY_TOOLS, tools_count)
-
                 from services.api_capabilities import initialize_capability_registry
                 capability_registry = await initialize_capability_registry(self._registry)
                 log("info", "capabilities_ready", {
@@ -482,19 +473,20 @@ class Worker:
                 log("error", "registry_failed")
                 raise RuntimeError("Tool Registry initialization failed")
 
-        log("info", "message_engine_init")
-        # NOTE: db_session=None at init time. Each request gets its own
-        # db session via process(db_session=...) to prevent race conditions
-        # when MAX_CONCURRENT > 1.
-        self._message_engine = MessageEngine(
+        # V2Engine — primary (and only) request-path engine since v1
+        # delete 2026-05-08. Init failure NOW blocks boot — there is no
+        # v1 fallback. If V2Engine can't construct, the worker stops so
+        # the bot is never half-broken.
+        log("info", "v2_engine_init")
+        from services.v2.engine import make_v2_engine_for_production
+        bundle = await make_v2_engine_for_production(
+            redis_client=self.redis,
             gateway=self._gateway,
-            registry=self._registry,
-            context_service=self._context,
-            queue_service=self._queue,
-            cache_service=self._cache,
-            db_session=None
+            tool_registry=self._registry,
+            settings=settings,
         )
-        log("info", "message_engine_ready")
+        self._v2_engine = bundle.engine
+        log("info", "v2_engine_ready")
 
         # Register Lua script for atomic lock release
         self._release_lock_sha = await self.redis.script_load(_RELEASE_LOCK_LUA)
@@ -536,10 +528,28 @@ class Worker:
         """
         Remove zombie consumers from previous worker restarts.
 
-        Each restart creates a new consumer (worker_{timestamp}) but never
-        removes the old one. Before removing a stale consumer that has
+        Each restart creates a new consumer (worker_{ts}_{pid}_{rand}) but
+        never removes the old one. Before removing a stale consumer that has
         pending messages, reclaim those messages so they get reprocessed.
+
+        EDGE-5 fix (Filip 2026-05-20): when 2 workers boot concurrently, both
+        would run cleanup + xautoclaim and could reclaim the SAME messages
+        into two consumers (double-processing). A Redis SET NX lock serializes
+        cleanup so only one worker does it at a time. Lock auto-expires (60s)
+        so a crashed worker doesn't deadlock cleanup forever.
         """
+        lock_key = "worker:cleanup_lock"
+        got_lock = False
+        try:
+            got_lock = await self.redis.set(lock_key, self.consumer_name, nx=True, ex=60)
+            if not got_lock:
+                log("info", "cleanup_skipped_locked")
+                return
+        except (ResponseError, RedisConnectionError, RedisError) as e:
+            # If lock acquisition fails, proceed without it (fail-open) — the
+            # message-level idempotency lock still prevents double-processing.
+            log("warn", "cleanup_lock_failed", {"error": str(e)})
+
         try:
             consumers = await self.redis.xinfo_consumers(
                 "whatsapp_stream_inbound",
@@ -601,6 +611,12 @@ class Worker:
 
         except (ConnectionError, TimeoutError, RedisError) as e:
             log("warn", "consumer_cleanup_failed", {"error": str(e)})
+        finally:
+            # EDGE-5: release cleanup lock if we hold it. Best-effort —
+            # 60s TTL guarantees release even if this fails.
+            if got_lock:
+                with suppress(Exception):
+                    await self.redis.delete("worker:cleanup_lock")
 
     async def _cleanup_stale_pending(self):
         """
@@ -690,12 +706,7 @@ class Worker:
                 )
 
                 if not messages:
-                    # Burst mode: exit if idle too long (queue drained)
-                    if self._burst_mode and self._check_burst_idle_timeout():
-                        break
                     continue
-
-                self._last_message_time = time.time()
 
                 tasks = [
                     asyncio.create_task(self._handle_message_safe(msg_id, data))
@@ -712,10 +723,6 @@ class Worker:
                 if total > 0 and total % self._lock_cleanup_interval == 0:
                     self._cleanup_stale_locks()
 
-                # Burst mode: exit after MAX_MESSAGES processed
-                if self._burst_mode and self._check_burst_message_limit():
-                    break
-
             except asyncio.CancelledError:
                 break
             except (ConnectionError, OSError) as e:
@@ -725,40 +732,6 @@ class Worker:
             except Exception as e:
                 log_exception("inbound_loop_error", e)
                 await asyncio.sleep(2)
-
-        # If burst mode triggered the break, initiate graceful shutdown
-        if self._burst_mode and not self.shutdown.is_shutting_down():
-            log("info", "burst_mode_complete", {
-                "messages_processed": self._messages_processed,
-                "max_messages": self._burst_max_messages
-            })
-            self.shutdown.request_shutdown()
-
-    def _check_burst_message_limit(self) -> bool:
-        """Check if burst worker has processed enough messages to exit."""
-        total = self._messages_processed + self._messages_failed
-        if total >= self._burst_max_messages:
-            log("info", "burst_message_limit_reached", {
-                "processed": self._messages_processed,
-                "failed": self._messages_failed,
-                "limit": self._burst_max_messages
-            })
-            return True
-        return False
-
-    def _check_burst_idle_timeout(self) -> bool:
-        """Check if burst worker has been idle too long (queue drained)."""
-        if self._last_message_time is None:
-            return False
-        idle_seconds = time.time() - self._last_message_time
-        if idle_seconds >= self._burst_idle_timeout:
-            log("info", "burst_idle_timeout", {
-                "idle_seconds": int(idle_seconds),
-                "timeout": self._burst_idle_timeout,
-                "processed": self._messages_processed
-            })
-            return True
-        return False
 
     async def _release_lock_lua(self, lock_key: str) -> int:
         """Fallback: run Lua script inline if SHA not cached."""
@@ -922,15 +895,21 @@ class Worker:
 
         # Per-sender lock: serialize processing for same user within this pod.
         # Prevents conversation state race when user sends rapid messages.
-        if sender not in self._processing_locks:
-            # Hard cap to prevent unbounded growth under adversarial conditions
-            if len(self._processing_locks) >= 10000:
-                oldest = min(self._lock_access_times, key=self._lock_access_times.get)
-                del self._processing_locks[oldest]
-                del self._lock_access_times[oldest]
-            self._processing_locks[sender] = asyncio.Lock()
-        self._lock_access_times[sender] = time.time()
-        sender_lock = self._processing_locks[sender]
+        # FIX (race audit): get-or-create + cap-eviction is wrapped in a
+        # single async lock so two concurrent coroutines can't both pass
+        # the membership check, both insert, or evict mid-iteration.
+        async with self._lock_dict_guard:
+            if sender not in self._processing_locks:
+                if len(self._processing_locks) >= 10000:
+                    oldest = min(
+                        self._lock_access_times,
+                        key=self._lock_access_times.get,
+                    )
+                    del self._processing_locks[oldest]
+                    del self._lock_access_times[oldest]
+                self._processing_locks[sender] = asyncio.Lock()
+            self._lock_access_times[sender] = time.time()
+            sender_lock = self._processing_locks[sender]
 
         # ACK PROTOCOL: XACK only after outbound enqueue succeeds.
         # If we ACK before enqueue and the pod dies, the user's reply
@@ -1018,27 +997,25 @@ class Worker:
         message_id: str,
         tenant_id: str = "",
     ) -> Optional[str]:
-        """Process message through MessageEngine with per-request db session."""
+        """Process message through V2Engine.
 
-        async with AsyncSessionLocal() as db:
-            try:
-                response = await self._message_engine.process(
-                    sender, text, message_id, db_session=db, tenant_id=tenant_id
-                )
+        v1 stack deleted 2026-05-08. V2Engine is the only engine — there
+        is no fallback. If V2Engine raises, the error propagates to the
+        caller which enqueues a generic Croatian error reply.
 
-                log("debug", "response_generated", {
-                    "length": len(response) if response else 0,
-                    "preview": response[:100] if response else "NONE"
-                })
-
-                return response
-            except Exception as e:
-                await db.rollback()
-                log_exception("engine_error_rollback", e, {
-                    "sender": sender[-4:] if sender else "",
-                    "text_preview": text[:50] if text else ""
-                })
-                raise
+        `db_session` and `tenant_id` are kept on the function signature
+        for symmetry with the prior MessageEngine.process() contract,
+        but V2Engine routes all DB/tenant concerns through its own
+        identity context, so they aren't passed down.
+        """
+        try:
+            return await self._v2_engine.process_message(sender, text)
+        except Exception as e:
+            log_exception("v2_engine_error", e, {
+                "sender": sender[-4:] if sender else "",
+                "text_preview": text[:50] if text else "",
+            })
+            raise
 
     async def _requeue_abandoned_outbound(self):
         """Re-queue messages left in processing list from previous crashes."""
@@ -1100,7 +1077,10 @@ class Worker:
                         await self.redis.lrem("whatsapp_outbound_processing", 1, data)
                         continue
 
-                await self._send_whatsapp(to=payload.get("to"), text=payload.get("text"))
+                await self._send_whatsapp(
+                    to=payload.get("to"), text=payload.get("text"),
+                    attempt=payload.get("attempt", 0),
+                )
 
                 # Mark as sent for idempotency (TTL 10 min)
                 if idem_key:
@@ -1162,6 +1142,18 @@ class Worker:
                         log("warn", "lua_script_reloaded", {"sha": self._release_lock_sha})
                         lua_cached = False
 
+                # EDGE-4 (Filip 2026-05-20): surface DLQ depth so dead-letter
+                # queues aren't a silent black hole. We do NOT auto-retry
+                # inbound DLQ (poison-message risk — a msg that crashed the
+                # engine would crash it again). Instead make depth visible so
+                # the weekly active-learning report + ops can inspect/replay
+                # manually. Warn when either DLQ grows past threshold.
+                dlq_inbound = 0
+                dlq_outbound = 0
+                with suppress(Exception):
+                    dlq_inbound = await self.redis.llen("dlq:inbound")
+                    dlq_outbound = await self.redis.llen("dlq:outbound")
+
                 health_data = {
                     "processed": self._messages_processed,
                     "failed": self._messages_failed,
@@ -1173,8 +1165,19 @@ class Worker:
                     "memory_mb": round(memory_mb, 1),
                     "uptime_sec": uptime_sec,
                     "lua_lock_cached": lua_cached,
-                    "local_locks": len(self._lock_access_times)
+                    "local_locks": len(self._lock_access_times),
+                    "dlq_inbound": dlq_inbound,
+                    "dlq_outbound": dlq_outbound,
                 }
+
+                # Alert if DLQ is accumulating — signals systemic failure
+                # (engine bug, Infobip outage) needing manual inspection.
+                if dlq_inbound > 50 or dlq_outbound > 50:
+                    log("warn", "dlq_growing", {
+                        "dlq_inbound": dlq_inbound,
+                        "dlq_outbound": dlq_outbound,
+                        "action": "inspect dlq:inbound / dlq:outbound in Redis",
+                    })
 
                 # Warn if memory is high; include tracemalloc top allocators
                 if memory_mb > MEMORY_WARNING_MB:
@@ -1191,8 +1194,25 @@ class Worker:
             except asyncio.CancelledError:
                 break
 
-    async def _send_whatsapp(self, to: str, text: str):
-        """Send WhatsApp message via WhatsAppService."""
+    # EDGE-2 (Filip 2026-05-20): outbound send resiliency.
+    # Permanent errors never succeed on retry → straight to DLQ.
+    # Transient errors (timeout, 5xx, conn reset, RATE_LIMIT) → delayed
+    # retry with exponential backoff, capped at MAX_SEND_ATTEMPTS, then DLQ.
+    # Before this, only RATE_LIMIT re-queued — every other failure silently
+    # dropped the reply, so the user never learned their action's outcome.
+    MAX_SEND_ATTEMPTS = 3
+    _PERMANENT_SEND_ERRORS = frozenset({
+        "INVALID_PHONE", "INVALID_RECIPIENT", "INVALID_NUMBER",
+        "AUTH", "UNAUTHORIZED", "FORBIDDEN", "BLOCKED",
+    })
+
+    async def _send_whatsapp(self, to: str, text: str, attempt: int = 0):
+        """Send WhatsApp message via WhatsAppService.
+
+        attempt: 0-based retry counter (carried through the delayed-outbound
+        queue). On transient failure we re-enqueue with attempt+1 until
+        MAX_SEND_ATTEMPTS, then park in the outbound DLQ.
+        """
         if not self._whatsapp_service:
             log("warn", "whatsapp_not_initialized")
             return
@@ -1202,26 +1222,77 @@ class Worker:
         if result.success:
             log("info", "sent", {
                 "to": to[-4:] if to else "",
-                "message_id": result.message_id
+                "message_id": result.message_id,
+                "attempt": attempt,
             })
-        else:
-            log("error", "send_failed", {
+            return
+
+        log("error", "send_failed", {
+            "error_code": result.error_code,
+            "error": result.error_message,
+            "attempt": attempt,
+        })
+
+        # Permanent errors: retry would never succeed → DLQ immediately.
+        if result.error_code in self._PERMANENT_SEND_ERRORS:
+            await self._store_outbound_dlq(to, text, result.error_code, attempt)
+            return
+
+        # Transient (RATE_LIMIT, timeout, 5xx, connection reset): retry with
+        # backoff until the cap, then DLQ so the reply isn't silently lost.
+        if attempt + 1 >= self.MAX_SEND_ATTEMPTS:
+            log("error", "send_exhausted", {
+                "to": to[-4:] if to else "",
                 "error_code": result.error_code,
-                "error": result.error_message
+                "attempts": attempt + 1,
             })
+            await self._store_outbound_dlq(to, text, result.error_code, attempt)
+            return
 
-            if result.error_code == "RATE_LIMIT":
-                await self._enqueue_outbound_delayed(
-                    to, text,
-                    delay=result.retry_after or 30
-                )
+        # RATE_LIMIT honors server retry_after; others use exponential backoff.
+        if result.error_code == "RATE_LIMIT":
+            delay = result.retry_after or 30
+        else:
+            delay = 5 * (2 ** attempt)  # 5s, 10s, 20s
+        await self._enqueue_outbound_delayed(
+            to, text, delay=delay, attempt=attempt + 1,
+        )
 
-    async def _enqueue_outbound_delayed(self, to: str, text: str, delay: int = 30):
-        """Enqueue outbound message with delay for rate limiting."""
+    async def _store_outbound_dlq(
+        self, to: str, text: str, error_code: str, attempt: int,
+    ) -> None:
+        """Park an undeliverable outbound reply in the outbound DLQ.
+        Full text retained (access-controlled recovery store, 7d TTL)."""
+        try:
+            entry = json.dumps({
+                "dlq": "outbound",
+                "to": to,
+                "text": text,
+                "error_code": error_code,
+                "attempts": attempt + 1,
+                "time": datetime.now(timezone.utc).isoformat(),
+            })
+            await self.redis.rpush("dlq:outbound", entry)
+            await self.redis.expire("dlq:outbound", 604800)  # 7d
+            log("error", "outbound_dlq_stored", {
+                "to": to[-4:] if to else "",
+                "error_code": error_code,
+            })
+        except (ResponseError, RedisConnectionError, RedisError) as e:
+            log("error", "outbound_dlq_failed", {"error": str(e)})
+
+    async def _enqueue_outbound_delayed(
+        self, to: str, text: str, delay: int = 30, attempt: int = 0,
+    ):
+        """Enqueue outbound message with delay for rate limiting / retry.
+
+        attempt: carried through so _send_whatsapp can enforce the retry cap
+        when this message is eventually re-sent (EDGE-2)."""
         try:
             delayed_payload = json.dumps({
                 "to": to,
                 "text": text,
+                "attempt": attempt,
                 "idempotency_key": f"{to}:{hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()[:12]}:{int(time.time() + delay)}",
                 "scheduled_at": time.time() + delay
             })
@@ -1269,63 +1340,48 @@ class Worker:
                 await asyncio.sleep(10)
 
     async def _enqueue_outbound(self, to: str, text: str):
-        # Split long messages to respect WhatsApp's 4096 char limit
+        # Split long messages to respect WhatsApp's 4096 char limit.
+        # A5 fix: batch multi-chunk rpush into ONE round-trip — was
+        # N synchronous awaits per long message.
         MAX_WA_LENGTH = 4000  # Leave margin for encoding overhead
+        ts_ns = time.time_ns()
         if len(text) > MAX_WA_LENGTH:
             chunks = self._split_message(text, MAX_WA_LENGTH)
             log("info", "message_split", {"chunks": len(chunks), "original_len": len(text)})
-            for idx, chunk in enumerate(chunks):
-                payload = {"to": to, "text": chunk, "idempotency_key": f"{to}:{hashlib.md5(chunk.encode(), usedforsecurity=False).hexdigest()[:12]}:{time.time_ns()}:{idx}"}
-                await self.redis.rpush("whatsapp_outbound", json.dumps(payload))
+            payloads = [
+                json.dumps({
+                    "to": to,
+                    "text": chunk,
+                    "idempotency_key": (
+                        f"{to}:"
+                        f"{hashlib.md5(chunk.encode(), usedforsecurity=False).hexdigest()[:12]}"
+                        f":{ts_ns}:{idx}"
+                    ),
+                })
+                for idx, chunk in enumerate(chunks)
+            ]
+            # Single rpush with multiple values — 1 redis RTT vs N.
+            await self.redis.rpush("whatsapp_outbound", *payloads)
         else:
-            payload = {"to": to, "text": text, "idempotency_key": f"{to}:{hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()[:12]}:{time.time_ns()}"}
-            await self.redis.rpush("whatsapp_outbound", json.dumps(payload))
+            payload = json.dumps({
+                "to": to,
+                "text": text,
+                "idempotency_key": (
+                    f"{to}:"
+                    f"{hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()[:12]}"
+                    f":{ts_ns}"
+                ),
+            })
+            await self.redis.rpush("whatsapp_outbound", payload)
 
     @staticmethod
     def _split_message(text: str, max_length: int) -> list:
-        """Split message at paragraph boundaries, respecting max length."""
+        """Naive split into <= max_length chunks. LLM formatter caps responses
+        at 500 tokens (~2 KB) so chunking is almost always a no-op; only edge
+        cases (huge list dumps) ever hit max_length."""
         if len(text) <= max_length:
             return [text]
-
-        chunks = []
-        current_chunk = ""
-
-        # Try to split at double newlines (paragraphs) first
-        paragraphs = text.split("\n\n")
-
-        for para in paragraphs:
-            if len(current_chunk) + len(para) + 2 <= max_length:
-                if current_chunk:
-                    current_chunk += "\n\n" + para
-                else:
-                    current_chunk = para
-            else:
-                if current_chunk:
-                    chunks.append(current_chunk)
-                # If single paragraph is too long, split at newlines
-                if len(para) > max_length:
-                    lines = para.split("\n")
-                    current_chunk = ""
-                    for line in lines:
-                        if len(current_chunk) + len(line) + 1 <= max_length:
-                            current_chunk = current_chunk + "\n" + line if current_chunk else line
-                        else:
-                            if current_chunk:
-                                chunks.append(current_chunk)
-                            # Hard split if single line is too long
-                            if len(line) > max_length:
-                                for i in range(0, len(line), max_length):
-                                    chunks.append(line[i:i + max_length])
-                                current_chunk = ""
-                            else:
-                                current_chunk = line
-                else:
-                    current_chunk = para
-
-        if current_chunk:
-            chunks.append(current_chunk)
-
-        return chunks if chunks else [text[:max_length]]
+        return [text[i:i + max_length] for i in range(0, len(text), max_length)]
 
     async def _ack_message(self, msg_id: str):
         with suppress(Exception):
