@@ -1,0 +1,8 @@
+{
+  "_comment": "REPLACE with real phone→persona mappings. Copy this file to config/tenants/{tenant_uuid}/personas.json, drop the _comment key, fill in real phones in E.164 format (with leading +).",
+  "_valid_personas": ["driver", "manager", "admin"],
+  "_default_if_unlisted": "driver",
+  "+385900000001": "admin",
+  "+385900000002": "manager",
+  "+385900000003": "driver"
+}
