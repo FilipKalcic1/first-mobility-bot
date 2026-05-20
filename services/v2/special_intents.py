@@ -92,6 +92,9 @@ def detect_special_intent(
     is_first_contact: bool = False,
     first_name: Optional[str] = None,
     vehicle_name: Optional[str] = None,
+    licence_plate: Optional[str] = None,
+    last_mileage: Optional[int] = None,
+    company_name: Optional[str] = None,
 ) -> Optional[SpecialIntentMatch]:
     """Match `query` against special intents.
 
@@ -99,7 +102,9 @@ def detect_special_intent(
 
     Welcome-on-first-contact: if `is_first_contact` is True, ANY query
     triggers a welcome (the user's first message of the session). The
-    welcome includes their name + vehicle from context.
+    welcome includes name, company, vehicle, mileage from context and
+    explicitly invites the user to send their actual query in the next
+    message.
 
     Otherwise: exact greeting phrase ("bok") gets a short ack but does
     NOT re-trigger the full welcome flow.
@@ -119,7 +124,12 @@ def detect_special_intent(
     # First contact — welcome takes precedence over greeting/help.
     if is_first_contact:
         return _build_match(
-            "WELCOME", first_name=first_name, vehicle_name=vehicle_name
+            "WELCOME",
+            first_name=first_name,
+            vehicle_name=vehicle_name,
+            licence_plate=licence_plate,
+            last_mileage=last_mileage,
+            company_name=company_name,
         )
 
     # Otherwise, longest-trigger across remaining intents.
@@ -184,6 +194,9 @@ def _build_match(
     *,
     first_name: Optional[str] = None,
     vehicle_name: Optional[str] = None,
+    licence_plate: Optional[str] = None,
+    last_mileage: Optional[int] = None,
+    company_name: Optional[str] = None,
 ) -> SpecialIntentMatch:
     """Generate SpecialIntentMatch with Croatian response + side-effects."""
     name_part = f" {first_name}" if first_name else ""
@@ -198,19 +211,37 @@ def _build_match(
             "Ne čuvam osobne razgovore izvan trenutne sesije. "
             "Za živu osobu napiši 'pomoć' ili kontaktiraj managera._"
         )
+
+        lines: list[str] = [f"Bok{name_part}! 👋"]
+        lines.append("Pronašao sam te u sustavu.")
+
+        # Context lines — only include what we know about the user.
+        if company_name:
+            lines.append(f"Pripadaš tvrtki **{company_name}**.")
+
         if vehicle_name:
-            response = (
-                f"Bok{name_part}! Vidim da ti je dodijeljeno vozilo "
-                f"{vehicle_name}. Kako ti mogu pomoći?\n\n"
-                f"{ai_disclosure}"
-            )
+            vehicle_line = f"Tvoje dodijeljeno vozilo je **{vehicle_name}**"
+            if licence_plate:
+                vehicle_line += f" (registracija {licence_plate})"
+            if last_mileage:
+                vehicle_line += f", trenutno stanje **{last_mileage:,} km**".replace(",", ".")
+            vehicle_line += "."
+            lines.append(vehicle_line)
         else:
-            response = (
-                f"Bok{name_part}! Kako ti mogu pomoći? Mogu ti reći "
-                "podatke o tvom vozilu, popis rezervacija, omogućiti unos "
-                "kilometraže ili rezervaciju auta.\n\n"
-                f"{ai_disclosure}"
+            lines.append(
+                "Vidim da trenutno nemaš dodijeljeno vozilo — "
+                "pošalji mi 'rezerviraj' ako želiš rezervirati."
             )
+
+        lines.append("")
+        lines.append(
+            "Pošalji mi svoj upit u **sljedećoj poruci**. "
+            "Mogu ti pomoći s rezervacijama, prijavama kvarova, "
+            "unosom kilometraže, troškovima i sl."
+        )
+        lines.append("")
+        lines.append(ai_disclosure)
+        response = "\n".join(lines)
         return SpecialIntentMatch(intent="WELCOME", response=response, side_effects=())
 
     if name == "GREETING":

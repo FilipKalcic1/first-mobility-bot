@@ -97,17 +97,17 @@ def _sanitize_string(s: str) -> tuple[str, list[str]]:
     return cleaned, warnings
 
 
-def sanitize(data: Any, max_depth: int = 8) -> tuple[Any, list[str]]:
+def sanitize(data: Any, max_depth: int = 6) -> tuple[Any, list[str]]:
     """Recursively sanitize any JSON-like structure.
 
     Returns (sanitized_copy, all_warnings). Never raises — if something
     breaks, returns (data, ['sanitize_error']) for the failing branch
     and continues elsewhere.
     """
-    return _sanitize(data, max_depth, set())
+    return _sanitize(data, max_depth)
 
 
-def _sanitize(data: Any, depth_left: int, seen: set) -> tuple[Any, list[str]]:
+def _sanitize(data: Any, depth_left: int) -> tuple[Any, list[str]]:
     if depth_left <= 0:
         return "[MAX_DEPTH_EXCEEDED]", ["max_depth"]
     try:
@@ -122,7 +122,7 @@ def _sanitize(data: Any, depth_left: int, seen: set) -> tuple[Any, list[str]]:
                 # Sanitize key as well — paranoid but cheap
                 clean_k, kw = _sanitize_string(str(k))
                 warns.extend(kw)
-                clean_v, vw = _sanitize(v, depth_left - 1, seen)
+                clean_v, vw = _sanitize(v, depth_left - 1)
                 warns.extend(vw)
                 out_dict[clean_k] = clean_v
             return out_dict, warns
@@ -130,7 +130,7 @@ def _sanitize(data: Any, depth_left: int, seen: set) -> tuple[Any, list[str]]:
             out_list = []
             warns = []
             for item in data:
-                clean_item, iw = _sanitize(item, depth_left - 1, seen)
+                clean_item, iw = _sanitize(item, depth_left - 1)
                 warns.extend(iw)
                 out_list.append(clean_item)
             return out_list, warns
@@ -139,18 +139,3 @@ def _sanitize(data: Any, depth_left: int, seen: set) -> tuple[Any, list[str]]:
     except Exception as e:  # noqa: BLE001
         logger.warning("sanitize_error: %s", e)
         return "[SANITIZE_ERROR]", [f"sanitize_error:{type(e).__name__}"]
-
-
-def is_safe(data: Any) -> bool:
-    """Quick check: returns False if any sanitize-warning would trigger.
-    Cheap pre-filter to skip sanitize call for clean data."""
-    if isinstance(data, str):
-        for pat in _STRIP_PATTERNS + _IMPERATIVE_PATTERNS:
-            if pat.search(data):
-                return False
-        return len(data) <= MAX_STRING_LEN
-    if isinstance(data, dict):
-        return all(is_safe(v) for v in data.values())
-    if isinstance(data, (list, tuple)):
-        return all(is_safe(v) for v in data)
-    return True

@@ -22,8 +22,11 @@ from services.errors import BotError, ErrorCode
 
 logger = logging.getLogger(__name__)
 
-# Config file path
-CONFIG_PATH = Path.cwd() / "config" / "context_param_schemas.json"
+# Config file path — anchored to repo root via this file's location, NOT
+# Path.cwd(), so the parser works regardless of where the worker was
+# launched from (K8s entrypoint, cron job, test runner in subdirectory).
+# services/registry/swagger_parser.py → parents[2] = repo root.
+CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "context_param_schemas.json"
 
 
 class SwaggerParser:
@@ -265,6 +268,25 @@ class SwaggerParser:
             embedding_text=embedding_text
         )
 
+    # Generic identifier names that must NEVER auto-classify as a typed context
+    # param. A bare 'Id' or 'id' is the entity's own primary key, not the user's
+    # person_id. Without this guard, format=uuid + type=string scores 3 and the
+    # iteration order picks person_id for hundreds of tools.
+    _GENERIC_ID_NAMES = frozenset({"id", "guid", "uuid", "objectid", "key"})
+
+    # HTTP query operators + pagination knobs. These are NEVER auto-injected
+    # context — they're user-typed search/filter expressions. Without this
+    # guard, a param named 'filter' with description "...client(contains)Bob"
+    # was scoring 3 via the "client" keyword and mistagging as tenant_id,
+    # which then made tool_schema_builder skip 'filter' from the LLM schema
+    # (services/router/tool_schema_builder.py:156). LLM never saw filter →
+    # silently broken search across 55 tools.
+    _NEVER_CONTEXT_NAMES = frozenset({
+        "filter", "search", "query", "limit", "offset",
+        "sort", "order", "page", "rows", "skip", "take", "top",
+        "select", "expand", "format", "fields",
+    })
+
     def _classify_context_parameter(
         self,
         param_name: str,
@@ -272,25 +294,79 @@ class SwaggerParser:
         param_format: Optional[str],
         description: str
     ) -> Tuple[Optional[str], bool]:
-        """Classify parameter as context param using schema metadata."""
+        """Classify parameter as context param using schema metadata.
+
+        Decision rules, in order:
+
+          1. Generic primary-key names ('Id', 'id', 'Guid', ...) are NEVER
+             typed context params — they're the entity's own PK. They fall
+             straight to the fallback dict.
+
+          2. Score each context_type with weighted signals:
+               description_keywords match: +3
+               schema_formats match (uuid/guid): +2
+               type_hints match (string): +1
+               name_patterns match: +2
+
+             Threshold is 3, BUT a match REQUIRES at least one strong-signal
+             contribution (description keyword OR name pattern). This prevents
+             the old failure mode where ANY uuid-string param scored 3 from
+             format(2)+type(1) alone and the first dict key always won.
+
+          3. If no typed match and the lowercased name is in the fallback
+             dict, return that.
+
+          4. Otherwise None — the swagger parser will treat it as user-input.
+        """
+        param_lower = param_name.lower()
+
+        # 1. Generic identifier guard.
+        if param_lower in self._GENERIC_ID_NAMES:
+            if param_lower in self.context_param_fallback:
+                return self.context_param_fallback[param_lower], True
+            return None, False
+
+        # 1a. HTTP query operators (filter/search/limit/...) — these are
+        # user-typed, never auto-injected. See _NEVER_CONTEXT_NAMES above.
+        if param_lower in self._NEVER_CONTEXT_NAMES:
+            return None, False
+
         description_lower = description.lower()
 
+        best_key: Optional[str] = None
+        best_score = 0
+        best_has_strong = False
         for context_key, patterns in self.context_param_patterns.items():
             score = 0
+            has_strong_signal = False
 
             if param_format and param_format.lower() in patterns["schema_formats"]:
                 score += 2
 
             if any(kw in description_lower for kw in patterns["description_keywords"]):
                 score += 3
+                has_strong_signal = True
 
             if param_type in patterns["type_hints"]:
                 score += 1
 
-            if score >= 3:
-                return context_key, True
+            for name_re in self.compiled_name_patterns.get(context_key, []):
+                if name_re.search(param_lower):
+                    score += 2
+                    has_strong_signal = True
+                    break
 
-        param_lower = param_name.lower()
+            if score > best_score:
+                best_score = score
+                best_key = context_key
+                best_has_strong = has_strong_signal
+
+        # Need both a passing score AND a strong (named) signal. Format+type
+        # alone (3 pts, no description, no name match) is rejected — that was
+        # the bug that mistagged 130+ generic 'id' params as person_id.
+        if best_score >= 3 and best_has_strong and best_key is not None:
+            return best_key, True
+
         if param_lower in self.context_param_fallback:
             return self.context_param_fallback[param_lower], True
 

@@ -95,20 +95,29 @@ def detect(query: str) -> MultiIntentResult:
     if not has_conjunction:
         return MultiIntentResult(detected=False)
 
-    # Try to split — best effort
+    # Try to split — best effort. Bug #3 fix (Faza 4 Filip 2026-05-17):
+    # filter empty fragments BEFORE deciding split was successful, otherwise
+    # "pokaži km i " (trailing conjunction) produces ["pokaži km", ""] → 1
+    # real part → clarify message lists a blank option.
     parts = []
     for sep in [r",\s*(?:te|pa|plus|i)\s+", r"\s+(?:te|pa|plus|i)\s+"]:
         split = re.split(sep, text, flags=re.IGNORECASE)
-        if len(split) >= 2:
-            parts = [p.strip() for p in split if p.strip()]
+        candidate = [p.strip() for p in split if p.strip()]
+        if len(candidate) >= 2:
+            parts = candidate
             break
+
+    # Defensive: conjunction matched the categories regex but split didn't
+    # yield 2 non-empty parts (trailing conjunction, double conjunction,
+    # punctuation noise). Don't render a malformed clarify.
+    if len(parts) < 2:
+        return MultiIntentResult(detected=False)
 
     clarify = (
         "Razumio sam dvije stvari u poruci. Jednu po jednu — što prvo?\n"
     )
-    if parts:
-        for i, p in enumerate(parts[:3], 1):
-            clarify += f"{i}. {p[:60]}\n"
+    for i, p in enumerate(parts[:3], 1):
+        clarify += f"{i}. {p[:60]}\n"
     clarify += "\nReci samo prvo, drugo radimo nakon."
 
     return MultiIntentResult(

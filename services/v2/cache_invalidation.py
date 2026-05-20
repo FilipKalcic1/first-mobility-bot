@@ -27,7 +27,7 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 

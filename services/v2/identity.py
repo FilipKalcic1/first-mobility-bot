@@ -1,10 +1,9 @@
 """L0 — Identity & Context.
 
 Resolves the user's identity (personId) and pre-fetches master data on
-first contact. Caches in Redis with 5-minute TTL because:
-  - mileage changes when driver writes it (rare)
-  - registration / leasing change once a year
-  - 5min keeps follow-up queries snappy without staleness
+first contact. Caches in Redis with 30-second TTL — caps staleness if
+admin deactivates a driver mid-session at 1 minute worst case (hit at
+second 29, served until next refresh).
 
 API contract — single class, single async method:
 
@@ -25,15 +24,17 @@ If `person_id` cannot be resolved → snapshot.is_known = False, all
 fields except `phone` and `is_first_contact` are None. Caller handles
 "unknown user" scenario.
 
-NEVER raises on transient API errors — returns degraded snapshot with
-.errors list. The router decides whether to proceed or apologize.
+NEVER raises on transient API errors — returns degraded snapshot
+(is_known=False or partial vehicle data) and logs a warning. The router
+decides whether to proceed or apologize.
 """
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Literal, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,15 @@ _CACHE_TTL_SECONDS = 30
 
 # Redis key prefix.
 _REDIS_PREFIX = "v2:identity:"
+
+# Persona resolution: MobilityOne API doesn't (yet) expose role on the
+# /Persons response, so we read per-tenant phone→persona overrides from
+# config/tenants/{tenant_id}/personas.json. Anyone not in the override
+# file is treated as "driver" — the most-restricted (safest) default.
+Persona = Literal["driver", "manager", "admin"]
+_DEFAULT_PERSONA: Persona = "driver"
+# Repo-relative path; resolved against project root at lookup time.
+_TENANTS_DIR_REL = Path("config") / "tenants"
 
 
 @dataclass
@@ -60,6 +70,12 @@ class IdentitySnapshot:
     full_name: Optional[str] = None
     first_name: Optional[str] = None
     tenant_id: Optional[str] = None
+    # Org context from /Persons response — used in first-message greeting.
+    company_name: Optional[str] = None
+    org_unit_name: Optional[str] = None
+    # Drives persona-restricted routing (Phase D 2026-05-16). Defaults to
+    # "driver" if not overridden in config/tenants/{tenant_id}/personas.json.
+    persona: Persona = _DEFAULT_PERSONA
 
     vehicle_id: Optional[str] = None
     vehicle_name: Optional[str] = None
@@ -72,7 +88,6 @@ class IdentitySnapshot:
 
     is_first_contact: bool = False
     is_known: bool = False
-    errors: list[str] = field(default_factory=list)
 
     def to_cache_dict(self) -> dict:
         """Serialize for Redis. is_first_contact is recomputed on load."""
@@ -81,6 +96,9 @@ class IdentitySnapshot:
             "full_name": self.full_name,
             "first_name": self.first_name,
             "tenant_id": self.tenant_id,
+            "company_name": self.company_name,
+            "org_unit_name": self.org_unit_name,
+            "persona": self.persona,
             "vehicle_id": self.vehicle_id,
             "vehicle_name": self.vehicle_name,
             "licence_plate": self.licence_plate,
@@ -100,6 +118,9 @@ class IdentitySnapshot:
             full_name=data.get("full_name"),
             first_name=data.get("first_name"),
             tenant_id=data.get("tenant_id"),
+            company_name=data.get("company_name"),
+            org_unit_name=data.get("org_unit_name"),
+            persona=data.get("persona") or _DEFAULT_PERSONA,
             vehicle_id=data.get("vehicle_id"),
             vehicle_name=data.get("vehicle_name"),
             licence_plate=data.get("licence_plate"),
@@ -125,10 +146,15 @@ class IdentityContext:
     here. The caller (gateway) handles auth header + tenant header.
     """
 
-    def __init__(self, redis_client, gateway, settings):
+    def __init__(self, redis_client, gateway, settings, tenant_resolver=None):
         self._redis = redis_client
         self._gateway = gateway
         self._settings = settings
+        # Optional dependency: when provided, identity lazy-onboards
+        # successful Persons resolutions into user_mappings (so subsequent
+        # messages can skip the API roundtrip via tenant_resolver). Tests
+        # pass None; production factory wires the real singleton.
+        self._tenant_resolver = tenant_resolver
 
     @staticmethod
     def _normalize_phone(phone: str) -> str:
@@ -150,27 +176,140 @@ class IdentityContext:
             s = s[2:]
         return s
 
-    async def resolve(self, phone: str) -> IdentitySnapshot:
-        """Get identity snapshot for a phone. Caches both hit + miss."""
+    async def resolve(
+        self,
+        phone: str,
+        *,
+        expected_tenant_id: Optional[str] = None,
+    ) -> IdentitySnapshot:
+        """Get identity snapshot for a phone. Caches both hit + miss.
+
+        ``expected_tenant_id`` is a defense-in-depth check for multi-tenant
+        safety: if provided (e.g. by the webhook layer that already resolved
+        the phone→tenant binding via tenant_resolver), and the cached
+        snapshot's tenant_id does NOT match, the cache entry is treated as
+        stale/poisoned, dropped, and re-populated from MobilityOne. Prevents
+        cross-tenant cache bleed in unusual deployment topologies
+        (dev/prod sharing Redis, blue-green, or tenant migration).
+        """
         normalized = self._normalize_phone(phone)
         if not normalized:
-            return IdentitySnapshot(
-                phone=phone, errors=["empty_phone"], is_first_contact=True
-            )
+            logger.warning("identity resolve called with empty phone")
+            return IdentitySnapshot(phone=phone, is_first_contact=True)
 
         cached = await self._read_cache(normalized)
         if cached is not None:
-            return cached
+            if expected_tenant_id and cached.tenant_id != expected_tenant_id:
+                logger.error(
+                    "identity cache poisoned for phone ****%s: cached "
+                    "tenant=%s but webhook resolved tenant=%s — invalidating "
+                    "and re-fetching to prevent cross-tenant leak.",
+                    normalized[-4:] if len(normalized) >= 4 else normalized,
+                    cached.tenant_id, expected_tenant_id,
+                )
+                await self.invalidate(normalized)
+                # fall through to re-fetch
+            else:
+                return cached
 
+        # Cache miss BUT this may still NOT be the user's first contact —
+        # the Redis snapshot expires after 30s (admin-deactivation safety),
+        # but "have we ever welcomed this phone" is a lifetime fact that
+        # lives in user_mappings (Postgres). Looking there prevents the bot
+        # from re-firing the WELCOME message every >30s gap. Best-effort:
+        # if the resolver lookup fails, default to True (safer — better to
+        # re-greet than miss a legitimate first contact).
+        already_welcomed = await self._was_phone_welcomed_before(normalized)
         snap = IdentitySnapshot(
-            phone=normalized, is_first_contact=True
+            phone=normalized, is_first_contact=not already_welcomed
         )
         await self._populate_from_persons(snap)
         if snap.is_known and snap.person_id:
             await self._populate_from_masterdata(snap)
+        # Resolve persona AFTER tenant_id is set, so we can read the
+        # tenant's phone→persona override file.
+        if snap.tenant_id:
+            snap.persona = self._resolve_persona(snap.tenant_id, normalized)
+
+        # Lazy onboarding: first time we successfully identify a phone,
+        # write it to user_mappings so tenant_resolver can skip the
+        # MobilityOne roundtrip on future messages. Best-effort —
+        # if Postgres write fails, the user still gets a response from
+        # this turn (we have the snapshot in hand); next message just
+        # re-hits the API. NEVER raises.
+        if snap.is_known and snap.tenant_id and snap.person_id:
+            await self._maybe_upsert_user_mapping(snap)
+
+        # Final guard: if caller specified expected_tenant_id and Persons
+        # returned a DIFFERENT tenant, refuse — do not cache, return unknown.
+        if (
+            expected_tenant_id
+            and snap.tenant_id
+            and snap.tenant_id != expected_tenant_id
+        ):
+            logger.error(
+                "identity Persons-API tenant mismatch for phone ****%s: "
+                "API says %s, webhook says %s — refusing to bind identity.",
+                normalized[-4:] if len(normalized) >= 4 else normalized,
+                snap.tenant_id, expected_tenant_id,
+            )
+            return IdentitySnapshot(
+                phone=normalized, is_first_contact=False, is_known=False,
+            )
 
         await self._write_cache(normalized, snap)
         return snap
+
+    async def _was_phone_welcomed_before(self, normalized: str) -> bool:
+        """Check user_mappings for a prior successful resolve of this phone.
+
+        Used to decide is_first_contact: TRUE only if the phone has NEVER
+        been resolved before (lifetime, not session). Without this check,
+        every Redis cache miss (~every 30s) would re-trigger the WELCOME
+        message — bad UX.
+
+        tenant_resolver normalizes to E.164 (with +), identity strips +,
+        so we prepend + before passing through. Best-effort: returns False
+        (= "treat as first contact") on any failure.
+        """
+        if self._tenant_resolver is None:
+            return False
+        try:
+            e164 = normalized if normalized.startswith("+") else "+" + normalized
+            existing_tenant = await self._tenant_resolver.resolve_tenant_for_phone(e164)
+            return existing_tenant is not None
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "welcomed-before check failed for ****%s: %s — defaulting to first contact",
+                normalized[-4:] if len(normalized) >= 4 else normalized, e,
+            )
+            return False
+
+    async def _maybe_upsert_user_mapping(self, snap: IdentitySnapshot) -> None:
+        """Best-effort: write the just-resolved identity into user_mappings.
+
+        No-op when tenant_resolver is not configured (tests). Production
+        engine factory wires the real resolver singleton.
+
+        Phone format: tenant_resolver uses E.164 (leading +); we prepend +
+        to match its normalization before passing through. Never raises —
+        onboarding is a cache optimization, not a hard dependency.
+        """
+        if self._tenant_resolver is None:
+            return
+        try:
+            e164 = snap.phone if snap.phone.startswith("+") else "+" + snap.phone
+            await self._tenant_resolver.upsert_user_mapping(
+                e164,
+                tenant_id=snap.tenant_id,
+                person_id=snap.person_id,
+                display_name=snap.full_name,
+            )
+        except Exception as e:  # noqa: BLE001 — onboarding never blocks
+            logger.warning(
+                "user_mappings onboarding skipped for ****%s: %s",
+                snap.phone[-4:] if snap.phone else "", e,
+            )
 
     async def invalidate(self, phone: str) -> None:
         """Drop cache entry — useful after the user updates mileage etc."""
@@ -181,6 +320,59 @@ class IdentityContext:
             await self._redis.delete(_REDIS_PREFIX + normalized)
         except Exception as e:  # noqa: BLE001 — never crash the bot
             logger.warning("identity cache invalidate failed: %s", e)
+
+    # ---- persona resolution (Phase D 2026-05-16) ----
+
+    # Process-level cache: tenant_id → {normalized_phone: persona}
+    # Loaded lazily once per tenant; reloaded on file mtime change.
+    _persona_overrides_cache: dict[str, dict[str, "Persona"]] = {}
+    _persona_overrides_mtime: dict[str, float] = {}
+
+    @classmethod
+    def _resolve_persona(cls, tenant_id: str, normalized_phone: str) -> "Persona":
+        """Look up tenant's phone→persona map; fall back to driver.
+
+        File: config/tenants/{tenant_id}/personas.json
+            {
+              "385951234567": "admin",
+              "385991234567": "manager"
+            }
+
+        Anyone not listed is implicitly "driver". Missing file = all driver.
+        """
+        overrides = cls._load_persona_overrides(tenant_id)
+        return overrides.get(normalized_phone, _DEFAULT_PERSONA)
+
+    @classmethod
+    def _load_persona_overrides(cls, tenant_id: str) -> dict[str, "Persona"]:
+        # Repo root = three levels up from this file (services/v2/identity.py)
+        repo_root = Path(__file__).resolve().parents[2]
+        path = repo_root / _TENANTS_DIR_REL / tenant_id / "personas.json"
+        try:
+            mtime = path.stat().st_mtime if path.exists() else 0.0
+        except OSError:
+            return cls._persona_overrides_cache.get(tenant_id, {})
+
+        cached_mtime = cls._persona_overrides_mtime.get(tenant_id, -1.0)
+        if mtime == cached_mtime and tenant_id in cls._persona_overrides_cache:
+            return cls._persona_overrides_cache[tenant_id]
+
+        overrides: dict[str, Persona] = {}
+        if path.exists():
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    for phone, persona in raw.items():
+                        if persona in ("driver", "manager", "admin") and isinstance(phone, str):
+                            overrides[phone.strip()] = persona  # type: ignore[assignment]
+            except (OSError, ValueError) as e:
+                logger.warning(
+                    "personas.json unreadable for tenant=%s: %s — defaulting all to driver",
+                    tenant_id, e,
+                )
+        cls._persona_overrides_cache[tenant_id] = overrides
+        cls._persona_overrides_mtime[tenant_id] = mtime
+        return overrides
 
     # ------------------------------------------------------------------
     # Internals — kept small enough to hold in your head.
@@ -214,22 +406,34 @@ class IdentityContext:
             logger.warning("identity cache write failed: %s", e)
 
     async def _populate_from_persons(self, snap: IdentitySnapshot) -> None:
-        """GET /tenantmgt/Persons?Filter=Phone(=){phone} → personId, name."""
+        """GET /tenantmgt/Persons?Filter=Phone(=){phone} → personId, name.
+
+        Uses ``settings.MOBILITY_TENANT_ID`` as the x-tenant header. For
+        Damir's pilot (one tenant) this is the right call. The Persons
+        response carries the user's actual ``TenantId``, which the rest of
+        the bot uses for subsequent tenant-scoped calls (MasterData, tools).
+
+        Multi-tenant (1000+ tenants) deployment: this single env var is the
+        bottleneck and will need re-architecture once we know how MobilityOne
+        wants to handle cross-tenant phone lookup. NOT solved here.
+        """
         try:
             response = await self._gateway.call(
                 method="GET",
                 service="tenantmgt",
                 path="/Persons",
                 query_params={"Filter": f"Phone(=){snap.phone}"},
-                tenant_id=self._settings.PERSONS_TENANT_ID,
+                tenant_id=self._settings.MOBILITY_TENANT_ID,
             )
         except Exception as e:  # noqa: BLE001
-            snap.errors.append(f"persons_lookup_error:{type(e).__name__}")
+            logger.warning("persons lookup error: %s", type(e).__name__)
             return
 
         if not response.success:
-            snap.errors.append(
-                f"persons_http_{response.status_code or 'unknown'}"
+            logger.warning(
+                "persons HTTP %s for phone ****%s",
+                response.status_code or "unknown",
+                snap.phone[-4:] if snap.phone else "",
             )
             return
 
@@ -248,30 +452,51 @@ class IdentityContext:
         snap.full_name = (
             f"{first_name} {last_name}".strip() or None
         )
-        snap.tenant_id = (
-            person.get("TenantId")
-            or person.get("tenantId")
-            or self._settings.PERSONS_TENANT_ID
-        )
+        # Org context for personalized greeting (FACT 2: Persons response
+        # carries CompanyName + OrgUnitName per processed_tool_registry).
+        snap.company_name = person.get("CompanyName") or person.get("companyName")
+        snap.org_unit_name = person.get("OrgUnitName") or person.get("orgUnitName")
+        # Strict tenant binding (multi-tenant safety): the TenantId field is
+        # the ONLY authoritative source. If Persons omits it, treat the user
+        # as unknown rather than silently routing into a default tenant.
+        snap.tenant_id = person.get("TenantId") or person.get("tenantId")
+        if not snap.tenant_id:
+            logger.error(
+                "persons response missing TenantId for phone ****%s — "
+                "refusing to bind identity to env default. Phone treated as unknown.",
+                snap.phone[-4:] if snap.phone else "",
+            )
+            snap.person_id = None
+            snap.first_name = None
+            snap.full_name = None
+            snap.is_known = False
+            return
         snap.is_known = bool(snap.person_id)
 
     async def _populate_from_masterdata(self, snap: IdentitySnapshot) -> None:
         """GET /automation/MasterData?personId={id} → vehicle context."""
+        if not snap.tenant_id:
+            # Multi-tenant safety: refuse to call MasterData without an
+            # authoritative tenant_id. Vehicle context is optional —
+            # downstream layers handle "no vehicle" gracefully.
+            return
         try:
             response = await self._gateway.call(
                 method="GET",
                 service="automation",
                 path="/MasterData",
                 query_params={"personId": snap.person_id},
-                tenant_id=snap.tenant_id or self._settings.AUTOMATION_TENANT_ID,
+                tenant_id=snap.tenant_id,
             )
         except Exception as e:  # noqa: BLE001
-            snap.errors.append(f"masterdata_lookup_error:{type(e).__name__}")
+            logger.warning("masterdata lookup error: %s", type(e).__name__)
             return
 
         if not response.success:
-            snap.errors.append(
-                f"masterdata_http_{response.status_code or 'unknown'}"
+            logger.warning(
+                "masterdata HTTP %s for person=%s",
+                response.status_code or "unknown",
+                snap.person_id,
             )
             return
 

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from services.v2.clarify_ui import (
     ClarifyOptions,
     build_clarify_options,
+    build_from_router_candidates,
     parse_clarify_reply,
     render_infobip_list_message,
     render_text,
@@ -117,3 +118,69 @@ def test_parse_reply_word_form():
     assert parse_clarify_reply("jedan", opts) == "a"
     assert parse_clarify_reply("Prvo", opts) == "a"
     assert parse_clarify_reply("tri", opts) == "c"
+
+
+# --- build_from_router_candidates (new builder used by engine FALLBACK) ----
+
+
+def test_build_from_router_candidates_uses_tkb_intent_for_description():
+    """Engine passes (tool_id, anchor_score) tuples + a TKB lookup callback.
+    The builder must produce ClarifyOptions with cards that have a sensible
+    short_label AND the TKB intent_summary as description."""
+    intents = {
+        "delete_VehicleCalendar_id": "Otkazuje pojedinačnu rezervaciju vozila po ID-u.",
+        "get_VehicleCalendar":        "Vraća listu rezervacija u kalendaru vozila.",
+        "put_VehicleCalendar_id":     "Mijenja postojeću rezervaciju.",
+    }
+    candidates = [
+        ("delete_VehicleCalendar_id", 0.62),
+        ("get_VehicleCalendar",        0.48),
+        ("put_VehicleCalendar_id",     0.43),
+    ]
+    opts = build_from_router_candidates(
+        candidates, tkb_lookup=lambda tid: intents.get(tid, ""),
+    )
+    assert len(opts.cards) == 3
+    assert opts.cards[0].tool_id == "delete_VehicleCalendar_id"
+    assert opts.cards[0].short_label.startswith("Obriši ")
+    assert "rezervaciju" in opts.cards[0].description
+    assert opts.cards[2].index == 3
+
+
+def test_build_from_router_candidates_truncates_to_max_cards():
+    candidates = [(f"get_X{i}", 0.5) for i in range(10)]
+    opts = build_from_router_candidates(
+        candidates, tkb_lookup=lambda tid: "purpose", max_cards=3,
+    )
+    assert len(opts.cards) == 3
+
+
+def test_build_from_router_candidates_skips_empty_tool_ids():
+    """Defensive: gate output shouldn't have empty tool_ids, but if it does
+    we skip them rather than producing a malformed card."""
+    candidates = [("", 0.9), ("get_X", 0.5), ("", 0.3), ("get_Y", 0.2)]
+    opts = build_from_router_candidates(
+        candidates, tkb_lookup=lambda tid: "",
+    )
+    assert [c.tool_id for c in opts.cards] == ["get_X", "get_Y"]
+    # Indices are 1-based and contiguous (not skipped along with skipped tools)
+    assert [c.index for c in opts.cards] == [1, 2]
+
+
+def test_build_from_router_candidates_empty_input_returns_no_cards():
+    opts = build_from_router_candidates([], tkb_lookup=lambda tid: "")
+    assert opts.cards == []
+    # render_text on empty options should fall through to the polite-fail message
+    txt = render_text(opts)
+    assert "kontaktiraj managera" in txt.lower() or "drugačije" in txt
+
+
+def test_build_from_router_candidates_missing_tkb_uses_tool_id_as_description():
+    """If TKB lookup returns empty (e.g. new tool not yet in TKB), description
+    falls back to the operation_id — readable, never blank."""
+    opts = build_from_router_candidates(
+        [("get_SomethingNotInTKB", 0.7)],
+        tkb_lookup=lambda tid: "",  # nothing in TKB
+    )
+    assert len(opts.cards) == 1
+    assert opts.cards[0].description == "get_SomethingNotInTKB"

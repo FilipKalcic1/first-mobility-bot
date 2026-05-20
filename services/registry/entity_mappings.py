@@ -8,10 +8,68 @@ These constants are used by EmbeddingEngine to generate Croatian-language
 embeddings from English API definitions.
 """
 
+import logging
+from functools import lru_cache
+from typing import Mapping, Tuple
+
+from services.config_loader import load_json as _load_json
+
+logger = logging.getLogger(__name__)
+
+
 # Comprehensive entity mappings for path/operationId extraction.
 # Data in config/domain/path_entity_map.json.
-from services.config_loader import load_json as _load_json
-PATH_ENTITY_MAP = {k: tuple(v) for k, v in _load_json("domain", "path_entity_map.json")["path_entity_map"].items()}
+#
+# Lazy-loaded — a missing/malformed JSON degrades to empty dict instead of
+# crashing the worker at import time. embedding_engine code path is only
+# exercised at build time (sync_tools.py), so degraded mode is acceptable
+# for the runtime; sync_tools will fail loudly with the same logged error.
+
+@lru_cache(maxsize=1)
+def _get_path_entity_map() -> dict[str, tuple[str, str]]:
+    try:
+        data = _load_json("domain", "path_entity_map.json")
+        m = data.get("path_entity_map") if isinstance(data, dict) else None
+        if not isinstance(m, dict):
+            logger.error(
+                "path_entity_map.json: expected {'path_entity_map': {...}}, got %r",
+                type(m),
+            )
+            return {}
+        return {k: tuple(v) for k, v in m.items()}
+    except (FileNotFoundError, ValueError, KeyError) as e:
+        logger.error(
+            "path_entity_map.json unloadable, embedding-text generation will be degraded: %s",
+            e,
+        )
+        return {}
+
+
+class _PathEntityMapProxy(dict):
+    """Module-level constant proxy — resolves on access, never raises at import.
+
+    Inherits from dict so isinstance(PATH_ENTITY_MAP, dict) passes for tests
+    and code that type-checks. All read operations route to the cached getter.
+    """
+    def __getitem__(self, key):  # type: ignore[override]
+        return _get_path_entity_map()[key]
+    def __contains__(self, key) -> bool:  # type: ignore[override]
+        return key in _get_path_entity_map()
+    def get(self, key, default=None):  # type: ignore[override]
+        return _get_path_entity_map().get(key, default)
+    def __iter__(self):  # type: ignore[override]
+        return iter(_get_path_entity_map())
+    def __len__(self) -> int:  # type: ignore[override]
+        return len(_get_path_entity_map())
+    def items(self):  # type: ignore[override]
+        return _get_path_entity_map().items()
+    def keys(self):  # type: ignore[override]
+        return _get_path_entity_map().keys()
+    def values(self):  # type: ignore[override]
+        return _get_path_entity_map().values()
+
+
+PATH_ENTITY_MAP: Mapping[str, Tuple[str, str]] = _PathEntityMapProxy()  # type: ignore[assignment]
 
 # Output key mappings for result description (v3.2 expanded - 200+ entries)
 # Maps API output field names to Croatian descriptions

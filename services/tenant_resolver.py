@@ -80,7 +80,11 @@ def _normalize_phone(raw: str, default_cc: str = "385") -> str:
 # ---------------------------------------------------------------------------
 
 CACHE_KEY_PREFIX = "tenant_phone:"
-DEFAULT_CACHE_TTL_SECONDS = 3600  # 1 hour
+# 5 minutes — multi-tenant isolation rule must self-heal even if an admin
+# forgets to call invalidate() after re-mapping a phone to a tenant. The
+# extra DB hits at low QPS are negligible vs. the security risk of stale
+# tenant routing.
+DEFAULT_CACHE_TTL_SECONDS = 300
 
 
 SessionFactory = Callable[[], Any]               # returns async context manager
@@ -200,6 +204,100 @@ class TenantResolver:
         except Exception as e:
             logger.warning("Tenant cache invalidate failed for ***%s: %s", normalized[-4:], e)
 
+    async def upsert_user_mapping(
+        self,
+        phone: str,
+        *,
+        tenant_id: str,
+        person_id: Optional[str] = None,
+        display_name: Optional[str] = None,
+    ) -> bool:
+        """Lazy-onboard: insert (or refresh) user_mappings row after a
+        successful MobilityOne /Persons lookup. Idempotent via phone unique
+        index. Future messages from same phone skip the API roundtrip.
+
+        Best-effort: returns False (no raise) on DB failure so the caller
+        can still reply to the user — onboarding is a cache optimization,
+        not a hard dependency. Cache is invalidated so the next
+        resolve_tenant_for_phone() reads the fresh tenant_id.
+        """
+        normalized = _normalize_phone(phone)
+        if not normalized or not tenant_id:
+            return False
+        factory = self._get_session_factory()
+        try:
+            async with factory() as session:
+                # Postgres ON CONFLICT — keeps existing row's id/created_at,
+                # refreshes tenant binding (in case user moved tenants).
+                await session.execute(
+                    text(
+                        "INSERT INTO user_mappings "
+                        "(phone_number, api_identity, display_name, tenant_id, is_active, created_at, updated_at) "
+                        "VALUES (:phone, :pid, :name, :tid, TRUE, NOW(), NOW()) "
+                        "ON CONFLICT (phone_number) DO UPDATE SET "
+                        "  api_identity = EXCLUDED.api_identity, "
+                        "  display_name = EXCLUDED.display_name, "
+                        "  tenant_id    = EXCLUDED.tenant_id, "
+                        "  is_active    = TRUE, "
+                        "  updated_at   = NOW()"
+                    ),
+                    {
+                        "phone": normalized,
+                        "pid": person_id,
+                        "name": display_name,
+                        "tid": tenant_id,
+                    },
+                )
+                await session.commit()
+        except Exception as e:
+            logger.warning(
+                "user_mappings upsert failed for ***%s: %s — onboarding skipped",
+                normalized[-4:], e,
+            )
+            return False
+        # Invalidate cache so next resolve_tenant_for_phone reads the fresh row.
+        await self.invalidate(normalized)
+        return True
+
+    async def purge_user_mapping(self, phone: str) -> int:
+        """
+        GDPR right-to-erasure: hard-DELETE the user_mappings row for `phone`
+        and drop the tenant cache entry. Returns the number of rows deleted
+        (0 if the phone was never registered, 1 on success).
+
+        This is irreversible — the legal record of the deletion lives in
+        ``gdpr:requests:{tenant_id}`` (see services/v2/gdpr_audit.py).
+        """
+        normalized = _normalize_phone(phone)
+        if not normalized:
+            return 0
+        factory = self._get_session_factory()
+        deleted = 0
+        try:
+            async with factory() as session:
+                result = await session.execute(
+                    text(
+                        "DELETE FROM user_mappings WHERE phone_number = :phone"
+                    ),
+                    {"phone": normalized},
+                )
+                await session.commit()
+                deleted = int(result.rowcount or 0)
+        except Exception as e:
+            logger.error(
+                "user_mappings purge failed for ***%s: %s",
+                normalized[-4:], e,
+            )
+            raise
+        # Best-effort cache drop — even if it fails, the next resolve()
+        # will hit DB (now empty) and return None.
+        await self.invalidate(normalized)
+        logger.warning(
+            "GDPR purge: deleted %d row(s) from user_mappings for ***%s",
+            deleted, normalized[-4:],
+        )
+        return deleted
+
     # ── internal ─────────────────────────────────────────────────────────
 
     async def _lookup_in_db(self, normalized_phone: str) -> Optional[str]:
@@ -251,12 +349,6 @@ async def get_tenant_resolver() -> TenantResolver:
         if _singleton is None:
             _singleton = TenantResolver()
     return _singleton
-
-
-def set_tenant_resolver_for_tests(resolver: Optional[TenantResolver]) -> None:
-    """Replace (or clear with None) the module singleton. Tests only."""
-    global _singleton
-    _singleton = resolver
 
 
 async def resolve_tenant_for_phone(phone: str) -> Optional[str]:

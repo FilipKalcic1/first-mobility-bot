@@ -1,3 +1,67 @@
+"""Regenerate config/processed_tool_registry.json from live Swagger sources.
+
+============================================================================
+ REGEN RUNBOOK — Phase 2 consolidation (2026-05-15)
+============================================================================
+
+The bot now routes via TWO configs:
+
+  config/processed_tool_registry.json    ← THIS script writes it (from Swagger)
+  config/tool_data.json                  ← single source of truth for routing
+                                           (intent_summary, use_when,
+                                           do_not_use_when, anchors)
+
+History (kept for archaeology, NO LONGER READ AT RUNTIME):
+  config/tool_knowledge_base.archive.json
+  config/tool_anchor_enrichments.archive.json
+
+CORRECT ORDER when MobilityOne backend changes (e.g. new tools added):
+
+    1.  python scripts/sync_tools.py
+            cost: ~2-5 min, $0 (only Swagger HTTP fetches)
+            writes: config/processed_tool_registry.json
+            requires: .env populated (swagger_sources URLs reachable)
+
+    2.  pytest tests/test_config_parity.py
+            cost: free, ~0.1s
+            verifies: tool_data.json operation_ids match registry; every
+                      tool has all 4 content fields, ≥5 anchors, etc.
+            If new tools appeared in step 1, this FAILS LOUDLY — they are
+            in the registry but missing from tool_data.json.
+
+    3.  If step 2 failed: HAND-EDIT config/tool_data.json to add the new
+        tools' content fields (intent_summary, use_when, do_not_use_when,
+        anchors). For each new tool add an entry under "tools":
+            "<operation_id>": {
+              "operation_id": "...",  "method": "...",  "service": "...",
+              "path": "...",          "parameters": {...},
+              "intent_summary": "Croatian — what this tool does, entity-specific",
+              "use_when": ["...", "..."],
+              "do_not_use_when": [{"alt_tool": "...", "razlog": "..."}],
+              "anchors": ["12 diverse Croatian phrases users might say", ...]
+            }
+        Then re-run step 2. Repeat until green.
+
+    4.  scripts/build_tool_data.py — EMERGENCY REBUILD ONLY (from archives).
+        Don't use in normal flow.
+
+WHY HAND-EDIT (not LLM regen): A Phase 3 LLM-regen attempt was verified
+broken by a 5-tool smoke test on 2026-05-15. Feeding gpt-4o-mini just
+(op_id, path, params, sibling list) produces literal-name slop — e.g.
+anchors mentioning "MasterData" or "AddCase" that no real user would
+type. The hand-curated content is BETTER than what context-blind regen
+produces. See scripts/regenerate_tool_data.py for the broken skeleton.
+
+SAFETY NETS:
+- tests/test_config_parity.py blocks CI if registry and tool_data drift.
+- services/v2/engine.py::_log_config_freshness emits a `config_freshness`
+  log line at every engine boot. Grep production logs for
+  `tool_data_stale=True` to spot stale data.
+
+DELETING this runbook = losing the only doc of how to keep accuracy
+from silently dropping. Don't.
+============================================================================
+"""
 import asyncio
 import json
 import logging

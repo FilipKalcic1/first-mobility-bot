@@ -1,26 +1,26 @@
-"""L6 — Mutation Safeguard. Absolute confirmation gate per CLAUDE.md §1.3.
+"""L6 — Mutation Safeguard. Single-confirm policy (Filip 2026-05-16).
 
-CLAUDE.md doctrine (overrides earlier "Council Pass 4" design):
-    "Ne postoji POST/PUT/PATCH/DELETE bez explicit user 'Da' potvrde
-    s konkretnim podacima u confirm message-u (entity name + context,
-    ne ID)."
+Doctrine update: dropped DOUBLE-confirm for DELETE / critical fields /
+out-of-range. Three-turn flow (delete request + Da + POTVRDA + Da) is
+infeasible UX — user closes WhatsApp mid-flow → bot stuck in pending
+state. **Always exactly ONE Da/Ne confirm for any mutation.**
 
-Decision matrix:
+Decision matrix (current):
   AUTO         GET only (read-only path)
-  CONFIRM      POST/PUT/PATCH (any) — single Da/Ne confirm with full context
-  DOUBLE       DELETE (any) OR critical-field PUT/PATCH
-                 — first Da/Ne, then second confirmation
+  CONFIRM      POST/PUT/PATCH/DELETE (any) — single Da/Ne with full
+               context. Confirm message strength scales with risk:
+                 - normal write: "Potvrđuješ akciju?"
+                 - DELETE: "⚠️ TRAJNO BRISANJE — siguran?"
+                 - critical fields: "Mijenjaš kritične podatke — siguran?"
+                 - out-of-range: "Vrijednost je neuobičajena — siguran?"
 
-This is non-negotiable for 0-error tolerance domain. The earlier
-"in-range auto-execute" path was a UX optimization that violates
-the safety pillar. Range checking is preserved — it just becomes
-DOUBLE confirm instead of CONFIRM when triggered, since out-of-range
-is itself a red flag.
+Previously DECISION_DOUBLE existed for the 2-step flow; removed entirely
+along with downstream STAGE_DOUBLE_FIRST/SECOND in pending_mutation.py
+and engine.py branches that handled them.
 
 Outcome:
   AUTO         caller executes immediately (GET only)
   CONFIRM      caller renders single confirm dialog, waits for "Da/Ne"
-  DOUBLE       caller renders FIRST confirm, then SECOND on "Da"
 """
 from __future__ import annotations
 
@@ -30,7 +30,6 @@ from typing import Optional
 
 DECISION_AUTO = "auto"
 DECISION_CONFIRM = "confirm"
-DECISION_DOUBLE = "double_confirm"
 
 
 # Default "expected range" rules. Per-tool, per-param.
@@ -60,8 +59,6 @@ _CRITICAL_FIELDS = {
 class MutationDecision:
     decision: str               # DECISION_*
     confirm_message: str = ""   # rendered Croatian, ready to send
-    double_first_message: str = ""
-    double_second_message: str = ""
     log_reason: str = ""
 
 
@@ -83,50 +80,42 @@ def decide_mutation(
             decision=DECISION_AUTO, log_reason="read_only"
         )
 
-    # DELETE → always double confirm (highest risk: irreversible)
+    # DELETE → single confirm with strong wording (irreversible action)
     if method_upper == "DELETE":
         return MutationDecision(
-            decision=DECISION_DOUBLE,
-            double_first_message=(
-                f"Sigurno želiš obrisati {entity_label or 'ovaj zapis'}? "
-                "Ova akcija je nepovratna. Da/Ne"
+            decision=DECISION_CONFIRM,
+            confirm_message=(
+                f"⚠️ TRAJNO BRISANJE: sigurno želiš obrisati "
+                f"{entity_label or 'ovaj zapis'}? Ova akcija je nepovratna. "
+                "Odgovori DA za potvrdu, NE za otkazivanje."
             ),
-            double_second_message=(
-                "Posljednja potvrda — brisanje će biti TRAJNO. Da/Ne"
-            ),
-            log_reason="delete_double_confirm",
+            log_reason="delete_single_confirm",
         )
 
-    # Critical-field changes → double confirm
+    # Critical-field changes → single confirm with strong wording
     critical = _CRITICAL_FIELDS.get(tool_id, set())
     if critical and any(k in critical for k in (params or {}).keys()):
         return MutationDecision(
-            decision=DECISION_DOUBLE,
-            double_first_message=(
-                f"Mijenjaš kritične podatke o {entity_label or 'zapisu'}. "
-                "Da/Ne"
+            decision=DECISION_CONFIRM,
+            confirm_message=(
+                f"⚠️ Mijenjaš kritične podatke o {entity_label or 'zapisu'}. "
+                "Promjena se odmah primjenjuje. "
+                "Odgovori DA za potvrdu, NE za otkazivanje."
             ),
-            double_second_message=(
-                "Sigurno potvrđuješ izmjenu? Promjena se odmah primjenjuje. Da/Ne"
-            ),
-            log_reason="critical_field_double_confirm",
+            log_reason="critical_field_single_confirm",
         )
 
-    # Out-of-range → escalate to DOUBLE confirm (red flag on top of mutation)
+    # Out-of-range → single confirm with red-flag wording
     ranges = _DEFAULT_RANGES.get(tool_id) or {}
     out_of_range = _check_range(tool_id, params, ranges, last_known_values)
     if out_of_range:
         return MutationDecision(
-            decision=DECISION_DOUBLE,
-            double_first_message=(
-                f"Vrijednost je izvan očekivanih granica ({out_of_range}). "
-                f"Potvrđuješ {entity_label or 'akciju'}? Da/Ne"
+            decision=DECISION_CONFIRM,
+            confirm_message=(
+                f"⚠️ Vrijednost je izvan očekivanih granica ({out_of_range}). "
+                f"Sigurno potvrđuješ {entity_label or 'akciju'}? Da/Ne"
             ),
-            double_second_message=(
-                "Posljednja potvrda — vrijednost je neuobičajena. Stvarno "
-                "potvrđuješ? Da/Ne"
-            ),
-            log_reason=f"out_of_range_double_confirm:{out_of_range}",
+            log_reason=f"out_of_range_single_confirm:{out_of_range}",
         )
 
     # All other POST/PUT/PATCH → single confirm.

@@ -557,14 +557,20 @@ class TestClassifyContextParameter:
         assert is_ctx is False
         assert context_key is None
 
-    def test_score_threshold_not_met(self, parser_with_defaults):
-        """Format uuid (score 2) + type string (score 1) = 3, which meets threshold."""
+    def test_format_plus_type_alone_does_not_classify(self, parser_with_defaults):
+        """Format uuid (2) + type string (1) WITHOUT description-keyword or
+        name-pattern is rejected. Old behavior was a false-positive engine —
+        every uuid-string param landed in person_id (the first dict key)."""
         context_key, is_ctx = parser_with_defaults._classify_context_parameter(
             "RandomId", "string", "uuid", "some random identifier"
         )
-        # uuid format = 2 points, string type = 1 point = 3 >= 3 threshold
-        # This matches person_id first because it checks in dict order
-        assert is_ctx is True
+        # No keyword in description ("random" is not a person/vehicle/tenant
+        # keyword), no name pattern matches "RandomId" → classifier rejects
+        # despite format+type score totalling 3.
+        assert is_ctx is False, (
+            "Generic uuid-string params must NOT auto-classify — they were "
+            "the source of 130+ mistagged tools."
+        )
 
     def test_no_score_below_threshold(self, parser_with_defaults):
         """Only type match (1 point) should not classify."""

@@ -7,7 +7,11 @@ from services.v2.pending_clarify import (
     PendingClarify,
     PendingClarifyStore,
     REDIS_KEY_PREFIX,
+    STAGE_ACTION,
+    STAGE_ACTION_GLOBAL,
+    STAGE_TOOL,
 )
+from services.v2 import clarify_ui
 
 
 class _FakeRedis:
@@ -110,6 +114,131 @@ async def test_works_with_none_redis_client():
     await store.save("p", [{"tool_id": "x"}])
     assert await store.load("p") is None
     await store.clear("p")  # must not raise
+
+
+# --------------------------------------------------------------------------
+# 2-step clarify (Filip direktiva 2026-05-17): stage field + action picker
+# --------------------------------------------------------------------------
+
+def test_default_stage_is_tool_for_backward_compat():
+    pc = PendingClarify(phone="p", candidates=[])
+    assert pc.stage == STAGE_TOOL
+
+
+def test_legacy_json_without_stage_field_loads_as_tool():
+    """Pre-2026-05-17 entries lack `stage` — must default to STAGE_TOOL."""
+    import json
+    legacy = json.dumps({
+        "phone": "p",
+        "candidates": [{"tool_id": "get_X"}],
+        "original_query": "x",
+    })
+    pc = PendingClarify.from_json(legacy)
+    assert pc.stage == STAGE_TOOL
+
+
+@pytest.mark.asyncio
+async def test_save_with_stage_action_persists_stage():
+    redis = _FakeRedis()
+    store = PendingClarifyStore(redis)
+    await store.save(
+        "p",
+        candidates=[
+            {"tool_id": "get_X", "method": "GET"},
+            {"tool_id": "post_Y", "method": "POST"},
+        ],
+        stage=STAGE_ACTION,
+    )
+    loaded = await store.load("p")
+    assert loaded is not None
+    assert loaded.stage == STAGE_ACTION
+    assert len(loaded.candidates) == 2
+
+
+def test_action_picker_groups_by_http_method():
+    """Step 1: mixed-method candidates produce one card per action label.
+    PUT+PATCH merge into single IZMIJENITI card."""
+    candidates = [
+        {"tool_id": "get_X",        "method": "GET"},
+        {"tool_id": "get_Y",        "method": "GET"},      # dup label, dedupe
+        {"tool_id": "post_Z",       "method": "POST"},
+        {"tool_id": "put_A",        "method": "PUT"},
+        {"tool_id": "patch_B",      "method": "PATCH"},    # shares IZMIJENITI
+        {"tool_id": "delete_C",     "method": "DELETE"},
+    ]
+    options = clarify_ui.build_action_picker(candidates)
+    labels = [c.short_label for c in options.cards]
+    # Canonical order: POGLEDATI, UNIJETI, IZMIJENITI, IZBRISATI
+    assert labels == ["POGLEDATI", "UNIJETI / KREIRATI", "IZMIJENITI", "IZBRISATI"]
+
+
+def test_action_picker_single_method_yields_single_card():
+    """All candidates GET → only 1 action card (POGLEDATI). Engine should
+    detect this and skip Step 1 entirely, going straight to Step 2."""
+    candidates = [
+        {"tool_id": "get_A", "method": "GET"},
+        {"tool_id": "get_B", "method": "GET"},
+        {"tool_id": "get_C", "method": "GET"},
+    ]
+    options = clarify_ui.build_action_picker(candidates)
+    assert len(options.cards) == 1
+    assert options.cards[0].short_label == "POGLEDATI"
+
+
+def test_action_picker_handles_empty_or_unknown_method():
+    """Defensive: candidates with empty/unrecognized method are skipped."""
+    candidates = [
+        {"tool_id": "get_OK", "method": "GET"},
+        {"tool_id": "weird",  "method": ""},
+        {"tool_id": "alien",  "method": "OPTIONS"},
+    ]
+    options = clarify_ui.build_action_picker(candidates)
+    assert len(options.cards) == 1
+    assert options.cards[0].short_label == "POGLEDATI"
+
+
+def test_methods_for_action_label_reverse_lookup():
+    """Step 2 filter: given a Step 1 selection label, return the methods to
+    filter candidates by. IZMIJENITI must yield both PUT and PATCH."""
+    assert clarify_ui.methods_for_action_label("POGLEDATI") == {"GET"}
+    assert clarify_ui.methods_for_action_label("UNIJETI / KREIRATI") == {"POST"}
+    assert clarify_ui.methods_for_action_label("IZMIJENITI") == {"PUT", "PATCH"}
+    assert clarify_ui.methods_for_action_label("IZBRISATI") == {"DELETE"}
+    assert clarify_ui.methods_for_action_label("nepostojeci") == set()
+
+
+# --------------------------------------------------------------------------
+# Model A (Filip 2026-05-17): STAGE_ACTION_GLOBAL = universal action picker
+# saved on every Turn-1 query. Candidates list is EMPTY at save time —
+# Turn 2 fills it after the user picks an action and the scoped router runs.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_save_with_stage_action_global_persists_empty_candidates_and_query():
+    redis = _FakeRedis()
+    store = PendingClarifyStore(redis)
+    await store.save(
+        "p",
+        candidates=[],  # Model A: filled on Turn 2
+        original_query="nešto s kalendarom",
+        stage=STAGE_ACTION_GLOBAL,
+    )
+    loaded = await store.load("p")
+    assert loaded is not None
+    assert loaded.stage == STAGE_ACTION_GLOBAL
+    assert loaded.candidates == []
+    assert loaded.original_query == "nešto s kalendarom"
+
+
+def test_action_picker_global_returns_four_canonical_actions():
+    """Model A universal picker — always 4 options regardless of router
+    state. Order matters: POGLEDATI / UNIJETI / IZMIJENITI / IZBRISATI."""
+    options = clarify_ui.build_action_picker_global()
+    labels = [c.short_label for c in options.cards]
+    assert labels == [
+        "POGLEDATI", "UNIJETI / KREIRATI", "IZMIJENITI", "IZBRISATI",
+    ]
 
 
 @pytest.mark.asyncio

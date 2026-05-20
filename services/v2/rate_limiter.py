@@ -32,6 +32,21 @@ COOLDOWN_PER_MIN = 100
 SUSPICION_PER_HOUR = 500
 
 
+# Atomic INCR + EXPIRE: a Redis crash between two separate await calls
+# would leave the counter without a TTL (permanent ghost). The Lua block
+# runs server-side so the two ops are atomic from the client's view.
+# EXPIRE is set only on key creation (v == 1) so subsequent INCRs do not
+# refresh the TTL — keeps the original "fixed window from first hit"
+# rate-limit semantics.
+_INCR_WITH_TTL_LUA = """
+local v = redis.call('INCR', KEYS[1])
+if v == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return v
+"""
+
+
 @dataclass(frozen=True)
 class RateLimitDecision:
     allowed: bool
@@ -90,10 +105,13 @@ class RateLimiter:
         )
 
     async def _incr_with_ttl(self, key: str, ttl_seconds: int) -> int:
-        """INCR + EXPIRE atomic-ish via two ops. Acceptable race window
-        (~ms) for a rate-limit primitive."""
-        # Some Redis clients support pipeline; use plain ops for portability.
-        new_value = await self._redis.incr(key)
-        if new_value == 1:
-            await self._redis.expire(key, ttl_seconds)
-        return int(new_value)
+        """Atomic INCR + (conditional) EXPIRE via server-side Lua.
+
+        Eliminates the race window between two awaited calls — if Redis
+        had crashed between INCR and EXPIRE, the counter would persist
+        without a TTL and the user's rate limit would be permanent.
+        """
+        result = await self._redis.eval(
+            _INCR_WITH_TTL_LUA, 1, key, ttl_seconds,
+        )
+        return int(result)

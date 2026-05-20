@@ -1,95 +1,136 @@
 # Architecture
 
-Two-process pod: a FastAPI **api** that receives Infobip webhooks and an asyncio **worker** that drains a Redis queue and runs the routing pipeline. They share Postgres and Redis; no direct RPC between them.
+Single Docker container running FastAPI **api** for Infobip webhooks + asyncio **worker** that drains the Redis queue and runs the routing pipeline. Postgres + Redis are shared dependencies. No direct RPC between api and worker.
 
 ## Request lifecycle
 
 ```
-WhatsApp → Infobip → POST /webhook (api)
+WhatsApp → Infobip → POST /webhook (FastAPI api)
     → HMAC verify (webhook_simple.py)
-    → enqueue job on Redis list (queue_service.py)
+    → enqueue job on Redis stream
 api returns 200 immediately.
 
 worker.py (consumer loop)
-    → tool_routing.py → services/unified_router.py
-        → text_normalizer + concept_mapper (query prep)
-        → unified_search.py   (FAISS + BM25 merge)
-        → llm_reranker.py     (ambiguous band: 0.50 < score < 0.88)
-        → entity_detector     (regex — only TFI veto trigger)
-    → services/engine/* (one handler per intent family)
-        → dependency_resolver (Graph Discovery: fill context params)
-        → parameter_manager   (extract user-input params via LLM)
-        → api_gateway.py      (HTTP call to MobilityOne API)
-    → response_formatter + message_engine → whatsapp_service → Infobip
-    → hallucination_repository (if the model returned an unverifiable claim)
+    → V2Engine.process_message
+    → response → Infobip outbound → WhatsApp
 ```
 
-## Retrieval pipeline
+## Routing pipeline
 
-Hybrid search — thresholds live in [services/unified_search.py](services/unified_search.py):
+`services/v2/engine.py` orchestrates 27 ordered layers. Only L2a + L3 + L8 use LLM; everything else is deterministic Python + Redis.
 
-| Score band | Action |
-| --- | --- |
-| ≥ 0.88 | Direct trust, execute |
-| 0.50 – 0.88 | LLM reranker over top-3 candidates |
-| < 0.50 | Ask user to clarify |
+| Layer | File | Purpose |
+|---|---|---|
+| L-1 Rate limiter | `services/v2/rate_limiter.py` | Per-phone Redis token bucket (atomic Lua) |
+| L0.5 PII Scrubber | `services/v2/pii_scrubber.py` | OIB/IBAN/email/phone redaction before LLM |
+| L0.6 Input sanitizer | `services/v2/input_sanitizer.py` | Prompt-injection guard |
+| L0 Identity | `services/v2/identity.py` | Phone → personId via MobilityOne API, cached 30s |
+| L1 State continuations | `pending_mutation.py`, `pending_clarify.py`, `flow_engine.py` | Resume mid-conversation flows |
+| L0.7 Crisis detector | `services/v2/crisis_detector.py` | Ethical hotline redirect (runs FIRST among inline detectors) |
+| L0.75 Negation | `services/v2/negation_handler.py` | Standalone "ne / nemoj / odustani" |
+| L0.8 Multi-intent | `services/v2/multi_intent_detector.py` | Split detection (2+ intents in one msg) |
+| L0.85 Meta-intents | `services/v2/meta_intents.py` | Self-reference, bug report, undo |
+| L1 Special intents | `services/v2/special_intents.py` | GDPR / welcome / handover (with side-effect queue) |
+| L1.5 Unknown-phone gate | `services/v2/engine.py` inline | Reject unregistered phones |
+| L2 Driver quick-path | `services/v2/driver_quick_path.py` | 21 deterministic regex patterns, 0 LLM |
+| L2a Intent type | `services/v2/intent_type.py` | 4-way classifier (1 LLM call) |
+| L2b Driver basics | `services/v2/driver_basics.py` | Embedding anchor match → serve from cached MasterData |
+| L3 LLM Router | `services/router/llm_router.py` | anchor top-50 → gpt-4o-mini tool-call |
+| L5 Confidence gate | `services/v2/confidence_gate.py` | execute / clarify / fallback decision |
+| L6 Mutation gate | `services/v2/mutation_gate.py` | Confirm dialog for POST/PUT/PATCH/DELETE |
+| L7 Executor | `services/v2/executor.py` + `services/api_gateway.py` | HTTP call to MobilityOne with circuit breaker, OAuth, tenant header |
+| L8 LLM Formatter | `services/formatter/llm_formatter.py` | Backend JSON → Croatian reply |
 
-Benchmark target (ada-002 HR plateau): Recalibrated Top-5 ≥ 78% on both seeds — see [tests/benchmarks/](tests/benchmarks/).
+## L3 router internals (services/router/)
 
-## Graph Discovery (dependency_resolver)
+```
+LLMRouter.route(query, identity_summary, conversation_history)
+  Stage A — AnchorIndex.top_k(query, k=50)
+            → cosine over 950 tools × ~12 anchor phrases each
+            → returns [(tool_id, score), ...] sorted desc
+  Stage B — ToolSchemaBuilder.build_for_tools(top50, tkb)
+            → OpenAI tools=[] schema with parameter descriptions
+            → 3 oversized tool names aliased via SHA1
+  Stage C — LLM tool-call
+            → gpt-4o-mini, tool_choice="auto", temp 0
+            → retries with backoff on 429/5xx (5s/15s/25s + jitter)
+  Stage D — Validate
+            → operation_id ∈ top-50 (hallucination guard)
+            → required user_input params → missing list
+            → heuristic confidence from anchor_score + missing
+  → RouterResult{tool_id, params, confidence, anchor_score, alternatives, missing_required}
+```
 
-The registry marks parameters with `dependency_source: "context" | "user_input"` and declares `output_key_aliases`. The resolver:
+## L8 formatter internals (services/formatter/)
 
-1. Walks required `context` params of the target tool.
-2. For each missing key, finds a "Master Tool" whose `output_keys` (after alias) provides it.
-3. Executes Master Tools JIT, populates the session context, then builds the final payload.
-
-End-to-end proof: [tests/test_masterdata_alias.py](tests/test_masterdata_alias.py) and [tests/test_full_bootstrap_e2e.py](tests/test_full_bootstrap_e2e.py).
+```
+LLMFormatter.format(query, tool_id, api_data, identity_summary)
+  1. output_sanitizer.sanitize(api_data)
+     → defang [SYSTEM:...] / "ignore previous" in attacker-controlled fields
+     → truncate strings > 1000 chars, max recursion 6 levels
+  2. Prune for token budget (≤6000 chars)
+     → list → keep first 15
+     → dict + registry.output_keys → project to subset
+  3. gpt-4o-mini call (temp 0, max 500 tokens, strict grounding prompt)
+  4. PIIScrubber on output (defense in depth — catches LLM-echoed OIBs)
+  → FormatResult{text, error, truncated}
+```
 
 ## Data stores
 
-- **Postgres** — conversations, user profiles, GDPR consent, hallucination reports, cost ledger, error-learning records. Two DB roles: `bot_user` (INSERT/SELECT on a strict allowlist), `admin_user` (full). See [SECURITY.md](SECURITY.md).
-- **Redis** — Infobip job queue, session context, FAISS warmup locks, rate limiting, circuit-breaker state. Atomic lock release via cached Lua script (verified by [scripts/verify_production_readiness.py](scripts/verify_production_readiness.py)).
-- **Disk cache** — `.cache/tool_embeddings.json`, mounted from a 200 MiB PVC so startup skips the ~120 s embedding regenerate.
+- **Postgres** — conversations, user profiles, GDPR consent, hallucination reports, cost ledger.
+- **Redis** — Infobip job queue (stream `whatsapp_stream_inbound`), outbound queue (`whatsapp_outbound`), session context, identity cache, pending mutation/clarify state, flow state, rate-limit counters, telemetry tap (`routing:accuracy_log`).
+- **Anchor cache** — `tests/benchmarks/router_anchor_cache.json` — content-fingerprinted vector cache, rebuilt on anchor data change.
 
-## Key service modules
+## Config files (production-active)
 
-| Module | Responsibility |
-| --- | --- |
-| [services/unified_router.py](services/unified_router.py) | Top-level intent decision, produces `RouterDecision` |
-| [services/unified_search.py](services/unified_search.py) | FAISS + BM25 merge, reranker gate |
-| [services/faiss_vector_store.py](services/faiss_vector_store.py) | Index loader, search, drift checks |
-| [services/bm25_index.py](services/bm25_index.py) | Lexical recall for technical op_ids |
-| [services/llm_reranker.py](services/llm_reranker.py) | 3-candidate LLM picker |
-| [services/dependency_resolver/resolver.py](services/dependency_resolver/resolver.py) | Graph Discovery engine |
-| [services/parameter_manager.py](services/parameter_manager.py) | User-input parameter extraction |
-| [services/api_gateway.py](services/api_gateway.py) | Outbound calls to MobilityOne API with retry + SSRF guard |
-| [services/circuit_breaker.py](services/circuit_breaker.py) | Per-dependency breaker (closed / open / half-open probing) |
-| [services/gdpr_masking.py](services/gdpr_masking.py), [services/pii_filter.py](services/pii_filter.py) | Phone/email masking before logs and DB writes |
-| [services/hallucination_repository.py](services/hallucination_repository.py) | Captures unverifiable LLM output for later admin review |
-| [services/cost_tracker.py](services/cost_tracker.py) | Per-tenant token/cost ledger |
-| [services/engine/*](services/engine/) | Intent handlers: tool, confirmation, hallucination, user, flow |
-
-## Tool registry
-
-`config/processed_tool_registry.json` is the runtime source of truth. It is generated by [scripts/sync_tools.py](scripts/sync_tools.py) from the upstream Swagger. Every tool entry carries:
-
-- `operation_id`, HTTP method, path template
-- `parameters[]` with `param_type`, `format`, `dependency_source`, `required`, `filter_template`
-- `output_keys`, `output_key_aliases`
-- `is_retrieval`, `is_mutation`, `synonyms_hr`, `entity_prefix`
-
-Companion files:
-- `config/tool_documentation.json` — HR synonyms + purpose strings (feeds embeddings)
-- `config/tool_categories.json` — groupings for routing hints
-- `config/context_param_schemas.json` — context param validation
+| File | Purpose |
+|---|---|
+| `config/processed_tool_registry.json` | 950 tools — operation_id, method, path, parameters, output_keys |
+| `config/tool_knowledge_base.json` | TKB per tool — intent_summary, use_when, do_not_use_when, examples |
+| `config/tool_anchor_enrichments.json` | 950 × 12 Croatian anchor phrases (regenerated 2026-05-12) |
+| `config/driver_quick_path.json` | 21 regex patterns for driver fast-path |
+| `config/context_param_schemas.json` | Param classification rules (person_id / tenant_id auto-injected) |
+| `config/.cache/param_descriptions.json` | LLM-enriched empty parameter descriptions (overlay) |
+| `config/linguistic/typo_synonyms.json` | Croatian typo / slang mapping for text_normalizer |
+| `config/domain/path_entity_map.json` | English path → Croatian entity name (used by sync_tools script) |
 
 ## Observability
 
-`/metrics` on `:8000` exposes Prometheus metrics (`prometheus_client.generate_latest()` in [main.py](main.py)). Scraped by **kube-prometheus-stack** via the ServiceMonitor in [k8s/monitoring.yaml](k8s/monitoring.yaml) — same file carries the PrometheusRule (alerts on latency, LLM error rate, circuit breaker, cost, clarify rate) and a Grafana dashboard ConfigMap that auto-imports into the stack's Grafana. In production the endpoint is Bearer-token protected; the monitoring namespace carries a `prometheus-metrics-token` Secret with the same value as `ADMIN_TOKEN_1`. Setup in [DEPLOYMENT.md](DEPLOYMENT.md).
+Each routing decision emits one `TelemetryEvent` (`services/v2/telemetry.py`) with 12 fields:
+`tenant_id`, `correlation_id`, `turn_number`, `query_scrubbed`, `is_negation`, `tool_picked`, `confidence`, `competitors`, `clarify`, `error`, `latency_ms`, `redactions`.
 
-Exported metric families: `http_request_*`, `llm_request_*`, `llm_tokens_used`, `llm_cost_usd_total`, `llm_rate_limit_hits_total`, `llm_circuit_breaker_open`, `routing_decisions_total`, `routing_clarify_total`, `faiss_search_duration`, `embedding_api_duration`, `tools_loaded_total`.
+`correlation_id` + `turn_number` + `is_negation` auto-injected via ContextVar (`set_request_context()` at engine entry). Sinks (`V2_TELEMETRY_BACKEND`):
 
-## Deployment shape
+- **`StdoutJsonSink`** — primary. Docker captures stdout → Azure Container Apps / Log Analytics.
+- **`RedisSink`** — live tap. `LPUSH routing:accuracy_log` (LTRIM 0..999, 30d TTL). Admin endpoint `/webhook/whatsapp/routing-log?token=…` reads this for live debugging.
+- **`BufferedAsyncFileSink`** — dev only.
 
-Single Pod, 1 replica, `Recreate` strategy (PVC is ReadWriteOnce). API + worker run as sidecar containers in the same Pod so they share the embeddings cache. Full manifest set in [k8s/](k8s/), overview in [DEPLOYMENT.md](DEPLOYMENT.md).
+User feedback signal: bot appends `"Ako nije točno, napiši 'nije točno'."` to read/mutate execute responses. Exact-match `"nije točno"` next turn flips `is_negation=True` — explicit ground-truth signal.
+
+## Admin endpoints
+
+Two token-protected diagnostic endpoints (`webhook_simple.py`):
+
+| Path | Purpose |
+|---|---|
+| `GET /webhook/whatsapp/debug?token=...` | Webhook stats, last events ring buffer, Redis health, stream lag |
+| `GET /webhook/whatsapp/routing-log?token=...&limit=N` | Last N (max 500) routing decisions from `routing:accuracy_log` |
+
+Token check via `services/admin_auth.py` (constant-time, returns user label). Up to 4 tokens via `ADMIN_TOKEN_1..4`; `ADMIN_TOKEN_<N>_USER` env var gives the operator label for per-call audit logging.
+
+## Deployment
+
+**Target: Azure VM with Docker.**
+
+| Component | Mechanism |
+|---|---|
+| Docker image | tagged with git short-sha for rollback |
+| Reverse proxy | nginx + LetsEncrypt for `bot.damir.com` |
+| Local Postgres + Redis | Docker Compose services |
+| Deploy iteration | `git push` → `docker build` → SSH `docker pull` + restart |
+| Rollback | `docker pull <dated-tag>` + restart |
+
+Full runbook: [docs/AZURE_VM_DEPLOY_PLAYBOOK.md](docs/AZURE_VM_DEPLOY_PLAYBOOK.md).
+
+`k8s/` manifests archived to `k8s/_archive/` — never production-tested.

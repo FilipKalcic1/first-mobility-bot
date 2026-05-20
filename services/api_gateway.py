@@ -198,10 +198,7 @@ class APIGateway:
                 metadata={"path": path, "method": method.value},
             )
             logger.error(f"{err}")
-            return APIResponse(
-                success=False,
-                status_code=0,
-                data=None,
+            return self._error_response(
                 error_message=(
                     "Missing Tenant Context: session has no TenantId. "
                     "Bootstrap (get_Persons) must populate it before any "
@@ -222,15 +219,27 @@ class APIGateway:
                 metadata={"consecutive_failures": self._consecutive_failures},
             )
             logger.warning(f"{err}")
-            return APIResponse(
-                success=False,
-                status_code=0,
-                data=None,
+            return self._error_response(
                 error_message=f"Circuit breaker open: API unavailable (retry in {remaining}s)",
                 error_code=ErrorCode.CIRCUIT_OPEN.value,
             )
 
         last_error = None
+
+        # FIX: idempotency key for mutating methods, generated ONCE outside
+        # the retry loop. If MobilityOne accepts the first POST but the
+        # response is lost (network glitch on the way back), the retry
+        # carries the same Idempotency-Key — server can detect the
+        # duplicate and skip a second create. Read-only methods (GET) are
+        # naturally idempotent, no key needed.
+        is_mutating = method in (
+            HttpMethod.POST, HttpMethod.PUT,
+            HttpMethod.PATCH, HttpMethod.DELETE,
+        )
+        idempotency_key: Optional[str] = None
+        if is_mutating:
+            import uuid as _uuid
+            idempotency_key = str(_uuid.uuid4())
 
         for attempt in range(retries + 1):
             try:
@@ -243,6 +252,8 @@ class APIGateway:
                     "Content-Type": "application/json",
                     "Accept": "text/plain, application/json",
                 }
+                if idempotency_key:
+                    request_headers["Idempotency-Key"] = idempotency_key
 
                 # CRITICAL: x-tenant header
                 if effective_tenant:
@@ -275,10 +286,20 @@ class APIGateway:
                     await asyncio.sleep(delay)
                     continue
 
-                # Reset circuit breaker on non-server-error responses
-                # 4xx are client errors (not API failures), so don't count them
+                # Circuit breaker accounting:
+                #   2xx/3xx: success — reset counter.
+                #   4xx: client error (user mistake), not API failure — reset.
+                #   5xx: real backend failure — INCREMENT counter so a
+                #        sustained 500-storm opens the circuit. Previously
+                #        only timeouts/network errors incremented; HTTP
+                #        5xx leaked through, leading to wasteful retries
+                #        when MobilityOne was hard-down.
                 if response.status_code < 500:
                     self._consecutive_failures = 0
+                else:
+                    self._record_circuit_failure(
+                        context=f"HTTP {response.status_code}",
+                    )
                 return self._parse_response(response)
 
             except httpx.TimeoutException as e:
@@ -290,11 +311,7 @@ class APIGateway:
                     cause=e,
                 )
                 logger.warning(f"{err}")
-                self._consecutive_failures += 1
-                if self._consecutive_failures >= self.CIRCUIT_FAILURE_THRESHOLD:
-                    cooldown = self._calculate_circuit_cooldown()
-                    self._circuit_open_until = time.monotonic() + cooldown
-                    logger.warning(f"Circuit OPENED: {self._consecutive_failures} consecutive failures, cooldown {cooldown:.0f}s")
+                self._record_circuit_failure(context="timeout")
                 if attempt < retries:
                     await asyncio.sleep(self._calculate_backoff(attempt))
                     continue
@@ -308,11 +325,7 @@ class APIGateway:
                     cause=e,
                 )
                 logger.warning(f"{err}")
-                self._consecutive_failures += 1
-                if self._consecutive_failures >= self.CIRCUIT_FAILURE_THRESHOLD:
-                    cooldown = self._calculate_circuit_cooldown()
-                    self._circuit_open_until = time.monotonic() + cooldown
-                    logger.warning(f"Circuit OPENED: {self._consecutive_failures} consecutive failures, cooldown {cooldown:.0f}s")
+                self._record_circuit_failure(context="network")
                 if attempt < retries:
                     await asyncio.sleep(self._calculate_backoff(attempt))
                     continue
@@ -605,7 +618,85 @@ class APIGateway:
             random.uniform(capped * 0.5, capped * 1.5),
         )
 
+    @staticmethod
+    def _error_response(
+        *,
+        status_code: int = 0,
+        error_message: str,
+        error_code: str,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> "APIResponse":
+        """Centralized factory for failure-shaped APIResponse. Reduces
+        the 5+ inline construction sites that all assemble the same
+        success=False / data=None / error_* shape."""
+        return APIResponse(
+            success=False,
+            status_code=status_code,
+            data=None,
+            error_message=error_message,
+            error_code=error_code,
+            headers=headers,
+        )
+
+    def _record_circuit_failure(self, *, context: str = "") -> None:
+        """Increment consecutive failures and open circuit if threshold reached.
+
+        Centralizes the post-failure accounting that was previously inlined in
+        each except branch (timeout, RequestError, 5xx response). `context` is
+        used in the OPENED log line to distinguish HTTP-5xx from transport.
+        """
+        self._consecutive_failures += 1
+        if self._consecutive_failures >= self.CIRCUIT_FAILURE_THRESHOLD:
+            cooldown = self._calculate_circuit_cooldown()
+            self._circuit_open_until = time.monotonic() + cooldown
+            logger.warning(
+                "Circuit OPENED%s: %d consecutive failures, cooldown %.0fs",
+                f" ({context})" if context else "",
+                self._consecutive_failures,
+                cooldown,
+            )
+
     # === CONVENIENCE METHODS ===
+
+    async def call(
+        self,
+        *,
+        method: str,
+        service: str,
+        path: str,
+        query_params: Optional[Dict[str, Any]] = None,
+        body: Optional[Dict[str, Any]] = None,
+        tenant_id: Optional[str] = None,
+    ) -> APIResponse:
+        """High-level wrapper used by identity + executor.
+
+        Identity and executor compose a request from three pieces:
+          - ``service``: MobilityOne service name ("tenantmgt", "automation", ...)
+          - ``path``: endpoint relative to the service ("/Persons", "/MasterData")
+          - ``tenant_id``: explicit tenant for the x-tenant header
+
+        The full URL becomes ``{MOBILITY_API_URL}/{service}{path}``.
+
+        Without this wrapper, callers had to know the URL-prefixing convention
+        and pre-build the path. Centralizing it here keeps tenant scoping
+        consistent and prevents the silent ``AttributeError`` that used to
+        occur when this method was missing (caught only by FakeGateway in tests).
+        """
+        try:
+            http_method = HttpMethod(method.upper())
+        except ValueError:
+            return self._error_response(
+                error_message=f"Unsupported HTTP method: {method!r}",
+                error_code=ErrorCode.BAD_REQUEST.value,
+            )
+        url_path = f"/{service.strip('/')}{path if path.startswith('/') else '/' + path}"
+        return await self.execute(
+            method=http_method,
+            path=url_path,
+            params=query_params,
+            body=body,
+            tenant_id=tenant_id,
+        )
 
     async def get(self, path: str, params: Optional[Dict] = None, **kwargs) -> APIResponse:
         """GET request."""

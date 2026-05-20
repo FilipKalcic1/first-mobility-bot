@@ -37,6 +37,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, time as dt_time, timedelta
 from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
@@ -235,10 +236,17 @@ class FlowEngine:
                 new_state=state,  # preserve state for retry
             )
 
+        # ASK_PERIOD returns a dict with multiple slot values (period_text,
+        # from_time, to_time). Merge all keys into collected_params.
+        if isinstance(validated, dict) and current.kind == STEP_ASK_PERIOD:
+            merged = {**state.collected_params, **validated}
+        else:
+            merged = {**state.collected_params, current.slot_name: validated}
+
         new_state = FlowState(
             flow_name=state.flow_name,
             step_index=state.step_index + 1,
-            collected_params={**state.collected_params, current.slot_name: validated},
+            collected_params=merged,
             started_at=state.started_at,
         )
         return self._advance_or_prompt(flow, new_state)
@@ -347,11 +355,14 @@ def _validate(step: Step, user_input: str, collected: dict) -> Optional[Any]:
         return value
 
     if step.kind == STEP_ASK_PERIOD:
-        # Free-form Croatian period — let the slot-filler upstream
-        # parse precisely. Here we just check length sanity.
+        # Parse Croatian period into {period_text, from_time, to_time}.
+        # State machine raspakira ovaj dict u collected_params (line ~245).
         if len(text) < 4:
             return None
-        return text[:200]
+        parsed = _parse_period(text[:200])
+        if parsed is None:
+            return None
+        return parsed
 
     if step.kind == STEP_ASK_CHOICE:
         choices = collected.get(step.choices_slot or "") or []
@@ -365,6 +376,163 @@ def _validate(step: Step, user_input: str, collected: dict) -> Optional[Any]:
         return None
 
     return None
+
+
+_PERIOD_HOUR_RE = re.compile(
+    r"(\d{1,2})(?::(\d{2}))?\s*[-–]\s*(\d{1,2})(?::(\d{2}))?"
+)
+_PERIOD_DATE_RE = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?\s*(.*)$")
+
+# Croatian weekday names → ISO weekday (0=Monday).
+_WEEKDAYS_HR = {
+    "ponedjeljak": 0, "pon": 0,
+    "utorak": 1, "uto": 1,
+    "srijed": 2, "sri": 2,  # 'srijed' covers 'srijeda', 'srijedu'
+    "četvrt": 3, "cetvrt": 3, "čet": 3, "cet": 3,
+    "petak": 4, "pet": 4,
+    "subot": 5, "sub": 5,
+    "nedjelj": 6, "ned": 6,
+}
+
+# Parts of day → default time range (used only when user gives no explicit
+# hours). Mapping calibrated to Croatian fleet driver workday patterns.
+_PART_OF_DAY = {
+    "ujutro":  (9, 12),    # morning
+    "prijepodne": (9, 12),
+    "popodne": (13, 17),   # afternoon
+    "navečer": (18, 22),   # evening
+    "naveer":  (18, 22),
+    "uvece":   (18, 22),
+}
+
+
+def _resolve_weekday(today_date, name_lower: str, next_week: bool = False):
+    """Return the date of the upcoming weekday matching `name_lower`.
+    If next_week=True, skips this week's match and returns the one after.
+    Returns None if no weekday keyword found."""
+    today_weekday = today_date.weekday()  # 0=Mon
+    for kw, target in _WEEKDAYS_HR.items():
+        if kw in name_lower:
+            delta = (target - today_weekday) % 7
+            if delta == 0 and not next_week:
+                # "u ponedjeljak" on a Monday → today; "iduci ponedjeljak" → +7
+                delta = 7  # treat as "next" if ambiguous — driver expectation
+            if next_week:
+                if delta == 0:
+                    delta = 7
+                else:
+                    delta += 7
+            return today_date + timedelta(days=delta)
+    return None
+
+
+def _resolve_date(lower: str, today_date) -> tuple:
+    """Resolve date component. Returns (date, remainder_text, source)
+    where source is one of 'relative', 'weekday', 'dmy', 'default'."""
+    if "prekosutra" in lower:
+        return today_date + timedelta(days=2), lower.replace("prekosutra", "").strip(), "relative"
+    if "sutra" in lower:
+        return today_date + timedelta(days=1), lower.replace("sutra", "").strip(), "relative"
+    if "danas" in lower:
+        return today_date, lower.replace("danas", "").strip(), "relative"
+
+    # Weekday names — "u petak", "iduci petak", "ovaj utorak", etc.
+    next_week = bool(re.search(r"\b(?:iduć|iduci|sljedeć|sljedeci|drugi)\b", lower))
+    weekday_date = _resolve_weekday(today_date, lower, next_week=next_week)
+    if weekday_date is not None:
+        # Strip weekday + modifiers from remainder
+        rest = lower
+        for kw in (
+            "iduć", "iduci", "sljedeć", "sljedeci", "drugi",
+            "ovaj", "u ", "tjedan",
+        ):
+            rest = rest.replace(kw, " ")
+        for kw in _WEEKDAYS_HR:
+            rest = rest.replace(kw, " ")
+        return weekday_date, re.sub(r"\s+", " ", rest).strip(), "weekday"
+
+    # Explicit DMY
+    m = _PERIOD_DATE_RE.match(lower)
+    if m:
+        d, mo, y, tail = m.groups()
+        try:
+            d_iso = datetime(int(y), int(mo), int(d)).date()
+        except ValueError:
+            return None, lower, "invalid"
+        return d_iso, (tail or "").strip(), "dmy"
+
+    # No date hint — default to today
+    return today_date, lower, "default"
+
+
+def _resolve_hours(rest: str) -> Optional[tuple]:
+    """Find HH-HH range in rest text. Returns (fh, fm, th, tm) or None.
+    Falls back to part-of-day keywords (ujutro/popodne/navečer)."""
+    # Explicit numeric range wins
+    hm = _PERIOD_HOUR_RE.search(rest)
+    if hm:
+        fh, fm, th, tm = hm.groups()
+        try:
+            fh_i = int(fh)
+            fm_i = int(fm) if fm else 0
+            th_i = int(th)
+            tm_i = int(tm) if tm else 0
+        except ValueError:
+            return None
+        if not (0 <= fh_i <= 23 and 0 <= th_i <= 23 and 0 <= fm_i <= 59 and 0 <= tm_i <= 59):
+            return None
+        if (fh_i, fm_i) >= (th_i, tm_i):
+            return None
+        return fh_i, fm_i, th_i, tm_i
+
+    # Part-of-day fallback
+    for kw, (start, end) in _PART_OF_DAY.items():
+        if kw in rest:
+            return start, 0, end, 0
+    return None
+
+
+def _parse_period(text: str) -> Optional[dict]:
+    """Parse Croatian period string into dict with ISO from/to times.
+
+    Supported formats (Faza 4 Filip 2026-05-17 extended):
+      Explicit ranges:
+        "sutra 9-15"               → tomorrow 09:00-15:00
+        "danas 9:30-17:00"         → today 09:30-17:00
+        "prekosutra 8-16"          → +2 days 08:00-16:00
+        "16.12.2025 9:00-17:00"    → explicit date + hours
+        "9-15"                     → today 09:00-15:00
+      Croatian weekdays (NEW):
+        "u petak 9-15"             → upcoming Friday 09:00-15:00
+        "iduci utorak 8-16"        → Tuesday of next week 08:00-16:00
+        "u srijedu ujutro"         → Wednesday 09:00-12:00
+      Parts of day (NEW):
+        "sutra ujutro"             → tomorrow 09:00-12:00
+        "danas popodne"            → today 13:00-17:00
+        "navečer"                  → today 18:00-22:00
+
+    Returns dict with `period_text`, `from_time`, `to_time` (all strings).
+    `from_time` and `to_time` are ISO-8601 with seconds, no timezone (caller
+    assumes local Europe/Zagreb). Returns None if parsing fails.
+    """
+    lower = text.lower().strip()
+    today = datetime.now()
+    date, rest, _src = _resolve_date(lower, today.date())
+    if date is None:
+        return None
+
+    hours = _resolve_hours(rest)
+    if hours is None:
+        return None
+    fh_i, fm_i, th_i, tm_i = hours
+
+    from_dt = datetime.combine(date, dt_time(fh_i, fm_i))
+    to_dt = datetime.combine(date, dt_time(th_i, tm_i))
+    return {
+        "period_text": text.strip()[:200],
+        "from_time": from_dt.isoformat(timespec="seconds"),
+        "to_time": to_dt.isoformat(timespec="seconds"),
+    }
 
 
 def _is_cancel(user_input: str) -> bool:
@@ -448,14 +616,6 @@ def _case_params(collected: dict) -> dict:
         "User": collected.get("person_id"),
         "Subject": collected.get("subject") or "Prijava preko bota",
         "Message": collected.get("description"),
-    }
-
-
-def _trip_modify_params(collected: dict) -> dict:
-    chosen = collected.get("chosen_trip") or {}
-    return {
-        "id": chosen.get("Id") if isinstance(chosen, dict) else None,
-        "TripTypeId": collected.get("new_trip_type_id"),
     }
 
 

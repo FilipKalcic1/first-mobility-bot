@@ -5,22 +5,24 @@ Main entry point with automatic database initialization.
 """
 
 import asyncio
-import hmac
 import logging
 import os
-import re
 import sys
-import time
-import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
-from starlette.middleware.base import BaseHTTPMiddleware
+
+# Middleware classes live in middleware.py (extracted from main.py
+# 2026-05-08 to keep main focused on app construction + lifespan).
+from middleware import (
+    PayloadSizeGuardMiddleware,
+    RequestIDMiddleware,
+    HTTPSRedirectMiddleware,
+)
 
 # Import config FIRST to get LOG_LEVEL
 from config import get_settings
@@ -55,114 +57,8 @@ logger.info(f"Logging configured: level={settings.LOG_LEVEL}")
 # already draining.
 APP_STOPPING = False
 
-# --- Payload Size Guard (OOM prevention at 1GB RAM) ---
-# JSON parsing a 10MB malicious payload at 20 concurrent requests = 200MB spike.
-# Combined with baseline 280MB = OOM kill. Reject before parsing.
-MAX_REQUEST_BODY_BYTES = 1 * 1024 * 1024  # 1MB
-
-class PayloadSizeGuardMiddleware(BaseHTTPMiddleware):
-    """Reject requests >1MB before JSON parsing to prevent OOM at 1GB RAM."""
-
-    async def dispatch(self, request: Request, call_next):
-        content_length = request.headers.get("content-length")
-        if content_length:
-            try:
-                length = int(content_length)
-            except (ValueError, OverflowError):
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": "Invalid Content-Length header"}
-                )
-            if length > MAX_REQUEST_BODY_BYTES:
-                logger.warning(
-                    f"Payload rejected: {length} bytes > {MAX_REQUEST_BODY_BYTES} limit "
-                    f"from {request.client.host if request.client else 'unknown'}"
-                )
-                return JSONResponse(
-                    status_code=413,
-                    content={"detail": "Request body too large (max 1MB)"}
-                )
-        return await call_next(request)
-
-
-# --- Request ID Middleware (for distributed tracing) ---
-class RequestIDMiddleware(BaseHTTPMiddleware):
-    """Add unique request ID to each request for log correlation."""
-
-    async def dispatch(self, request: Request, call_next):
-        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())[:12]
-        request.state.request_id = request_id
-
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = request_id
-        return response
-
-# --- HTTPS Redirect Middleware (production only) ---
-class HTTPSRedirectMiddleware(BaseHTTPMiddleware):
-    """Redirect HTTP to HTTPS in production."""
-
-    async def dispatch(self, request: Request, call_next):
-        # Check X-Forwarded-Proto header (set by reverse proxy/load balancer)
-        proto = request.headers.get("X-Forwarded-Proto", "https")
-        if proto == "http" and settings.is_production:
-            url = request.url.replace(scheme="https")
-            return PlainTextResponse(
-                content="Redirecting to HTTPS",
-                status_code=301,
-                headers={"Location": str(url)}
-            )
-        response = await call_next(request)
-        # Add HSTS header in production
-        if settings.is_production:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        return response
-
-# Prometheus metrics
-REQUEST_COUNT = Counter(
-    'http_requests_total',
-    'Total HTTP requests',
-    ['method', 'endpoint', 'status']
-)
-REQUEST_LATENCY = Histogram(
-    'http_request_duration_seconds',
-    'HTTP request latency',
-    ['method', 'endpoint']
-)
-TOOLS_LOADED = Gauge('tools_loaded_total', 'Number of tools loaded in registry')
-
-
-_UUID_RE = re.compile(
-    r"/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-)
-_NUMERIC_ID_RE = re.compile(r"/\d+")
-
-
-class MetricsMiddleware(BaseHTTPMiddleware):
-    """Record Prometheus HTTP request metrics (count + latency)."""
-
-    # Paths excluded from metrics to avoid noise from probes/scraping
-    _SKIP_PATHS = {"/health", "/ready", "/metrics"}
-
-    async def dispatch(self, request: Request, call_next):
-        if request.url.path in self._SKIP_PATHS:
-            return await call_next(request)
-
-        method = request.method
-        start = time.monotonic()
-        response = await call_next(request)
-        elapsed = time.monotonic() - start
-
-        # Normalize path to avoid high-cardinality label explosion
-        # Replace UUID/numeric ID segments with placeholders
-        raw_path = request.url.path.rstrip("/") or "/"
-        path = _UUID_RE.sub("/{id}", raw_path)
-        path = _NUMERIC_ID_RE.sub("/{id}", path)
-        status = str(response.status_code)
-
-        REQUEST_COUNT.labels(method=method, endpoint=path, status=status).inc()
-        REQUEST_LATENCY.labels(method=method, endpoint=path).observe(elapsed)
-
-        return response
+# Middleware classes (PayloadSizeGuard, RequestID, HTTPSRedirect)
+# moved to middleware.py 2026-05-08. Use the imports at the top of this file.
 
 async def wait_for_database(max_retries: int = 30, base_delay: int = 2) -> bool:
     """Wait for database to be available and create tables."""
@@ -271,9 +167,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         logger.error(f"Service initialization failed: {e}")
         raise
 
-    # 4. ML model warm-up removed in Phase D (ML cull).
+    # NOTE: V2Engine is NOT initialized in the api process. Webhook just
+    # validates HMAC + pushes to Redis stream — no routing logic runs here.
+    # All engine work happens in worker.py which has its own V2Engine.
+
     logger.info("Application ready!")
-    
+
     yield
     
     # Shutdown — set flag FIRST so webhook stops accepting new messages
@@ -311,24 +210,26 @@ app = FastAPI(
 # Payload size guard (outermost - runs first, rejects before JSON parsing)
 app.add_middleware(PayloadSizeGuardMiddleware)
 
-# Prometheus HTTP metrics (count + latency for all non-probe endpoints)
-app.add_middleware(MetricsMiddleware)
-
 # Request ID
 app.add_middleware(RequestIDMiddleware)
 
 # HTTPS enforcement in production
 if settings.is_production:
-    app.add_middleware(HTTPSRedirectMiddleware)
+    # HTTPSRedirectMiddleware now takes a callable for is_production so it
+    # doesn't need to import config — keeps middleware.py framework-pure.
+    app.add_middleware(
+        HTTPSRedirectMiddleware,
+        is_production_fn=lambda: settings.is_production,
+    )
 
 # Security headers
 from services.security_headers import SecurityHeadersMiddleware
 app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS - restricted in production, permissive in development.
-# Belt-and-suspenders: require BOTH DEBUG and non-production env so a stray
-# DEBUG=true leaked into prod cannot widen origins to *.
-if settings.DEBUG and not settings.is_production:
+# settings.DEBUG is derived from APP_ENV == "development", so this branch
+# never runs in staging/production regardless of how operators flip flags.
+if settings.DEBUG:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -350,6 +251,47 @@ else:
 # Simple webhook endpoint that pushes to Redis queue
 from webhook_simple import router as webhook_router
 app.include_router(webhook_router, prefix="/webhook", tags=["webhook"])
+
+
+# ---------------------------------------------------------------------------
+# Cache invalidation webhook (admin → bot)
+# Backend admin UI fires this on vehicle reassignment, role change,
+# termination, tenant change, permission update — bot busts caches so the
+# next message uses fresh identity. Core security logic lives in
+# services/v2/cache_invalidation.process_request; this is the FastAPI binding.
+# ---------------------------------------------------------------------------
+from services.v2.cache_invalidation import process_request as _ci_process_request
+
+
+@app.post("/admin/cache-invalidate")
+async def cache_invalidate(request: Request):
+    """HMAC-verified webhook that busts caches for one phone.
+
+    Payload (≤1KB JSON):
+        {"phone": "+385...", "reasons": ["vehicle_change", ...],
+         "timestamp": 1746... }
+
+    Header: `X-Signature: <hex sha256 hmac of body>`
+    """
+    state = app.state
+    stores = {
+        "identity_context": getattr(state, "v2_identity", None),
+        "conversation_history_store": getattr(state, "v2_conv_history", None),
+        "pending_mut_store": getattr(state, "v2_pending_mut", None),
+        "pending_clarify_store": getattr(state, "v2_pending_clarify", None),
+        "fact_snapshot_store": getattr(state, "v2_fact_snapshot", None),
+    }
+    body = await request.body()
+    status, payload = await _ci_process_request(
+        body=body,
+        signature=request.headers.get("X-Signature") or "",
+        declared_content_length=request.headers.get("content-length"),
+        client_ip=request.client.host if request.client else "unknown",
+        secret=os.environ.get("CACHE_INVALIDATION_SECRET") or "",
+        stores=stores,
+    )
+    return JSONResponse(status_code=status, content=payload)
+
 
 if settings.DEBUG:
     for route in app.routes:
@@ -464,49 +406,6 @@ async def root():
         "version": settings.APP_VERSION,
         "status": "running"
     }
-
-@app.get("/metrics")
-async def metrics(request: Request):
-    """Prometheus metrics endpoint. Protected in production."""
-    # In production, require a token via either ?token= (human/kubectl port-forward)
-    # or Authorization: Bearer <token> (Prometheus ServiceMonitor bearerTokenSecret).
-    if settings.is_production:
-        token = request.query_params.get("token", "")
-        if not token:
-            auth = request.headers.get("authorization", "")
-            if auth.lower().startswith("bearer "):
-                token = auth[7:].strip()
-        admin_tokens = []
-        for i in range(1, 5):
-            env_token = os.environ.get(f"ADMIN_TOKEN_{i}")
-            if env_token:
-                admin_tokens.append(env_token)
-        if not admin_tokens:
-            logger.error("ADMIN_TOKENS not configured — denying /metrics access in production")
-            return JSONResponse(status_code=503, content={"detail": "Metrics unavailable: admin tokens not configured"})
-        token_bytes = token.encode()
-        valid = False
-        for stored in admin_tokens:
-            if hmac.compare_digest(token_bytes, stored.encode()):
-                valid = True
-        if not valid:
-            return JSONResponse(status_code=403, content={"detail": "Forbidden"})
-
-    # Read tools count from Redis (written by worker after registry init)
-    if hasattr(app.state, 'redis') and app.state.redis:
-        try:
-            tools_count = await app.state.redis.get(settings.REDIS_STATS_KEY_TOOLS)
-            if tools_count:
-                TOOLS_LOADED.set(int(tools_count))
-        except (ConnectionError, OSError) as e:
-            logger.debug(f"Redis unavailable for metrics read: {e}")
-        except (ValueError, TypeError) as e:
-            logger.debug(f"Invalid tools_count value in Redis: {e}")
-
-    return PlainTextResponse(
-        content=generate_latest(),
-        media_type=CONTENT_TYPE_LATEST
-    )
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

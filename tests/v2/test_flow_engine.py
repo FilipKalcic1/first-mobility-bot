@@ -200,10 +200,7 @@ def test_cancel_during_flow(cancel_word):
 
 def test_booking_flow_period_then_lookup_request():
     engine = FlowEngine(FLOWS)
-    out = engine.start("booking", identity_context={
-        "person_id": "p1", "from_time": "2025-12-16T09:00",
-        "to_time": "2025-12-16T17:00",
-    })
+    out = engine.start("booking", identity_context={"person_id": "p1"})
     assert out.kind == OUTCOME_PROMPT
     assert "period" in out.response.lower()
     state = out.new_state
@@ -213,17 +210,14 @@ def test_booking_flow_period_then_lookup_request():
     # Engine now wants lookup tool to run (EXEC_LOOKUP step)
     assert out.kind == OUTCOME_PROMPT
     assert out.tool_id == "get_AvailableVehicles"
-    # Template substitution of {from_time}/{to_time} from collected_params
-    assert out.params["from"] == "2025-12-16T09:00"
-    assert out.params["to"] == "2025-12-16T17:00"
+    # _parse_period populated from_time/to_time slots; template substituted.
+    assert out.params["from"] == "2025-12-16T09:00:00"
+    assert out.params["to"] == "2025-12-16T17:00:00"
 
 
 def test_booking_flow_after_lookup_asks_choice_then_confirm():
     engine = FlowEngine(FLOWS)
-    out = engine.start("booking", identity_context={
-        "person_id": "p1", "from_time": "2025-12-16T09:00",
-        "to_time": "2025-12-16T17:00",
-    })
+    out = engine.start("booking", identity_context={"person_id": "p1"})
     state = out.new_state
     out = engine.handle(state, "16.12.2025 9-17")
     state = out.new_state
@@ -442,3 +436,109 @@ def test_all_flows_have_params_builder():
         assert callable(flow.final_params_builder), (
             f"flow {name!r} missing final_params_builder"
         )
+
+
+# ---- Faza 4 Bug #2 (Filip 2026-05-17): extended _parse_period ----
+
+from services.v2.flow_engine import _parse_period
+from datetime import datetime, timedelta
+
+
+def _next_weekday(target_weekday: int):
+    """Return next occurrence of weekday (0=Mon). 0-delta means today is
+    Monday → returns next Monday (+7), matching _parse_period semantics
+    where 'u ponedjeljak' on a Monday is treated as next week."""
+    today = datetime.now().date()
+    delta = (target_weekday - today.weekday()) % 7
+    if delta == 0:
+        delta = 7
+    return today + timedelta(days=delta)
+
+
+def test_parse_period_handles_named_weekdays():
+    """'u petak 9-15' → next Friday 09:00-15:00."""
+    out = _parse_period("u petak 9-15")
+    assert out is not None
+    expected = _next_weekday(4)  # Friday=4
+    assert out["from_time"].startswith(expected.isoformat())
+    assert "09:00:00" in out["from_time"]
+    assert "15:00:00" in out["to_time"]
+
+
+def test_parse_period_handles_srijeda_inflections():
+    """'u srijedu 8-16' (akuzativ) and 'u srijedi 8-16' both should match
+    because we use prefix 'srijed' that covers both forms."""
+    out = _parse_period("u srijedu 8-16")
+    assert out is not None
+    expected = _next_weekday(2)  # Wednesday=2
+    assert out["from_time"].startswith(expected.isoformat())
+
+
+def test_parse_period_handles_next_week_keyword():
+    """'iduci petak 9-15' → Friday of NEXT week (+7 days beyond this week's)."""
+    out = _parse_period("iduci petak 9-15")
+    assert out is not None
+    this_friday = _next_weekday(4)
+    next_friday = this_friday + timedelta(days=7)
+    # When today is NOT Friday, _next_weekday returns this week's Friday;
+    # 'iduci' adds another 7. When today IS Friday, _next_weekday already
+    # returns +7 (next Monday-relative semantics), so 'iduci' adds +7 again.
+    # Either way, output must NOT be this week's Friday.
+    assert not out["from_time"].startswith(this_friday.isoformat())
+    assert out["from_time"].startswith(next_friday.isoformat())
+
+
+def test_parse_period_parts_of_day_ujutro():
+    """'sutra ujutro' → tomorrow 09:00-12:00 (default morning window)."""
+    out = _parse_period("sutra ujutro")
+    assert out is not None
+    expected = datetime.now().date() + timedelta(days=1)
+    assert out["from_time"].startswith(expected.isoformat())
+    assert "09:00:00" in out["from_time"]
+    assert "12:00:00" in out["to_time"]
+
+
+def test_parse_period_parts_of_day_popodne():
+    """'danas popodne' → today 13:00-17:00."""
+    out = _parse_period("danas popodne")
+    assert out is not None
+    today = datetime.now().date()
+    assert out["from_time"].startswith(today.isoformat())
+    assert "13:00:00" in out["from_time"]
+    assert "17:00:00" in out["to_time"]
+
+
+def test_parse_period_parts_of_day_navecer():
+    """'sutra navečer' → tomorrow 18:00-22:00."""
+    out = _parse_period("sutra navečer")
+    assert out is not None
+    expected = datetime.now().date() + timedelta(days=1)
+    assert out["from_time"].startswith(expected.isoformat())
+    assert "18:00:00" in out["from_time"]
+    assert "22:00:00" in out["to_time"]
+
+
+def test_parse_period_weekday_plus_part_of_day():
+    """'u petak ujutro' → next Friday 09:00-12:00."""
+    out = _parse_period("u petak ujutro")
+    assert out is not None
+    expected = _next_weekday(4)
+    assert out["from_time"].startswith(expected.isoformat())
+    assert "09:00:00" in out["from_time"]
+    assert "12:00:00" in out["to_time"]
+
+
+def test_parse_period_existing_formats_still_work():
+    """Regression: old supported formats must keep working."""
+    # Original cases that have to keep working
+    assert _parse_period("sutra 9-15") is not None
+    assert _parse_period("danas 9:30-17:00") is not None
+    assert _parse_period("prekosutra 8-16") is not None
+    assert _parse_period("16.12.2025 9:00-17:00") is not None
+
+
+def test_parse_period_returns_none_on_garbage():
+    """No date AND no time → None."""
+    assert _parse_period("kasnim na sastanak") is None
+    # Date but no hour and no part-of-day → None
+    assert _parse_period("sutra negdje") is None

@@ -39,32 +39,18 @@ class LatencyHint:
     ack_text: Optional[str] = None
 
 
-# Patterns that hint slow path (V3 routing or backend call)
-_FAST_PATH_TOKENS = {
-    "kolika", "km", "tablica", "registracija", "marka", "model",
-    "moj auto", "moja km",
-}
+def hint_for_query(query: str) -> LatencyHint:
+    """Decide whether to send typing indicator + ack message.
 
-
-def hint_for_query(query: str, has_quick_path: bool = True) -> LatencyHint:
-    """Decide whether to send typing indicator + ack message based on
-    expected processing path.
-
-    Quick-path (regex hit) → no ack, response in 50ms.
-    Slow path → typing + ack to keep user informed.
+    Every query now goes through LLM router → typing always on; ack message
+    only for queries long enough that the user would otherwise wonder
+    whether the bot received them.
     """
     if not query:
         return LatencyHint(send_typing=False, send_ack_message=False)
 
-    q_lower = query.lower().strip()
-    word_count = len(q_lower.split())
+    word_count = len(query.lower().strip().split())
 
-    # Very short canonical → quick-path likely → no ack
-    if has_quick_path and word_count <= 3:
-        if any(tok in q_lower for tok in _FAST_PATH_TOKENS):
-            return LatencyHint(send_typing=True, send_ack_message=False)
-
-    # Long or complex → slow path → ack message
     if word_count >= 8:
         return LatencyHint(
             send_typing=True,
@@ -72,7 +58,6 @@ def hint_for_query(query: str, has_quick_path: bool = True) -> LatencyHint:
             ack_text="Tražim, sekunda...",
         )
 
-    # Medium queries — typing only
     return LatencyHint(send_typing=True, send_ack_message=False)
 
 

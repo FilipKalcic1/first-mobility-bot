@@ -1,21 +1,24 @@
 """Pending mutation state — survives across user turns.
 
-When L6 mutation gate returns CONFIRM (single Da/Ne) or DOUBLE (Da +
-"TRAJNO" double-check), the engine sends a confirm prompt and the user's
-next message must trigger execution. Without persistence, "Da" gets
-re-classified by L2a/L3 and the original mutation is lost. That's a
-0-error tolerance violation — the user thinks they confirmed an action
-that never executes.
+When L6 mutation gate returns CONFIRM (single Da/Ne), the engine sends a
+confirm prompt and the user's next message must trigger execution.
+Without persistence, "Da" gets re-classified by L2a/L3 and the original
+mutation is lost. That's a 0-error tolerance violation — the user thinks
+they confirmed an action that never executes.
 
-This store fixes it: the pending mutation (tool_id + params + which
-confirm-stage) is saved to Redis with a short TTL (default 5 min). The
-engine consults it BEFORE any other classification on the next turn.
+This store fixes it: the pending mutation (tool_id + params) is saved to
+Redis with a short TTL (default 5 min). The engine consults it BEFORE
+any other classification on the next turn.
+
+Single-confirm policy (Filip 2026-05-16): only STAGE_SINGLE exists.
+Previous DOUBLE-confirm stages were dropped as infeasible UX (3 turns
+for 1 delete; user closes WhatsApp mid-flow → bot stuck).
 
 Storage shape (JSON):
     {
         "tool_id": "delete_VehicleCalendar_id",
         "params":  {"id": "x"},
-        "stage":   "single" | "double_first" | "double_second",
+        "stage":   "single",     # only valid value now
         "created_at": 1714000000.0,
     }
 """
@@ -33,10 +36,8 @@ logger = logging.getLogger(__name__)
 _REDIS_PREFIX = "v2:pending_mut:"
 _DEFAULT_TTL_SECONDS = 300  # 5 minutes — short, safety against stale Da
 
-# Stages — explicit not stringly because typos = silent miss.
+# Stage — only one exists post single-confirm policy.
 STAGE_SINGLE = "single"
-STAGE_DOUBLE_FIRST = "double_first"
-STAGE_DOUBLE_SECOND = "double_second"
 
 
 @dataclass
@@ -157,11 +158,20 @@ class PendingMutationStore:
 # --------------------------------------------------------------------------
 
 
-_AFFIRMATIVE = {"da", "yes", "ok", "okej", "može", "moze", "potvrdjujem", "potvrđujem"}
-_NEGATIVE = {"ne", "no", "odustani", "prekini", "stani", "cancel"}
-_DOUBLE_CONFIRM_TOKEN = "trajno"   # used by DELETE prompts
+# EXECUTE whitelist — STRICT exact match (after trimming punctuation). The
+# old word-split match (`any(a in norm.split() ...)`) caused false positives
+# like "može biti" → execute because "može" was in the affirmative set. For a
+# destructive confirm, prefer re-asking to silently running on a hesitant reply.
+# Filip 2026-05-17.
+_AFFIRMATIVE = {"da", "yes", "y", "ok", "okej", "može", "moze",
+                "potvrdjujem", "potvrđujem"}
+# CANCEL set stays lenient (word-split fallback) because false negatives only
+# mean the bot re-asks — safer to over-cancel than under-cancel.
+_NEGATIVE = {"ne", "no", "n", "odustani", "prekini", "stani", "cancel",
+             "otkaži", "otkazi"}
 
-_VALID_STAGES = {STAGE_SINGLE, STAGE_DOUBLE_FIRST, STAGE_DOUBLE_SECOND}
+# Trailing punctuation to strip before matching ("Da." / "Da!" / "ok?").
+_TRAILING_PUNCT = ".!?,;"
 
 
 def parse_reply(text: str, stage: str) -> str:
@@ -169,36 +179,31 @@ def parse_reply(text: str, stage: str) -> str:
 
     Returns one of:
         "execute"   → run the saved mutation
-        "advance"   → first stage of double passed; ask second stage
         "cancel"    → user said no
         "ambiguous" → unclear; re-prompt or fall through (caller decides)
 
-    Unknown stage strings (typo / future-stage / corrupt cache) are
-    treated as ambiguous so the engine re-prompts instead of executing.
+    EXECUTE requires EXACT match against `_AFFIRMATIVE` (post-trim) — multi-
+    word replies like "može biti" / "ok ali..." / "da možda" are ambiguous,
+    not execute. CANCEL allows word-split fallback so phrases like "ne hvala"
+    still cancel safely.
+
+    Unknown stage strings (typo / corrupt cache) are treated as ambiguous
+    so the engine re-prompts instead of executing.
     """
-    if stage not in _VALID_STAGES:
+    if stage != STAGE_SINGLE:
         logger.warning("parse_reply got unknown stage=%r", stage)
         return "ambiguous"
 
-    norm = (text or "").strip().lower()
+    norm = (text or "").strip().lower().rstrip(_TRAILING_PUNCT)
     if not norm:
         return "ambiguous"
 
+    # Cancel — lenient (exact OR any word match).
     if norm in _NEGATIVE or any(n in norm.split() for n in _NEGATIVE):
         return "cancel"
 
-    if stage == STAGE_DOUBLE_SECOND:
-        # Stage 2 of DELETE: must literally type TRAJNO (case-insensitive)
-        if _DOUBLE_CONFIRM_TOKEN in norm:
-            return "execute"
-        return "ambiguous"
-
-    if stage == STAGE_DOUBLE_FIRST:
-        if norm in _AFFIRMATIVE or any(a in norm.split() for a in _AFFIRMATIVE):
-            return "advance"
-        return "ambiguous"
-
-    # STAGE_SINGLE
-    if norm in _AFFIRMATIVE or any(a in norm.split() for a in _AFFIRMATIVE):
+    # Execute — STRICT (exact match only).
+    if norm in _AFFIRMATIVE:
         return "execute"
+
     return "ambiguous"

@@ -64,14 +64,14 @@
     },
 
     "tenant_id": {
-      "description": "Multi-tenancy identifier (organization/company)",
+      "description": "Multi-tenancy identifier. MobilityOne calls it CompanyId at the data layer, TenantId at the auth layer; both resolve to the same tenant binding.",
       "schema_hints": {
         "formats": ["uuid", "guid"],
         "types": ["string"]
       },
       "classification_rules": {
         "description_keywords": ["tenant", "organization", "company", "client"],
-        "name_patterns": [".*tenant.*id.*", "^x-tenant(-id)?$"],
+        "name_patterns": [".*tenant.*id.*", "^x-tenant(-id)?$", ".*company.*id.*"],
         "path_hints": []
       },
       "scoring": {
@@ -81,7 +81,10 @@
         "path_hint_match": 1,
         "threshold": 3
       },
-      "fallback_names": ["tenantid", "tenant_id", "x-tenant-id", "x_tenant_id"]
+      "fallback_names": [
+        "tenantid", "tenant_id", "x-tenant-id", "x_tenant_id",
+        "companyid", "company_id"
+      ]
     }
   },
 

@@ -18,16 +18,19 @@ class FakeRedis:
         self.expirations = {}
         self.broken = False
 
-    async def incr(self, key):
+    async def eval(self, script, numkeys, *args):
+        # Mimics _INCR_WITH_TTL_LUA: INCR; if new value == 1, EXPIRE.
         if self.broken:
             raise ConnectionError("redis down")
+        keys = args[:numkeys]
+        extra = args[numkeys:]
+        key = keys[0]
+        ttl = int(extra[0])
         self.counts[key] = self.counts.get(key, 0) + 1
-        return self.counts[key]
-
-    async def expire(self, key, ttl):
-        if self.broken:
-            raise ConnectionError("redis down")
-        self.expirations[key] = ttl
+        v = self.counts[key]
+        if v == 1:
+            self.expirations[key] = ttl
+        return v
 
 
 @pytest.mark.asyncio

@@ -1,34 +1,55 @@
 # MobilityOne WhatsApp Bot
 
-Croatian-language conversational agent over the MobilityOne fleet API. Receives Infobip WhatsApp webhooks, routes natural-language requests to ~950 backend tools via a hybrid FAISS + BM25 + LLM reranker pipeline, resolves identifier dependencies automatically (Graph Discovery), and replies in Croatian.
+Croatian-language conversational agent over the MobilityOne fleet API. Receives Infobip WhatsApp webhooks, routes natural-language requests to ~950 backend tools, executes via the MobilityOne HTTP API, replies in Croatian.
 
-- **Version:** `11.0.2` (see [config.py](config.py))
-- **Runtime:** Python 3.14, FastAPI, asyncio worker
+- **Runtime:** Python 3.12 + FastAPI + asyncio worker ([Dockerfile](Dockerfile))
 - **Stores:** PostgreSQL (asyncpg + SQLAlchemy 2.0), Redis (queue + cache + distributed locks)
-- **AI:** Azure OpenAI — `gpt-4o-mini` for routing/reranking, `text-embedding-ada-002` for FAISS
-- **Deployment:** single-pod Kubernetes, 1 CPU / 1 GiB RAM (see [k8s/](k8s/))
+- **AI:** Azure OpenAI — `gpt-4o-mini` (chat + tool-call routing), `text-embedding-ada-002` (anchor retrieval)
+- **Deploy target:** Azure VM with Docker — see [docs/AZURE_VM_DEPLOY_PLAYBOOK.md](docs/AZURE_VM_DEPLOY_PLAYBOOK.md)
+
+## Routing architecture (post-rewrite 2026-05-12)
+
+Single pipeline. Old V2 recognition + V3 hierarchical router experiments deleted.
+
+```
+Infobip POST → webhook → Redis stream → worker → V2Engine.process_message
+   L-1 rate limiter / L0.5 PII / L0.6 sanitizer / L0 identity (cache 30s)
+   L0.7 crisis / L0.75 negation / L0.8 multi-intent / L0.85 meta
+   L1 special intents (GDPR/welcome/handover) / L1.5 unknown-phone gate
+   L2 driver quick-path (regex, 0 LLM) / L2a intent type / L2b basics anchor
+   L3 LLM router [services/router/]:
+     anchor_index.top_k(query) → 50 candidates
+     tool_schema_builder → OpenAI tools=[]
+     gpt-4o-mini chat.completions.create(tools=..., tool_choice="auto")
+     → RouterResult{tool_id, params, confidence, anchor_score}
+   L5 confidence_gate → execute / clarify / fallback
+   L6 mutation gate → confirm dialog for POST/PUT/PATCH/DELETE
+   L7 executor → services/api_gateway (OAuth, circuit breaker, x-tenant)
+   L8 LLM formatter [services/formatter/]:
+     output_sanitize → prune → gpt-4o-mini Croatian response → PII scrub
+   → Redis outbound list → Infobip POST
+```
 
 ## Repository layout
 
 | Path | Purpose |
-| --- | --- |
-| [main.py](main.py) | FastAPI app (webhook receiver, health, metrics) |
-| [webhook_simple.py](webhook_simple.py) | Infobip HMAC verification + enqueue |
-| [worker.py](worker.py) | Async queue consumer, runs the full routing pipeline |
+|---|---|
+| [main.py](main.py) | FastAPI app (webhook receiver, health checks) |
+| [webhook_simple.py](webhook_simple.py) | Infobip HMAC verification + enqueue + admin diagnostic endpoints |
+| [worker.py](worker.py) | Async queue consumer; runs V2Engine routing |
 | [config.py](config.py) | Pydantic `Settings` — all env vars |
-| [database.py](database.py), [models.py](models.py), [base.py](base.py) | SQLAlchemy engine + ORM |
-| [tool_routing.py](tool_routing.py) | Entry into unified router |
-| [services/](services/) | Routing, retrieval, execution, GDPR, cost tracking, circuit breakers |
-| [services/engine/](services/engine/) | Per-intent handlers (tool, confirmation, hallucination, user, flow) |
-| [services/registry/](services/registry/) | Swagger parsing, tool registry, embedding engine |
-| [services/dependency_resolver/](services/dependency_resolver/) | Graph Discovery over `processed_tool_registry.json` |
-| [config/](config/) | Processed tool registry, documentation, categories, context schemas |
-| [alembic/versions/](alembic/versions/) | DB migrations (001 initial, 002 GDPR consent, 003 ORM alignment) |
-| [k8s/](k8s/) | Kustomize deployment manifests |
-| [tests/](tests/) | pytest suite + benchmarks |
-| [scripts/](scripts/) | Tool sync, embedding generation, documentation helpers |
+| [database.py](database.py), [models.py](models.py) | SQLAlchemy engine + ORM |
+| [services/v2/](services/v2/) | Engine orchestrator + L0-L2/L4-L8 guards, flows, gates, executor |
+| [services/router/](services/router/) | L3 anchor retrieval + OpenAI tool-call routing |
+| [services/formatter/](services/formatter/) | L8 LLM-driven Croatian response generation |
+| [services/api_gateway.py](services/api_gateway.py) | MobilityOne HTTP client (OAuth, retries, circuit breaker, tenant headers) |
+| [services/registry/](services/registry/) | Offline registry build (sync_tools, embedding helper for scripts) |
+| [config/](config/) | Tool registry (950 tools), TKB, anchor enrichments, quick-path patterns, typo synonyms |
+| [tests/](tests/) | pytest suite (~1180 passing) |
+| [scripts/](scripts/) | Tool sync, anchor + TKB regeneration, router benchmark, param enrichment |
+| [k8s/_archive/](k8s/_archive/) | Old k8s manifests (never production-tested) |
 
-## Quickstart (local)
+## Quickstart (local dev)
 
 ```bash
 python -m venv .venv && . .venv/Scripts/activate   # Windows: Scripts; Linux/mac: bin
@@ -40,43 +61,31 @@ alembic upgrade head
 # API (webhook receiver)
 uvicorn main:app --host 0.0.0.0 --port 8000
 
-# Worker (in a second shell)
+# Worker (separate shell)
 python worker.py
 ```
 
-Docker alternative: `docker compose up --build` (see [docker-compose.yml](docker-compose.yml)).
+Docker: `docker compose up --build` (see [docker-compose.yml](docker-compose.yml)).
 
-## First-time setup of the tool registry
-
-Swagger → processed registry → FAISS embeddings:
-
-```bash
-python scripts/sync_tools.py                   # regenerate config/processed_tool_registry.json
-python scripts/generate_tool_embeddings.py     # populate .cache/tool_embeddings.json
-```
-
-Re-run `scripts/generate_tool_embeddings.py` whenever tool metadata changes; the worker loads `.cache/tool_embeddings.json` on startup.
-
-## Tests
+## Testing
 
 ```bash
 pytest                                          # full suite
-pytest tests/benchmarks/test_tool_recognition.py  # retrieval benchmark (seed=42)
-PARAPHRASES_PATH=tests/benchmarks/tool_recognition_paraphrases.seed1337.json \
-  pytest tests/benchmarks/test_tool_recognition.py   # held-out seed
+python scripts/bench_router.py                  # end-to-end router benchmark
 ```
 
-Pre-flight for production pods:
+## Production deploy
 
-```bash
-python scripts/verify_production_readiness.py
-```
+Single Docker image, Azure VM target. See [docs/AZURE_VM_DEPLOY_PLAYBOOK.md](docs/AZURE_VM_DEPLOY_PLAYBOOK.md) for step-by-step.
+
+Rollback: pull previous sha tag, restart container. ~30-60s downtime per deploy.
 
 ## Related documents
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — component map and request lifecycle
-- [DEPLOYMENT.md](DEPLOYMENT.md) — k8s manifests, env vars, sealed secrets
+- [ARCHITECTURE.md](ARCHITECTURE.md) — component map + request lifecycle
+- [DEPLOYMENT.md](DEPLOYMENT.md) — env vars, secrets, deploy steps
+- [docs/REWRITE_2026-05-12.md](docs/REWRITE_2026-05-12.md) — routing rewrite report + numbers
+- [docs/AZURE_VM_DEPLOY_PLAYBOOK.md](docs/AZURE_VM_DEPLOY_PLAYBOOK.md) — full VM runbook
 - [SECURITY.md](SECURITY.md) — threat model, GDPR, hardening
-- [HANDOFF.md](HANDOFF.md) — ownership orientation for new maintainers
+- [CLAUDE.md](CLAUDE.md) — engineering doctrine
 - [CHANGELOG.md](CHANGELOG.md) — notable changes
-- [k8s/README.md](k8s/README.md) — manifest-level details

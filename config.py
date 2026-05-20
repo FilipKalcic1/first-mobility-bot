@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     APP_ENV: str = Field(default="development")
     APP_NAME: str = Field(default="MobilityOne Bot")
-    APP_VERSION: str = Field(default="11.0.2")
+    APP_VERSION: str = Field(default="12.22.0")
     
     # ---
     # DATABASE - REQUIRED (no localhost defaults for production safety!)
@@ -50,7 +50,6 @@ class Settings(BaseSettings):
         description="Redis connection string (e.g., redis://host:6379/0)"
     )
     REDIS_MAX_CONNECTIONS: int = Field(default=100)
-    REDIS_STATS_KEY_TOOLS: str = Field(default="stats:tools_loaded")
 
     # Redis Sentinel (optional - for HA failover)
     REDIS_SENTINEL_ENABLED: bool = Field(default=False)
@@ -85,7 +84,7 @@ class Settings(BaseSettings):
     MOBILITY_CLIENT_SECRET: str = Field(..., description="OAuth2 client secret")
     MOBILITY_TENANT_ID: str = Field(..., description="Tenant ID for x-tenant header")
     MOBILITY_SCOPE: Optional[str] = Field(default=None, description="OAuth2 scope(s) for token request")
-    
+
     # ---
     # AZURE OPENAI - REQUIRED (no defaults)
     # ---
@@ -95,25 +94,14 @@ class Settings(BaseSettings):
     AZURE_OPENAI_DEPLOYMENT_NAME: str = Field(default="gpt-4o-mini")
     AZURE_OPENAI_EMBEDDING_DEPLOYMENT: str = Field(default="text-embedding-ada-002")
 
-    # ---
-    # DIRECT OPENAI (for text-embedding-3-large — bypasses Azure)
-    # ---
-    OPENAI_EMBEDDING_API_KEY: Optional[str] = Field(
-        default=None,
-        description="Direct OpenAI API key for embeddings (bypasses Azure when set)"
-    )
-    OPENAI_EMBEDDING_MODEL: str = Field(
-        default="text-embedding-3-large",
-        description="OpenAI embedding model (used when OPENAI_EMBEDDING_API_KEY is set)"
-    )
-    OPENAI_RERANKER_API_KEY: Optional[str] = Field(
-        default=None,
-        description="Direct OpenAI API key for reranker (bypasses Azure when set)"
-    )
-    OPENAI_RERANKER_MODEL: str = Field(
-        default="gpt-4o",
-        description="OpenAI model for reranker (used when OPENAI_RERANKER_API_KEY is set)"
-    )
+    # NOTE — direct-OpenAI embedding/reranker settings removed in 12.3.0.
+    # Employer constraint: Azure OpenAI is the only allowed AI provider.
+    # `services/openai_client.get_embedding_client()` and `get_reranker_client()`
+    # always return Azure clients. Anything previously gated on
+    # `OPENAI_EMBEDDING_API_KEY` / `OPENAI_RERANKER_API_KEY` is dead code.
+    # If a swap to a different Azure deployment is needed, change
+    # `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` (already wired) — not by adding
+    # a direct-OpenAI escape hatch.
 
     # ---
     # AI SETTINGS
@@ -182,11 +170,6 @@ class Settings(BaseSettings):
         default="https://admin.mobilityone.io",
         description="Comma-separated CORS origins for admin API"
     )
-    ADMIN_RATE_LIMIT_PER_MINUTE: int = Field(default=30, description="Admin API rate limit per minute per user")
-    ADMIN_ALLOWED_IPS: Optional[str] = Field(
-        default=None,
-        description="Comma-separated IP whitelist for admin API (e.g., '10.0.0.0/8,192.168.0.0/16'). If None, all IPs allowed."
-    )
 
     # ---
     # DATABASE ROLES (dual-user security)
@@ -195,13 +178,51 @@ class Settings(BaseSettings):
     ADMIN_DATABASE_URL: Optional[str] = Field(default=None, description="Full-access DB URL for admin (falls back to DATABASE_URL)")
 
     # ---
-    # MONITORING & LOGGING
+    # ERROR TRACKING & LOGGING
     # ---
     SENTRY_DSN: Optional[str] = Field(default=None)
 
     # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
     # In production, set to WARNING or ERROR to reduce noise
     LOG_LEVEL: str = Field(default="INFO", description="Logging level (DEBUG/INFO/WARNING/ERROR)")
+
+    # ---
+    # RESPONSE SANITY CHECKER
+    # ---
+    # Last-gate inspector that catches wrong-shape responses (empty data,
+    # all-zero numerics, stale cache, HTML leak) before user sees them.
+    # See services/response_sanity.py.
+    SANITY_CHECKER_ENABLED: bool = Field(
+        default=True,
+        description="Enable response sanity checks before formatter render",
+    )
+
+    # ---
+    # CONCURRENCY / SCALING (audit fix — 2026-05-08)
+    # Centralized so deploy ops don't dig into worker/openai_client to tune.
+    # Previous state: each module read os.environ directly with its own
+    # default, leading to silent drift between consumer pods.
+    # ---
+    AZURE_LLM_MAX_CONCURRENT: int = Field(
+        default=20,
+        description="Process-wide cap on concurrent Azure chat-completion calls",
+    )
+    MAX_CONCURRENT: int = Field(
+        default=5,
+        description="Worker concurrent message processing slots",
+    )
+    BURST_MAX_MESSAGES: int = Field(
+        default=100,
+        description="Burst-mode worker exits after processing this many messages",
+    )
+    BURST_IDLE_TIMEOUT: int = Field(
+        default=300,
+        description="Burst-mode worker exits after this many seconds idle",
+    )
+    CACHE_INVALIDATION_SECRET: Optional[str] = Field(
+        default=None,
+        description="HMAC secret for /admin/cache-invalidate webhook",
+    )
 
     # ---
     # CONFIGURATION (Pydantic V2 Style)
@@ -282,6 +303,26 @@ class Settings(BaseSettings):
             raise ValueError(
                 "INFOBIP_SECRET_KEY is required when INFOBIP_API_KEY is set. "
                 "Webhook HMAC validation cannot be bypassed."
+            )
+        return self
+
+    @model_validator(mode='after')
+    def _forbid_disabled_signature_in_production(self) -> 'Settings':
+        """
+        R4 (multi-tenant safety): if APP_ENV is "production", refuse to
+        start with VERIFY_WHATSAPP_SIGNATURE=False. Disabling signature
+        verification in prod lets any attacker spoof messages for any
+        tenant by crafting a webhook payload with a chosen sender phone.
+        Dev/test envs may opt out, but prod must not.
+        """
+        if (
+            self.APP_ENV.lower() == "production"
+            and not self.VERIFY_WHATSAPP_SIGNATURE
+        ):
+            raise ValueError(
+                "VERIFY_WHATSAPP_SIGNATURE=False is not allowed when "
+                "APP_ENV=production. HMAC validation is the only defense "
+                "against tenant-spoofed webhook payloads."
             )
         return self
 

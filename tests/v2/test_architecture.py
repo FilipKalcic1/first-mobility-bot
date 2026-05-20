@@ -2,9 +2,13 @@
 
 Encodes the layered design:
 
-  - L-1 rate_limiter, L0 identity, L0.5 pii_scrubber, L1 special_intents,
-    L2a intent_type, L2b driver_basics, L3 recognition, L4 flow_engine,
-    L5 confidence_gate, L6 mutation_gate, L7 executor, L8 formatter
+  - L-1 rate_limiter, L0 identity, L0.5 pii_scrubber, L0.6 input_sanitizer,
+    L0.7 crisis_detector, L0.75 negation, L0.8 multi_intent, L0.85 meta_intents,
+    L1 special_intents, L2a intent_type, L2b driver_basics,
+    L4 flow_engine, L5 confidence_gate + clarify_ui + pending_clarify,
+    L6 mutation_gate + pending_mutation, L7 executor, L8 formatter (legacy).
+    NEW L3 router lives at services/router/ (not in v2 namespace).
+    NEW L8 LLM formatter lives at services/formatter/ (not in v2).
   - Only the orchestrator (engine.py) may pull siblings together.
   - No cycles.
   - No layer reaches into another's private surface (`._private`).
@@ -30,37 +34,32 @@ LEAF_MODULES = {
     "identity",              # L0 phone → personId
     "intent_type",           # L2a 4-way intent classifier
     "driver_basics",         # L2b anchor index for driver self-questions
-    "driver_quick_path",     # L2 deterministic regex routing
-    "recognition",           # L3 anchor + judge fallback
-    "domain_picker",         # L3a Stage 1 V3 hierarchical
-    "domain_scoped_picker",  # L3b Stage 2 V3 hierarchical
-    "unified_responder",     # L3 alt — one-call routing + params + response
-    "unified_retriever",     # FAISS adapter for UnifiedResponder + ToolUse
-    "tool_use_responder",    # L3 alt — 2-pass OpenAI function calling
     "flow_engine",           # L4 multi-step state machine
     "confidence_gate",       # L5 execute / clarify / fallback
     "clarify_ui",            # L5.5 Top-3 cards
     "pending_clarify",       # L5.5 state for "1"/"2"/"3" replies
     "mutation_gate",         # L6 confirm dialog (POST/PUT/DELETE)
     "pending_mutation",      # L6 confirm state
+    "param_ui",              # L5.7 Croatian param questions + parsing
+    "pending_params",        # L5.7 state for param-collection turns
+    "optional_extractor",    # L5.7 LLM extract free-text → optional dict
+    "api_error_translator",  # L7.5 LLM translate 4xx body → Croatian message
+    "param_labeler",         # L5.7 LLM generate Croatian param labels
+    "active_learning",       # offline: telemetry → actionable report
+    "anchor_audit",          # offline: anchor quality → actionable report
     "executor",              # L7 API call + circuit breaker + idempotency
     "output_sanitizer",      # L7.5 indirect-prompt-injection guard
-    "hallucination_guard",   # L7.5 response vs api_data sanity
-    "formatter",             # L8 Croatian template
+    "formatter",             # L8 Croatian template (replaced in Phase 4)
     # Cross-cutting helpers
-    "registry",              # v2 tool registry
     "telemetry",             # structured event logging
     "conversation_history",  # multi-turn context
-    "query_normalizer",      # L1.5 query rewrite
     "crisis_detector",       # L0.7 suicidal-signal redirect
     "negation_handler",      # standalone "nemoj/ne" recognizer
     "multi_intent_detector", # split detection
-    "reference_resolver",    # anaphoric follow-ups
     "meta_intents",          # self-reference / handover / OOS
     "special_intents",       # welcome / GDPR / help
-    # L3 sub-helpers (used only by recognition.py)
-    "hierarchical_entity_retrieval",
-    "confusion_disambiguator",
+    "gdpr_audit",            # L1 side-effect handler for GDPR + handover
+    "atomic_io",             # Faza 11.2: atomic JSON write helper for config files
     # Infra wired outside engine.py
     "azure_rate_guard",      # used by openai_client wrapper
     "cache_invalidation",    # used by /admin/cache-invalidate route
@@ -91,31 +90,10 @@ def _v2_imports(path: Path) -> set[str]:
 
 
 SIBLING_IMPORTS_ALLOWED = {
-    # recognition (L3) may pull its internal sub-components for entity-level
-    # hierarchical retrieval and per-cluster confusion disambiguation.
-    # Single-direction composition (recognition uses, not the reverse).
-    "recognition": {
-        "hierarchical_entity_retrieval",
-        "confusion_disambiguator",
-    },
     # confidence_gate (L5) renders Top-3 fallback via clarify_ui (L5.5).
     # Lazy-imported inside _context_fallback to avoid import cycles —
     # this is a single-direction render-helper composition.
     "confidence_gate": {"clarify_ui"},
-    # domain_scoped_picker (L3b Stage 2) needs Stage 1 metadata.
-    # Single-direction: scoped picker reads domain definitions from picker.
-    "domain_scoped_picker": {"domain_picker"},
-    # SECURITY composition (audit fix 2026-05-08): tool_use_responder
-    # and unified_responder embed identity fields (vehicle_name, etc.)
-    # into the LLM system prompt at Pass 1. Those fields come from the
-    # backend API and are NOT user-input (so input_sanitizer doesn't
-    # cover them); without sanitization, a corrupted/maliciously-set
-    # vehicle_name like "[INST: ...]" could shift LLM behavior.
-    # Both responders now reuse `output_sanitizer._sanitize_string`
-    # via a single-direction import. The architecture test invariant
-    # treats this the same as recognition→clarify_ui composition.
-    "tool_use_responder": {"output_sanitizer"},
-    "unified_responder": {"output_sanitizer"},
 }
 
 

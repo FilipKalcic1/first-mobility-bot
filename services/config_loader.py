@@ -1,12 +1,12 @@
-"""Loader for externalized domain/linguistic/flow/per_tool JSON configs.
+"""Loader for externalized domain/linguistic JSON configs.
 
-Domain data (HR stems, synonyms, verb maps, per-tool heuristics) lives in
-`config/{domain,linguistic,flow,per_tool}/` so linguists can edit without
-Python PRs. This module loads, validates, and caches those files.
+Domain data (HR stems/synonyms in `domain/`, typo + slang map in
+`linguistic/`) lives under `config/` so linguists can edit without
+touching Python. This module loads, validates, and caches those files.
 
 Contract:
-- `load(kind, name)` returns the parsed object (already-validated).
-- Loads are LRU-cached; call `reload(kind, name)` to force re-read.
+- `load_json(kind, name)` returns the parsed object (already-validated).
+- Loads are LRU-cached; call `reload()` to force re-read.
 - On validation failure: raises at startup (fail-fast). Callers get a
   predictable shape and never need to defensively check for missing keys.
 """
@@ -19,7 +19,7 @@ from typing import Any
 
 _CONFIG_ROOT = Path(__file__).resolve().parent.parent / "config"
 
-_ALLOWED_KINDS = frozenset({"domain", "linguistic", "flow", "per_tool"})
+_ALLOWED_KINDS = frozenset({"domain", "linguistic"})
 
 
 def _path(kind: str, name: str) -> Path:

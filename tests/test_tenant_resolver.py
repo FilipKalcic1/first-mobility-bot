@@ -137,10 +137,12 @@ async def test_cache_miss_then_db_hit_writes_through(session_factory):
     tid = await resolver.resolve_tenant_for_phone("+385955087196")
     assert tid == "tenant-A"
 
-    # Write-through: the same key is now cached with TTL == 3600
+    # Write-through: the same key is now cached with TTL == 300
+    # (security-tight default; multi-tenant routing must self-heal even if
+    # admin forgets to invalidate after re-mapping a phone)
     cached = redis.store.get(f"{CACHE_KEY_PREFIX}+385955087196")
     assert cached == "tenant-A"
-    assert redis.set_calls and redis.set_calls[-1][2] == 3600
+    assert redis.set_calls and redis.set_calls[-1][2] == 300
 
 
 @pytest.mark.asyncio

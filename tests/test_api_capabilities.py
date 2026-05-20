@@ -913,32 +913,36 @@ class TestAPICapabilityRegistryCache:
 class TestGlobalFunctions:
     """Test module-level functions."""
 
-    def test_get_capability_registry_initial(self):
+    @pytest.fixture
+    def _capability_module_isolated(self):
+        """Fixture-based save/restore of the module-level singleton.
+
+        Replaces hand-rolled try/finally save/restore in each test —
+        with try/finally, an assertion failure inside the test body
+        STILL restores correctly, but a crash between save and
+        try-block (e.g. import error) leaks the polluted state.
+        Pytest fixtures handle teardown via the test runner so the
+        restore happens even on hard crashes.
+        """
+        import services.api_capabilities as module
+        original = module._capability_registry
+        try:
+            yield module
+        finally:
+            module._capability_registry = original
+
+    def test_get_capability_registry_initial(self, _capability_module_isolated):
         """Test get_capability_registry returns None initially."""
-        # Need to reset global state
-        import services.api_capabilities as module
-        original = module._capability_registry
-        module._capability_registry = None
+        _capability_module_isolated._capability_registry = None
+        result = get_capability_registry()
+        assert result is None
 
-        try:
-            result = get_capability_registry()
-            assert result is None
-        finally:
-            module._capability_registry = original
-
-    def test_get_capability_registry_after_init(self):
+    def test_get_capability_registry_after_init(self, _capability_module_isolated):
         """Test get_capability_registry returns initialized registry."""
-        import services.api_capabilities as module
-        original = module._capability_registry
-
         mock_registry = APICapabilityRegistry()
-        module._capability_registry = mock_registry
-
-        try:
-            result = get_capability_registry()
-            assert result is mock_registry
-        finally:
-            module._capability_registry = original
+        _capability_module_isolated._capability_registry = mock_registry
+        result = get_capability_registry()
+        assert result is mock_registry
 
     @pytest.mark.asyncio
     async def test_initialize_capability_registry(self, mock_tool_registry):

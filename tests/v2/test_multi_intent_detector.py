@@ -71,3 +71,31 @@ def test_clarify_message_includes_first_part():
     assert out.detected
     # First part should be in the message
     assert "pokaži" in out.clarify_message.lower() or "km" in out.clarify_message.lower()
+
+
+# ---- Faza 4 Bug #3 (Filip 2026-05-17): empty parts fragments ----
+
+def test_trailing_conjunction_does_not_trigger_multi_intent():
+    """'pokaži km i' has only 1 action category → already returns False
+    via category check. Defensive: ensure no crash, no fake clarify."""
+    out = detect("pokaži km i")
+    assert out.detected is False
+
+
+@pytest.mark.parametrize("text", [
+    # Two action verbs separated by ", i" then trailing junk
+    "pokaži km, i  ",
+    "pokaži km, i ,",
+    # Double conjunction (typo'd input)
+    "pokaži km i i rezerviraj",
+])
+def test_malformed_conjunction_input_does_not_crash(text):
+    """Whatever malformed input, detector must not raise and must not
+    emit a clarify message with blank parts."""
+    out = detect(text)
+    # Either correctly detected (real multi-intent) OR not detected — but
+    # if detected, parts must be ≥2 and non-empty.
+    if out.detected:
+        assert len(out.parts) >= 2
+        for p in out.parts:
+            assert p.strip(), f"empty part in {out.parts!r}"

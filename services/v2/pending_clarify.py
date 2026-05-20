@@ -28,13 +28,35 @@ REDIS_KEY_PREFIX = "v2_pending_clarify:"
 DEFAULT_TTL_SECONDS = 300  # 5 minutes
 
 
+STAGE_ACTION = "action"  # Step 1 (fallback context): user bira akciju iz set-a
+                          # koji router-ova low-confidence top-K kandidata daje.
+                          # Ovo je legacy fallback model.
+STAGE_TOOL = "tool"      # Step 2 (or single-step legacy): user bira specifičan tool
+STAGE_ACTION_GLOBAL = "action_global"
+                          # Model A (Filip 2026-05-17): user uvijek bira akciju
+                          # prvo PRIJE router-a. State drži original_query +
+                          # identity context. Nakon pick-a, engine pokreće
+                          # silent filters + L3 router scoped → STAGE_TOOL.
+
+
 @dataclass
 class PendingClarify:
-    """One clarify-pending state per phone."""
+    """One clarify-pending state per phone.
+
+    Two-step clarify (Filip direktiva 2026-05-17):
+      stage="action" → engine prikazao actions (1=POGLEDATI / 2=UNIJETI / ...),
+                       čeka pick. Nakon pick-a, filter candidates i prelazi
+                       u stage="tool".
+      stage="tool"   → engine prikazao top-3 tools (originalni flow), čeka pick.
+
+    Backward compat: stage defaults to "tool" (postojeći direktni clarify
+    flow ne mijenja se).
+    """
     phone: str
     candidates: list[dict] = field(default_factory=list)
-    # candidates: list of {"tool_id": "...", "label": "...", "description": "..."}
+    # candidates: list of {"tool_id": "...", "label": "...", "description": "...", "method": "GET|POST|..."}
     original_query: str = ""
+    stage: str = STAGE_TOOL
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False)
@@ -42,6 +64,8 @@ class PendingClarify:
     @classmethod
     def from_json(cls, s: str) -> "PendingClarify":
         d = json.loads(s)
+        # Backward compat: legacy entries (pre 2026-05-17) lack `stage` field
+        d.setdefault("stage", STAGE_TOOL)
         return cls(**d)
 
 
@@ -61,13 +85,21 @@ class PendingClarifyStore:
         phone: str,
         candidates: list[dict],
         original_query: str = "",
+        stage: str = STAGE_TOOL,
     ) -> None:
         """Persist pending clarify. Caller assembled candidates in
-        clarify_ui-compatible format ({tool_id, label, description})."""
+        clarify_ui-compatible format ({tool_id, label, description}).
+
+        ``stage`` selects 2-step flow position:
+          - STAGE_ACTION: user just received action picker (Step 1)
+          - STAGE_TOOL (default): user received tool picker (Step 2 or
+            single-step direct clarify when all candidates share method)
+        """
         if self._redis is None:
             return
         pc = PendingClarify(
-            phone=phone, candidates=candidates, original_query=original_query,
+            phone=phone, candidates=candidates,
+            original_query=original_query, stage=stage,
         )
         try:
             await self._redis.setex(self._key(phone), self._ttl, pc.to_json())

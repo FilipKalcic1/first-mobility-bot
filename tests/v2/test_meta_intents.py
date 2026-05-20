@@ -19,17 +19,24 @@ def test_self_identity_detected(text, kind):
     assert "AI" in out.response or "bot" in out.response.lower()
 
 
+# NOTE: handoff/handover signals ("čovjek/operater/human") are now handled
+# ONLY by L1 special_intents.HANDOVER (which carries the
+# queue_human_handover side-effect). meta_intents.detect MUST return
+# falsey for these so the engine pipeline reaches L1.
 @pytest.mark.parametrize("text", [
     "hoću pravog čovjeka",
     "trebam ljudsku osobu",
     "spoji me s operaterom",
     "talk to a human",
 ])
-def test_human_handoff(text):
+def test_human_handoff_no_longer_in_meta(text):
+    """Regression: handoff used to live here but had to move to special_intents
+    so the queue_human_handover side-effect actually fires."""
     out = detect(text)
-    assert out.detected
-    assert out.kind == "human_handoff"
-    assert "manager" in out.response.lower() or "podršku" in out.response.lower()
+    assert not out.detected, (
+        f"meta_intents.detect should return falsey for {text!r}; "
+        "handoff belongs to L1 special_intents"
+    )
 
 
 @pytest.mark.parametrize("text", [

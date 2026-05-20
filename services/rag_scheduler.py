@@ -533,35 +533,9 @@ class RAGScheduler:
             "swagger_version": None
         }
 
-        try:
-            # Try to import and use actual tool registry if available
-            from services.engine import get_tool_registry
-            registry = await get_tool_registry()
-            if hasattr(registry, 'refresh'):
-                await registry.refresh()
-            if hasattr(registry, 'get_tool_count'):
-                result["tools_count"] = registry.get_tool_count()
-            elif hasattr(registry, 'tools'):
-                result["tools_count"] = len(registry.tools)
-
-        except ImportError:
-            logger.debug("ToolRegistry not available for default refresh")
-        except Exception as e:
-            logger.warning(f"Error during tool registry refresh: {e}")
-
-        try:
-            # Try to import and use embedding engine if available
-            from services.engine.embedding_engine import get_embedding_engine
-            engine = await get_embedding_engine()
-            if hasattr(engine, 'reindex'):
-                result["embeddings_count"] = await engine.reindex()
-            elif hasattr(engine, 'get_embedding_count'):
-                result["embeddings_count"] = engine.get_embedding_count()
-
-        except ImportError:
-            logger.debug("EmbeddingEngine not available for default refresh")
-        except Exception as e:
-            logger.warning(f"Error during embedding refresh: {e}")
+        # v1 services.engine refresh removed 2026-05-08. RAG refresh
+        # logic now lives in scripts/ (sync_tools, generate_tool_embeddings)
+        # — invoked via cron, not from the runtime scheduler.
 
         # Generate version using SHA256 (more secure than MD5)
         version_input = json.dumps({

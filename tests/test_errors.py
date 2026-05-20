@@ -4,12 +4,10 @@ Tests for services/errors.py
 Covers:
 - ErrorCode enum completeness and str-backed serialization
 - BotError construction, __str__, to_dict, with_metadata
-- ClassificationError, SearchError, RoutingError (domain subclasses)
 - GatewayError with status_code, from_status, is_retryable
 - CircuitOpenError convenience constructor
 - ConversationError, InfrastructureError
 - HTTP_STATUS_TO_ERROR_CODE mapping
-- gateway_error_from_response factory
 """
 
 import pytest
@@ -17,15 +15,11 @@ import pytest
 from services.errors import (
     ErrorCode,
     BotError,
-    ClassificationError,
-    SearchError,
-    RoutingError,
     GatewayError,
     CircuitOpenError,
     ConversationError,
     InfrastructureError,
     HTTP_STATUS_TO_ERROR_CODE,
-    gateway_error_from_response,
 )
 
 
@@ -130,40 +124,6 @@ class TestBotError:
 
 
 # ============================================================================
-# Domain-specific subclasses
-# ============================================================================
-
-class TestClassificationError:
-    def test_is_bot_error(self):
-        err = ClassificationError(ErrorCode.MODEL_NOT_LOADED, "no model")
-        assert isinstance(err, BotError)
-        assert isinstance(err, ClassificationError)
-
-    def test_catch_as_bot_error(self):
-        with pytest.raises(BotError):
-            raise ClassificationError(ErrorCode.PREDICTION_FAILED, "fail")
-
-
-class TestSearchError:
-    def test_is_bot_error(self):
-        err = SearchError(ErrorCode.FAISS_NOT_INITIALIZED, "no faiss")
-        assert isinstance(err, BotError)
-
-
-class TestRoutingError:
-    def test_is_bot_error(self):
-        err = RoutingError(ErrorCode.LLM_ROUTING_FAILED, "llm down")
-        assert isinstance(err, BotError)
-
-    def test_metadata_propagation(self):
-        err = RoutingError(
-            ErrorCode.MEDIATION_FAILED, "mediation fail",
-            metadata={"cp_set_size": 3},
-        )
-        assert err.metadata["cp_set_size"] == 3
-
-
-# ============================================================================
 # GatewayError
 # ============================================================================
 
@@ -245,38 +205,19 @@ class TestInfrastructureError:
 
 class TestHTTPStatusMapping:
     def test_all_common_statuses_mapped(self):
-        expected = {400, 401, 403, 404, 405, 408, 422, 429, 500, 502, 503, 504}
+        # 409 added 2026-05-08 (audit fix — was falling through to
+        # generic SERVER_ERROR despite v2/http_status_handler having
+        # the right Croatian message ready)
+        expected = {400, 401, 403, 404, 405, 408, 409, 422, 429, 500, 502, 503, 504}
         assert expected == set(HTTP_STATUS_TO_ERROR_CODE.keys())
 
     def test_correct_mapping(self):
         assert HTTP_STATUS_TO_ERROR_CODE[400] is ErrorCode.BAD_REQUEST
         assert HTTP_STATUS_TO_ERROR_CODE[401] is ErrorCode.UNAUTHORIZED
         assert HTTP_STATUS_TO_ERROR_CODE[404] is ErrorCode.NOT_FOUND
+        assert HTTP_STATUS_TO_ERROR_CODE[409] is ErrorCode.CONFLICT
         assert HTTP_STATUS_TO_ERROR_CODE[429] is ErrorCode.RATE_LIMITED
         assert HTTP_STATUS_TO_ERROR_CODE[500] is ErrorCode.SERVER_ERROR
         assert HTTP_STATUS_TO_ERROR_CODE[503] is ErrorCode.SERVICE_UNAVAILABLE
 
 
-# ============================================================================
-# gateway_error_from_response factory
-# ============================================================================
-
-class TestGatewayErrorFromResponse:
-    def test_basic(self):
-        err = gateway_error_from_response(404, "/api/vehicles")
-        assert err.code is ErrorCode.NOT_FOUND
-        assert err.status_code == 404
-        assert err.metadata["url"] == "/api/vehicles"
-
-    def test_with_body(self):
-        err = gateway_error_from_response(500, "/api/test", body="Internal Server Error")
-        assert err.metadata["response_body"] == "Internal Server Error"
-
-    def test_body_truncated(self):
-        long_body = "x" * 1000
-        err = gateway_error_from_response(500, "/api/test", body=long_body)
-        assert len(err.metadata["response_body"]) == 500
-
-    def test_unknown_status_defaults_to_server_error(self):
-        err = gateway_error_from_response(418, "/api/teapot")
-        assert err.code is ErrorCode.SERVER_ERROR

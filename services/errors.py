@@ -85,6 +85,7 @@ class ErrorCode(str, Enum):
     FORBIDDEN = "GATEWAY_FORBIDDEN"
     NOT_FOUND = "GATEWAY_NOT_FOUND"
     METHOD_NOT_ALLOWED = "GATEWAY_METHOD_NOT_ALLOWED"
+    CONFLICT = "GATEWAY_CONFLICT"
     VALIDATION_ERROR = "GATEWAY_VALIDATION_ERROR"
     RATE_LIMITED = "GATEWAY_RATE_LIMITED"
     SERVER_ERROR = "GATEWAY_SERVER_ERROR"
@@ -136,6 +137,7 @@ HTTP_STATUS_TO_ERROR_CODE: Dict[int, ErrorCode] = {
     404: ErrorCode.NOT_FOUND,
     405: ErrorCode.METHOD_NOT_ALLOWED,
     408: ErrorCode.TIMEOUT,
+    409: ErrorCode.CONFLICT,
     422: ErrorCode.VALIDATION_ERROR,
     429: ErrorCode.RATE_LIMITED,
     500: ErrorCode.SERVER_ERROR,
@@ -193,21 +195,6 @@ class BotError(Exception):
 # ---------------------------------------------------------------------------
 # Domain-specific exceptions
 # ---------------------------------------------------------------------------
-
-class ClassificationError(BotError):
-    """ML classification failures (intent, query type, action intent)."""
-    pass
-
-
-class SearchError(BotError):
-    """FAISS / BM25 / exact-match search failures."""
-    pass
-
-
-class RoutingError(BotError):
-    """3-tier routing pipeline failures (ML fast path, mediation, LLM)."""
-    pass
-
 
 class GatewayError(BotError):
     """MobilityOne API gateway failures (HTTP, auth, circuit breaker).
@@ -278,11 +265,6 @@ class CircuitOpenError(GatewayError):
         self.cooldown_seconds: float = cooldown_seconds
 
 
-class SecurityError(BotError):
-    """Security-related errors (integrity check failures, unauthorized access)."""
-    pass
-
-
 class ConversationError(BotError):
     """Conversation state machine and flow errors."""
     pass
@@ -297,20 +279,3 @@ class InfrastructureError(BotError):
 # Convenience factory for the most common gateway errors
 # ---------------------------------------------------------------------------
 
-def gateway_error_from_response(
-    status_code: int,
-    url: str,
-    body: Optional[str] = None,
-) -> GatewayError:
-    """Create a GatewayError from an HTTP response.
-
-    Extracts the appropriate ErrorCode from the status code and includes
-    the URL and response body as metadata for debugging.
-    """
-    code = HTTP_STATUS_TO_ERROR_CODE.get(status_code, ErrorCode.SERVER_ERROR)
-    message = f"HTTP {status_code} from {url}"
-    metadata: Dict[str, Any] = {"url": url}
-    if body:
-        # Truncate to prevent huge log entries
-        metadata["response_body"] = body[:500]
-    return GatewayError(code, message, status_code=status_code, metadata=metadata)

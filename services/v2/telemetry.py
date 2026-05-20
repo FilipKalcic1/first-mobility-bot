@@ -53,9 +53,31 @@ logger = logging.getLogger(__name__)
 # Damir-export Redis key — admin endpoint at webhook_simple.py:763 reads
 # this list. Bounded to 1k entries (LTRIM) with 30-day TTL so the key
 # disappears if telemetry stops writing (no stale snapshot).
-ROUTING_LOG_KEY = "routing:accuracy_log"
+#
+# Multi-tenant scoping (R2 fix 2026-05-14): the canonical sink key is
+# now per-tenant `routing:accuracy_log:{tenant_id}`. Events with no
+# tenant (e.g. early input-blocks before identity resolution) fall back
+# to the legacy unscoped key, which is now treated as a security-bypass
+# bucket the admin endpoint refuses to expose unless the operator asks
+# for the special `tenant=__unscoped__` selector explicitly.
+ROUTING_LOG_KEY_BASE = "routing:accuracy_log"
+ROUTING_LOG_LEGACY_KEY = ROUTING_LOG_KEY_BASE  # ← writes without tenant
+# Kept as an alias for backward-compat imports. New code should not use
+# this directly — use ``redis_key_for_tenant(tenant_id)`` instead.
+ROUTING_LOG_KEY = ROUTING_LOG_LEGACY_KEY
 ROUTING_LOG_MAX_ENTRIES = 999  # LTRIM 0..999 keeps 1000 newest
 ROUTING_LOG_TTL_SECONDS = 30 * 24 * 3600
+
+
+def redis_key_for_tenant(tenant_id: Optional[str]) -> str:
+    """Resolve the Redis key for a telemetry event given its tenant_id.
+
+    Per-tenant scoping prevents the routing-log admin endpoint from
+    leaking one tenant's queries to another's operator.
+    """
+    if tenant_id:
+        return f"{ROUTING_LOG_KEY_BASE}:{tenant_id}"
+    return ROUTING_LOG_LEGACY_KEY
 
 # BufferedAsyncFileSink defaults — flush every 100 events OR every 1s.
 BUFFER_MAX_SIZE = 10_000
@@ -76,10 +98,15 @@ _correlation_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
 _turn_number_var: contextvars.ContextVar[int] = contextvars.ContextVar(
     "_v2_turn_number", default=0
 )
+_is_negation_var: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_v2_is_negation", default=False
+)
 
 
-def set_request_context(*, correlation_id: str, turn_number: int) -> None:
-    """Record the current request's correlation_id + turn_number.
+def set_request_context(
+    *, correlation_id: str, turn_number: int, is_negation: bool = False,
+) -> None:
+    """Record the current request's correlation_id + turn_number + negation flag.
 
     Called once at V2Engine.process_message entry. Subsequent
     TelemetryEvent(...) constructions read from these vars when the
@@ -87,6 +114,19 @@ def set_request_context(*, correlation_id: str, turn_number: int) -> None:
     """
     _correlation_id_var.set(correlation_id)
     _turn_number_var.set(turn_number)
+    _is_negation_var.set(is_negation)
+
+
+def set_negation_flag(is_negation: bool) -> None:
+    """Update the per-request negation flag mid-dispatch.
+
+    Used by engine when it detects exact "nije točno" in user input.
+    """
+    _is_negation_var.set(is_negation)
+
+
+def get_negation_flag() -> bool:
+    return _is_negation_var.get()
 
 
 def hash_phone(phone: str) -> str:
@@ -132,6 +172,12 @@ class TelemetryEvent:
     # Execution
     error: Optional[str] = None
     latency_ms: int = 0
+
+    # Privacy / GDPR audit trail — list of redaction kinds the PII
+    # scrubber applied to this query (e.g. ["OIB", "EMAIL"]). Empty
+    # list (the default) is dropped from the emitted record by
+    # to_record(), so events without redactions stay compact.
+    redactions: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # Auto-fill from context vars if caller didn't supply explicitly.
@@ -297,12 +343,17 @@ class RedisSink(TelemetrySink):
     """Mirror events into a bounded Redis list for the live Damir endpoint.
 
     Single pipeline per write (one round-trip):
-        LPUSH routing:accuracy_log <json>
-        LTRIM routing:accuracy_log 0 999
-        EXPIRE routing:accuracy_log <30 days>
+        LPUSH routing:accuracy_log:{tenant_id} <json>
+        LTRIM ... 0 999
+        EXPIRE ... <30 days>
 
     The webhook_simple.py /whatsapp/routing-log endpoint reads the same
     key (LRANGE 0..N). Bounded list = no unbounded memory in Redis.
+
+    Per-tenant scoping (R2): each event's tenant_id field determines the
+    Redis key. Events without a tenant_id (early input-block etc.) fall
+    through to the legacy unscoped key; the admin endpoint refuses to
+    expose those unless the operator explicitly asks for them.
 
     Failure mode: exceptions propagate to the TelemetryLogger.log()
     inline loop, which logs and continues to other sinks.
@@ -311,21 +362,25 @@ class RedisSink(TelemetrySink):
     def __init__(
         self,
         redis_client,
-        key: str = ROUTING_LOG_KEY,
+        key: Optional[str] = None,  # explicit override; None = per-tenant routing
         max_entries: int = ROUTING_LOG_MAX_ENTRIES,
         ttl_seconds: int = ROUTING_LOG_TTL_SECONDS,
     ):
         self._redis = redis_client
-        self._key = key
+        self._key_override = key  # if set, ALL events go to this single key
         self._max_entries = max_entries
         self._ttl = ttl_seconds
 
     async def write_record(self, record: dict[str, Any]) -> None:
         line = json.dumps(record, ensure_ascii=False)
+        if self._key_override is not None:
+            key = self._key_override
+        else:
+            key = redis_key_for_tenant(record.get("tenant_id"))
         pipe = self._redis.pipeline()
-        pipe.lpush(self._key, line)
-        pipe.ltrim(self._key, 0, self._max_entries)
-        pipe.expire(self._key, self._ttl)
+        pipe.lpush(key, line)
+        pipe.ltrim(key, 0, self._max_entries)
+        pipe.expire(key, self._ttl)
         await pipe.execute()
 
 

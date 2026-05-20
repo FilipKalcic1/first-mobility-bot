@@ -5,7 +5,7 @@ import pytest
 
 from services.v2.pending_mutation import (
     PendingMutation, PendingMutationStore,
-    STAGE_DOUBLE_FIRST, STAGE_DOUBLE_SECOND, STAGE_SINGLE,
+    STAGE_SINGLE,
     parse_reply,
 )
 
@@ -110,23 +110,14 @@ def test_parse_ne_cancels():
     assert parse_reply("ne", STAGE_SINGLE) == "cancel"
     assert parse_reply("Ne", STAGE_SINGLE) == "cancel"
     assert parse_reply("odustani", STAGE_SINGLE) == "cancel"
-    assert parse_reply("prekini", STAGE_DOUBLE_FIRST) == "cancel"
+    assert parse_reply("prekini", STAGE_SINGLE) == "cancel"
 
 
-def test_parse_da_in_double_first_advances():
-    assert parse_reply("Da", STAGE_DOUBLE_FIRST) == "advance"
-    assert parse_reply("ok", STAGE_DOUBLE_FIRST) == "advance"
-
-
-def test_parse_trajno_in_double_second_executes():
-    assert parse_reply("TRAJNO", STAGE_DOUBLE_SECOND) == "execute"
-    assert parse_reply("trajno", STAGE_DOUBLE_SECOND) == "execute"
-    assert parse_reply("Da, trajno", STAGE_DOUBLE_SECOND) == "execute"
-
-
-def test_parse_da_alone_in_double_second_is_ambiguous():
-    # User must type the literal token TRAJNO at stage 2 — bare "Da" not enough
-    assert parse_reply("Da", STAGE_DOUBLE_SECOND) == "ambiguous"
+def test_parse_unknown_stage_returns_ambiguous():
+    """Single-confirm policy: only STAGE_SINGLE is recognised. Corrupt or
+    legacy stage strings get treated as ambiguous (re-prompt, not execute)."""
+    assert parse_reply("Da", "double_first") == "ambiguous"
+    assert parse_reply("TRAJNO", "double_second") == "ambiguous"
 
 
 def test_parse_empty_is_ambiguous():
@@ -142,3 +133,45 @@ def test_parse_random_text_is_ambiguous():
 def test_parse_negative_beats_affirmative_in_mixed_text():
     """If user writes 'Da, ali ne' the cancel signal wins to be safe."""
     assert parse_reply("ne, odustani", STAGE_SINGLE) == "cancel"
+
+
+# ---- Faza 1 (Filip 2026-05-17): strict execute whitelist --------------
+
+
+def test_parse_moze_biti_is_ambiguous_not_execute():
+    """Bug #4: 'može biti' used to parse as execute because 'može' was
+    matched by word-split. STRICT whitelist now requires exact match."""
+    assert parse_reply("može biti", STAGE_SINGLE) == "ambiguous"
+    assert parse_reply("može možda", STAGE_SINGLE) == "ambiguous"
+    assert parse_reply("možda", STAGE_SINGLE) == "ambiguous"
+
+
+def test_parse_da_with_other_words_does_not_execute():
+    """'da možda', 'da ali...' must NOT execute (strict whitelist).
+    Note: 'da, ne znam' falls under cancel because cancel set is lenient
+    (word-split fallback) — safer to over-cancel than over-execute."""
+    assert parse_reply("da možda", STAGE_SINGLE) == "ambiguous"
+    assert parse_reply("da ali samo ako", STAGE_SINGLE) == "ambiguous"
+    assert parse_reply("da, ne znam", STAGE_SINGLE) == "cancel"  # 'ne' wins
+
+
+def test_parse_strips_trailing_punctuation():
+    """'Da.' / 'Da!' / 'Da?' should still execute (common phone keyboards)."""
+    assert parse_reply("Da.", STAGE_SINGLE) == "execute"
+    assert parse_reply("DA!", STAGE_SINGLE) == "execute"
+    assert parse_reply("ok!", STAGE_SINGLE) == "execute"
+    assert parse_reply("može.", STAGE_SINGLE) == "execute"
+
+
+def test_parse_standalone_moze_still_executes():
+    """Standalone 'može' (no trailing words) IS a confirm — keep working."""
+    assert parse_reply("može", STAGE_SINGLE) == "execute"
+    assert parse_reply("Može", STAGE_SINGLE) == "execute"
+    assert parse_reply("moze", STAGE_SINGLE) == "execute"
+
+
+def test_parse_ne_hvala_still_cancels():
+    """Cancel set stays lenient — 'ne hvala' / 'ne, ne radi to' should
+    still cancel (false negatives only mean re-ask, safer)."""
+    assert parse_reply("ne hvala", STAGE_SINGLE) == "cancel"
+    assert parse_reply("Ne, otkaži", STAGE_SINGLE) == "cancel"

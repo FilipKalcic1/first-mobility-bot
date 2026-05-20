@@ -1,7 +1,0 @@
-{
-  "_comment": "Tools that must be surfaced when the query is identified as a user-profile question. Score is the synthetic FAISS score used for injection (no embedding match required).",
-  "tools": [
-    {"tool_id": "get_PersonData_personIdOrEmail", "score": 2.0},
-    {"tool_id": "get_Persons_id", "score": 1.5}
-  ]
-}

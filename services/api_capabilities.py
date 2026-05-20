@@ -32,7 +32,11 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
-CAPABILITIES_CACHE_FILE = Path.cwd() / ".cache" / "api_capabilities.json"
+# Anchored to repo root (not Path.cwd()) so the path is stable regardless
+# of where the worker is launched from. services/api_capabilities.py →
+# parents[1] = repo root. The .cache/ directory must be writable; docker
+# compose mounts cache_data volume here, K8s must do the same.
+CAPABILITIES_CACHE_FILE = Path(__file__).resolve().parents[1] / ".cache" / "api_capabilities.json"
 
 class ParameterSupport(Enum):
     """How a tool supports a parameter."""

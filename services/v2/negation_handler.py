@@ -22,7 +22,7 @@ on UNAMBIGUOUS Croatian negations to avoid false positives.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

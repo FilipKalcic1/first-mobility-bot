@@ -21,8 +21,8 @@ unsure, instead of executing a confident-wrong pick.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
+from typing import Callable, Optional
 
 
 @dataclass(frozen=True)
@@ -39,6 +39,111 @@ class ClarifyOptions:
     """Rendered top-3 + 'Ne znam' option."""
     cards: list[ClarifyCard]
     none_of_above_label: str = "Nešto drugo"
+
+
+# --------------------------------------------------------------------------
+# 2-step clarify (Filip direktiva 2026-05-17):
+#   Step 1 (action picker): user bira što HOĆE RADITI (POGLEDATI/UNIJETI/...)
+#   Step 2 (tool picker):   user bira specifičan tool unutar te akcije
+# --------------------------------------------------------------------------
+
+
+# HTTP method → Croatian action label (Step 1 button text).
+# Order matters for UI presentation: read first (najčešće), then writes.
+ACTION_LABELS: dict[str, str] = {
+    "GET":    "POGLEDATI",
+    "POST":   "UNIJETI / KREIRATI",
+    "PUT":    "IZMIJENITI",
+    "PATCH":  "IZMIJENITI",
+    "DELETE": "IZBRISATI",
+}
+
+# Stable ordering — Step 1 picker shows actions in this order
+_ACTION_ORDER = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+
+
+def build_action_picker_global() -> ClarifyOptions:
+    """Model A (Filip 2026-05-17): UNIVERSAL action picker shown on EVERY
+    message regardless of candidate set. Always 4 options in canonical order,
+    independent of router state.
+
+    Use this for Turn-1 action picker (before any L3 routing). For the
+    fallback-context action picker that derives options from existing
+    candidate set, use build_action_picker() (legacy 2-step clarify).
+    """
+    cards: list[ClarifyCard] = []
+    idx = 1
+    seen_labels: set[str] = set()
+    for method in _ACTION_ORDER:
+        label = ACTION_LABELS.get(method)
+        if not label or label in seen_labels:
+            continue
+        seen_labels.add(label)
+        cards.append(ClarifyCard(
+            index=idx,
+            tool_id=method,  # placeholder — engine uses methods_for_action_label()
+            short_label=label,
+            description="",
+        ))
+        idx += 1
+    return ClarifyOptions(cards=cards, none_of_above_label="Nešto drugo")
+
+
+def build_action_picker(candidates: list[dict]) -> ClarifyOptions:
+    """Step 1 of 2-step clarify: group candidates by HTTP method, render
+    one card per unique action category (POGLEDATI/UNIJETI/IZMIJENITI/IZBRISATI).
+
+    Input: list of dicts with at least {"tool_id", "method", ...}
+    Output: ClarifyOptions where each card.tool_id holds the METHOD name
+            (not a real tool_id) — caller uses it to filter candidates
+            in Step 2. PUT/PATCH merged into single "IZMIJENITI" card.
+
+    Returns empty cards list if candidates is empty (caller decides fallback).
+    """
+    if not candidates:
+        return ClarifyOptions(cards=[])
+
+    # Group: action_key → list of methods that map to it
+    # (e.g. {"IZMIJENITI": ["PUT", "PATCH"]} — merged label)
+    by_action: dict[str, list[str]] = {}
+    for c in candidates:
+        method = (c.get("method") or "").upper()
+        if method not in ACTION_LABELS:
+            continue
+        label = ACTION_LABELS[method]
+        by_action.setdefault(label, []).append(method)
+
+    # Render cards in canonical action order (POGLEDATI first, IZBRISATI last)
+    seen_labels: set[str] = set()
+    cards: list[ClarifyCard] = []
+    idx = 1
+    for method in _ACTION_ORDER:
+        if method not in ACTION_LABELS:
+            continue
+        label = ACTION_LABELS[method]
+        if label in seen_labels:
+            continue  # PUT and PATCH share label, only render once
+        if label not in by_action:
+            continue
+        seen_labels.add(label)
+        # tool_id slot carries the canonical method for the filter step.
+        # PUT and PATCH share "IZMIJENITI" — use whichever appeared first.
+        canonical_method = by_action[label][0]
+        cards.append(ClarifyCard(
+            index=idx,
+            tool_id=canonical_method,  # NOT a real tool_id — placeholder
+            short_label=label,
+            description="",
+        ))
+        idx += 1
+
+    return ClarifyOptions(cards=cards, none_of_above_label="Nešto drugo")
+
+
+def methods_for_action_label(label: str) -> set[str]:
+    """Reverse lookup: given a Step 1 selection (e.g. "IZMIJENITI"), return
+    the HTTP methods to filter candidates by (e.g. {"PUT", "PATCH"})."""
+    return {m for m, l in ACTION_LABELS.items() if l == label}
 
 
 def build_clarify_options(
@@ -60,6 +165,34 @@ def build_clarify_options(
             tool_id=c.tool_id,
             short_label=short,
             description=desc,
+        ))
+    return ClarifyOptions(cards=cards)
+
+
+def build_from_router_candidates(
+    candidates: list[tuple[str, float]],
+    tkb_lookup: Callable[[str], str],
+    max_cards: int = 3,
+) -> ClarifyOptions:
+    """Build top-3 cards from confidence_gate.GateDecision.fallback_candidates.
+
+    The gate gives `[(tool_id, anchor_score), ...]` — no descriptions. We
+    look up each tool's `intent_summary` from TKB via the injected callback
+    so we don't pull tool_knowledge_base.json into clarify_ui as a dep.
+
+    Empty tool_ids are skipped (defensive — shouldn't happen, but the
+    router's tuple shape is loose).
+    """
+    # Filter empties FIRST so they don't consume max_cards slots.
+    valid = [c for c in candidates if c and c[0]]
+    cards: list[ClarifyCard] = []
+    for idx, (tool_id, _score) in enumerate(valid[:max_cards], start=1):
+        purpose = (tkb_lookup(tool_id) or "").strip()
+        short = _build_short_label(tool_id, purpose)
+        desc = (purpose or tool_id)[:140]
+        cards.append(ClarifyCard(
+            index=idx, tool_id=tool_id,
+            short_label=short, description=desc,
         ))
     return ClarifyOptions(cards=cards)
 

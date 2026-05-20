@@ -81,12 +81,8 @@ exclude = [
 [tool.coverage.run]
 source = ["services", "config"]
 omit = [
-    "services/faiss_vector_store.py",
-    "services/llm_reranker.py",
-    "services/unified_search.py",
     # whatsapp_service.py removed from omit — now covered by test_whatsapp_service.py
     "services/queue_service.py",
-    "services/message_engine.py",
 ]
 
 [tool.coverage.report]

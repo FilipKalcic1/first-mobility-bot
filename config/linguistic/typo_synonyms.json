@@ -1,4 +1,5 @@
 {
+  "_comment": "Synonym + slang map. Keys are matched with word-boundary regex; values replace them. 12.18.0 added the slang/regional cluster (fure/papire/oće) drawn from the real-world accuracy benchmark's slang category.",
   "synonym_map": {
     "auto": "vozilo",
     "auta": "vozila",
@@ -18,6 +19,14 @@
     "rezevacija": "rezervacija",
     "rezevirati": "rezervirati",
     "osteio": "ostetio",
-    "ostetiti": "ostetio"
+    "ostetiti": "ostetio",
+    "fure": "vozila",
+    "fura": "vozilo",
+    "papiri": "dokumenti",
+    "papire": "dokumente",
+    "papira": "dokumenata",
+    "oce": "zeli",
+    "oću": "želim",
+    "ocu": "zelim"
   }
 }

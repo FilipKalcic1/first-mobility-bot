@@ -152,76 +152,7 @@ class UnifiedToolDefinition(BaseModel):
             if param.dependency_source == DependencySource.FROM_TOOL_OUTPUT
         }
 
-    _openai_function_cache: Optional[Dict[str, Any]] = None
 
-    def to_openai_function(self) -> Dict[str, Any]:
-        """
-        Convert to OpenAI function calling format with STRICT validation.
-
-        ONLY includes parameters visible to LLM (FROM_USER and FROM_TOOL_OUTPUT).
-        Context params are INVISIBLE.
-
-        FIX #13: Uses SchemaSanitizer to ensure OpenAI compatibility.
-        Cached after first call — tool schemas don't change at runtime.
-        """
-        if self._openai_function_cache is not None:
-            return self._openai_function_cache
-        from services.schema_sanitizer import SchemaSanitizer
-        result = SchemaSanitizer.sanitize_tool_schema(self)
-        object.__setattr__(self, '_openai_function_cache', result)
-        return result
-
-
-class ToolExecutionContext(BaseModel):
-    """Context for tool execution - contains all runtime state."""
-    user_context: Dict[str, Any] = Field(default_factory=dict)
-    tool_outputs: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Outputs from previously executed tools"
-    )
-    conversation_state: Dict[str, Any] = Field(default_factory=dict)
-
-    @classmethod
-    def from_conv_manager(cls, user_context: Dict[str, Any], conv_manager) -> "ToolExecutionContext":
-        """Build execution context from user_context and conversation manager.
-
-        Extracts tool_outputs from conv_manager.context if available.
-        Single source of truth — all engine/ callers should use this.
-        """
-        tool_outputs = getattr(conv_manager.context, 'tool_outputs', {}) if conv_manager else {}
-        return cls(
-            user_context=user_context,
-            tool_outputs=tool_outputs,
-            conversation_state={},
-        )
-
-
-class ToolExecutionResult(BaseModel):
-    """Result of tool execution."""
-    success: bool
-    operation_id: str
-
-    # Success path
-    data: Optional[Any] = None
-    output_values: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Extracted output values for chaining"
-    )
-
-    # Error path
-    error_code: Optional[str] = None
-    error_message: Optional[str] = None
-    ai_feedback: Optional[str] = None  # Croatian explanation for LLM
-
-    # Required for auto-chaining: list of missing parameters
-    missing_params: List[str] = Field(
-        default_factory=list,
-        description="Missing required parameters (for auto-chaining)"
-    )
-
-    # Metadata
-    execution_time_ms: Optional[int] = None
-    http_status: Optional[int] = None
 
 
 class DependencyGraph(BaseModel):

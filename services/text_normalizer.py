@@ -19,8 +19,14 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import re
+from functools import lru_cache
 from typing import Dict, Final, FrozenSet, List, Optional
+
+from services.config_loader import load_json as _load_json
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -38,17 +44,58 @@ _DIACRITIC_TABLE: Final = str.maketrans(DIACRITIC_MAP)
 
 # ---------------------------------------------------------------------------
 # Synonym map (canonical forms for common Croatian variations)
+#
+# Lazy-loaded (not module-level) so a missing/malformed
+# config/linguistic/typo_synonyms.json degrades to "no synonym replacement"
+# instead of crashing the worker at import time.
 # ---------------------------------------------------------------------------
 
-from services.config_loader import load_json as _load_json
-SYNONYM_MAP: Final[Dict[str, str]] = _load_json("linguistic", "typo_synonyms.json")["synonym_map"]
+@lru_cache(maxsize=1)
+def _get_synonym_map() -> Dict[str, str]:
+    try:
+        data = _load_json("linguistic", "typo_synonyms.json")
+        m = data.get("synonym_map") if isinstance(data, dict) else None
+        if not isinstance(m, dict):
+            logger.error("typo_synonyms.json: expected {'synonym_map': {...}}, got %r", type(m))
+            return {}
+        return m
+    except (FileNotFoundError, ValueError, KeyError) as e:
+        logger.error(
+            "typo_synonyms.json unloadable, slang normalization disabled: %s", e,
+        )
+        return {}
 
-# Pre-compiled synonym pattern with word boundaries — handles punctuation correctly.
-# Sorted longest-first so "automobili" matches before "auto".
-_SYNONYM_PATTERN: Final = re.compile(
-    r'\b(' + '|'.join(re.escape(k) for k in sorted(SYNONYM_MAP, key=len, reverse=True)) + r')\b',
-    flags=re.IGNORECASE
-)
+
+@lru_cache(maxsize=1)
+def _get_synonym_pattern() -> re.Pattern[str]:
+    """Pre-compiled, longest-first to match 'automobili' before 'auto'."""
+    m = _get_synonym_map()
+    if not m:
+        # Never-matching pattern so .sub() is a no-op without an exception
+        return re.compile(r"(?!)")
+    return re.compile(
+        r'\b(' + '|'.join(re.escape(k) for k in sorted(m, key=len, reverse=True)) + r')\b',
+        flags=re.IGNORECASE,
+    )
+
+
+# Backwards-compat shim — old code imported SYNONYM_MAP as a constant. Keep
+# a module-level proxy that resolves on each access so missing-file scenarios
+# still don't crash at import.
+class _SynonymMapProxy(dict):
+    def __getitem__(self, key):  # noqa: D401
+        return _get_synonym_map()[key]
+    def __contains__(self, key):
+        return key in _get_synonym_map()
+    def get(self, key, default=None):
+        return _get_synonym_map().get(key, default)
+    def __iter__(self):
+        return iter(_get_synonym_map())
+    def __len__(self):
+        return len(_get_synonym_map())
+
+
+SYNONYM_MAP: Final[Dict[str, str]] = _SynonymMapProxy()  # type: ignore[assignment]
 
 
 # ---------------------------------------------------------------------------
@@ -208,15 +255,20 @@ def normalize_synonyms(text: str) -> str:
     """Replace common synonyms with canonical forms.
 
     Uses word-boundary regex so punctuation adjacent to words
-    (e.g. ``"auto."`` or ``"auta,""``) is handled correctly.
+    (e.g. ``"auto."`` or ``"auta,""``) is handled correctly. When
+    typo_synonyms.json is missing or malformed, falls back to identity
+    (no replacement) — never raises.
 
     >>> normalize_synonyms("prikaži mi sva auta")
     'prikaži mi sva vozila'
     >>> normalize_synonyms("trebam auto.")
     'trebam vozilo.'
     """
-    return _SYNONYM_PATTERN.sub(
-        lambda m: SYNONYM_MAP[m.group(1).lower()], text
+    m = _get_synonym_map()
+    if not m:
+        return text
+    return _get_synonym_pattern().sub(
+        lambda match: m[match.group(1).lower()], text,
     )
 
 

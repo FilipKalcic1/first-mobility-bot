@@ -38,11 +38,29 @@ jobs:
           pip install -r requirements-dev.txt
           pip install faiss-cpu
 
+      - name: Validate all JSON configs
+        # Production-safety gate (2026-05-16). A malformed JSON would crash
+        # the worker at startup. Block the bad commit at PR time.
+        run: |
+          set -e
+          shopt -s globstar nullglob
+          failed=0
+          for f in config/**/*.json; do
+            if ! python -m json.tool "$f" > /dev/null 2>&1; then
+              echo "::error file=$f::Invalid JSON"
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
+          echo "All config/*.json files are valid JSON."
+
       - name: Pre-import modules
         run: |
           python -c "from config import get_settings; s = get_settings(); print(f'Config OK: APP_ENV={s.APP_ENV}')"
-          python -c "from services.cost_tracker import get_cost_tracker; print('CostTracker OK')"
           python -c "from services.registry import ToolRegistry; print('Registry OK')"
+          python -c "from services.v2.engine import V2Engine; print('V2Engine OK')"
 
       - name: Collect tests
         run: pytest tests/ --collect-only -q 2>&1 | tail -5

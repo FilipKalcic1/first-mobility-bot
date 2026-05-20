@@ -3,9 +3,8 @@ Production Readiness Verification Suite
 
 Validates pre-flight checks for single-pod 1 CPU / 1 GiB deployment:
 1. Lua script cache persistence in Redis
-2. FAISS index ID integrity (no ID drift after operations)
-3. Memory baseline under target limit (<900 MiB)
-4. PII masking in log output
+2. Memory baseline under target limit (<900 MiB)
+3. PII masking in log output
 
 Usage:
     kubectl exec deploy/mobility-bot -c worker -- python scripts/verify_production_readiness.py
@@ -70,54 +69,7 @@ end
 
 
 # ---------------------------------------------------------------------------
-# 2. FAISS Index ID Integrity
-# ---------------------------------------------------------------------------
-def verify_faiss_integrity():
-    """Verify FAISS index IDs match metadata — no ID drift."""
-    try:
-        from services.faiss_vector_store import FAISSVectorStore
-
-        store = FAISSVectorStore()
-
-        if not store._index:
-            logger.warning("[SKIP] FAISS index not initialized (no embeddings cached)")
-            return True
-
-        index_size = store._index.ntotal
-        metadata_size = len(store._tool_ids)
-
-        if index_size != metadata_size:
-            logger.error(
-                f"[FAIL] FAISS ID drift: index has {index_size} vectors "
-                f"but metadata has {metadata_size} tool IDs"
-            )
-            return False
-
-        # Verify a search returns valid tool IDs
-        import numpy as np
-        dummy_query = np.random.rand(1, 1536).astype("float32")
-        distances, indices = store._index.search(dummy_query, min(5, index_size))
-
-        for idx in indices[0]:
-            if idx < 0:
-                continue
-            if idx >= metadata_size:
-                logger.error(f"[FAIL] FAISS returned index {idx} beyond metadata range {metadata_size}")
-                return False
-
-        logger.info(f"[PASS] FAISS integrity OK: {index_size} vectors, IDs align with metadata")
-        return True
-
-    except ImportError:
-        logger.warning("[SKIP] FAISS not available in this environment")
-        return True
-    except Exception as e:
-        logger.error(f"[FAIL] FAISS verification error: {e}")
-        return False
-
-
-# ---------------------------------------------------------------------------
-# 3. Memory Baseline Check
+# 2. Memory Baseline Check
 # ---------------------------------------------------------------------------
 def verify_memory_baseline():
     """Check that idle memory usage is under 200MB (leaving 800MB for operations)."""
@@ -211,7 +163,6 @@ async def main():
     results["lua_cache"] = await verify_lua_script_cache()
 
     # Run sync checks
-    results["faiss_integrity"] = verify_faiss_integrity()
     results["memory_baseline"] = verify_memory_baseline()
     results["pii_masking"] = verify_pii_masking()
 

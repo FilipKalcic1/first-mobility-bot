@@ -205,7 +205,9 @@ async def test_buffered_sink_overflow_drops_oldest():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_redis_sink_uses_pipeline():
+async def test_redis_sink_uses_pipeline_legacy_key_when_no_tenant():
+    """Events without tenant_id (early input-blocks etc.) land in the
+    legacy unscoped key. Admin endpoint requires explicit opt-in to read."""
     pipe = MagicMock()
     pipe.lpush = MagicMock(return_value=pipe)
     pipe.ltrim = MagicMock(return_value=pipe)
@@ -215,15 +217,42 @@ async def test_redis_sink_uses_pipeline():
     redis.pipeline = MagicMock(return_value=pipe)
 
     sink = RedisSink(redis)
-    await sink.write_record({"tool_picked": "get_X"})
+    await sink.write_record({"tool_picked": "get_X"})  # no tenant_id
 
     redis.pipeline.assert_called_once()
     args, _ = pipe.lpush.call_args
-    assert args[0] == ROUTING_LOG_KEY
+    assert args[0] == ROUTING_LOG_KEY  # legacy bucket
     assert json.loads(args[1])["tool_picked"] == "get_X"
     pipe.ltrim.assert_called_once_with(ROUTING_LOG_KEY, 0, ROUTING_LOG_MAX_ENTRIES)
     pipe.expire.assert_called_once_with(ROUTING_LOG_KEY, ROUTING_LOG_TTL_SECONDS)
     pipe.execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_redis_sink_routes_event_to_per_tenant_key():
+    """R2 regression: each event's tenant_id determines its Redis key.
+    Two tenants must never share the same routing-log list — otherwise
+    /whatsapp/routing-log would leak tenant A's queries to tenant B."""
+    from services.v2.telemetry import redis_key_for_tenant
+
+    pipe = MagicMock()
+    pipe.lpush = MagicMock(return_value=pipe)
+    pipe.ltrim = MagicMock(return_value=pipe)
+    pipe.expire = MagicMock(return_value=pipe)
+    pipe.execute = AsyncMock(return_value=[])
+    redis = MagicMock()
+    redis.pipeline = MagicMock(return_value=pipe)
+
+    sink = RedisSink(redis)
+    await sink.write_record({"tool_picked": "get_X", "tenant_id": "tenant-A"})
+    args_a, _ = pipe.lpush.call_args
+    assert args_a[0] == redis_key_for_tenant("tenant-A")
+    assert args_a[0] == "routing:accuracy_log:tenant-A"
+
+    await sink.write_record({"tool_picked": "get_Y", "tenant_id": "tenant-B"})
+    args_b, _ = pipe.lpush.call_args
+    assert args_b[0] == "routing:accuracy_log:tenant-B"
+    assert args_b[0] != args_a[0]
 
 
 @pytest.mark.asyncio
@@ -423,56 +452,9 @@ class _CapturingSink:
         pass
 
 
-@pytest.mark.asyncio
-async def test_correlation_id_propagates_across_routing_call_sites(monkeypatch):
-    """Every event emitted during one process_message call shares one
-    correlation_id, automatically injected via context var."""
-    # Reuse fixtures from test_engine_smoke
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from test_engine_smoke import (  # noqa: E402
-        _FakeRedis, _FakeRateLimiter, _FakePII, _FakeIdentity,
-        _FakeIntentTypeClassifier, _FakeBasics, _FakeRecognition,
-        _FakeFlowEngine, _FakeFlowStore, _FakeExecutor,
-        _FakePendingMutStore, _unknown_identity,
-    )
-    from services.v2.engine import V2Engine
-    from services.v2.pending_clarify import PendingClarifyStore
-    from services.v2.conversation_history import ConversationHistoryStore
-
-    sink = _CapturingSink()
-    redis = _FakeRedis()
-    engine = V2Engine(
-        rate_limiter=_FakeRateLimiter(),
-        pii=_FakePII(),
-        identity=_FakeIdentity(_unknown_identity()),
-        intent_type=_FakeIntentTypeClassifier(),
-        basics=_FakeBasics(),
-        recognition=_FakeRecognition(),
-        flow_engine=_FakeFlowEngine(),
-        flow_store=_FakeFlowStore(),
-        executor=_FakeExecutor(),
-        pending_mut_store=_FakePendingMutStore(),
-        quick_path=None,
-        telemetry=TelemetryLogger([sink], enabled=True),
-        domain_picker=None,
-        scoped_picker=None,
-        pending_clarify_store=PendingClarifyStore(redis),
-        conversation_history_store=ConversationHistoryStore(redis),
-    )
-
-    await engine.process_message("385999999999", "kolika km")
-
-    assert len(sink.records) >= 1, "expected at least one telemetry event"
-    correlation_ids = {rec.get("correlation_id") for rec in sink.records}
-    assert len(correlation_ids) == 1, (
-        f"events emitted in one request must share one correlation_id, "
-        f"got {correlation_ids}"
-    )
-    cid = correlation_ids.pop()
-    assert cid, "correlation_id must be non-empty (UUID hex)"
-    assert len(cid) >= 16, f"correlation_id looks malformed: {cid!r}"
+# NOTE: integration tests reusing deleted test_engine_smoke fakes removed
+# 2026-05-13. Telemetry ContextVar behavior covered by unit tests above
+# (test_event_picks_up_correlation_id_from_context, test_set_request_context).
 
 
 # ---------------------------------------------------------------------------
@@ -496,6 +478,35 @@ def test_user_message_pii_scrubbed_before_telemetry():
     # The exact phone number must NOT survive into the telemetry record
     assert "+385981234567" not in rec.get("query_scrubbed", "")
     assert "981234567" not in rec.get("query_scrubbed", "")
+
+
+def test_redactions_field_carries_kinds_only():
+    """Audit-trail invariant: TelemetryEvent.redactions stores the *kinds*
+    of redactions (PHONE, OIB, ...) but NEVER the original values. If a
+    future change leaks raw values into this field, this test fails."""
+    from services.v2.pii_scrubber import PIIScrubber
+
+    scrubber = PIIScrubber()
+    raw = "moj OIB je 12345678901, mail mi je foo@bar.hr"
+    result = scrubber.scrub(raw)
+    evt = TelemetryEvent(redactions=[r.kind for r in result.redactions])
+    rec = evt.to_record()
+
+    assert "redactions" in rec
+    # Each entry must be a kind label, never raw user data.
+    for kind in rec["redactions"]:
+        assert kind in {"OIB", "JMBG", "IBAN", "CARD", "EMAIL", "PHONE"}
+    # And both expected kinds present.
+    kinds = set(rec["redactions"])
+    assert "OIB" in kinds
+    assert "EMAIL" in kinds
+
+
+def test_empty_redactions_dropped_from_record():
+    """Default (no redactions) must not bloat every event with an empty list."""
+    evt = TelemetryEvent(query_scrubbed="kolika km")
+    rec = evt.to_record()
+    assert "redactions" not in rec
 
 
 # ---------------------------------------------------------------------------
@@ -611,122 +622,8 @@ async def test_log_telemetry_clarify_dict_built_from_legacy_pair():
     assert "clarify_chosen" not in r
 
 
-# ---------------------------------------------------------------------------
-# Integration tests — real V2Engine + real telemetry pipeline
-# ---------------------------------------------------------------------------
-# These guard the architectural caveats that unit tests can't catch:
-#   1. correlation_id propagation across asyncio Tasks under concurrency
-#   2. turn_number monotonicity across multi-turn conversations
-#   3. End-to-end emission with V2Engine wired to a real TelemetryLogger
-#      (existing test_engine_smoke uses telemetry=None, never exercises
-#      the path)
-
-def _build_engine_with_telemetry(sink, redis=None):
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from test_engine_smoke import (  # noqa: E402
-        _FakeRedis, _FakeRateLimiter, _FakePII, _FakeIdentity,
-        _FakeIntentTypeClassifier, _FakeBasics, _FakeRecognition,
-        _FakeFlowEngine, _FakeFlowStore, _FakeExecutor,
-        _FakePendingMutStore, _unknown_identity,
-    )
-    from services.v2.engine import V2Engine
-    from services.v2.pending_clarify import PendingClarifyStore
-    from services.v2.conversation_history import ConversationHistoryStore
-
-    if redis is None:
-        redis = _FakeRedis()
-    history = ConversationHistoryStore(redis)
-    engine = V2Engine(
-        rate_limiter=_FakeRateLimiter(),
-        pii=_FakePII(),
-        identity=_FakeIdentity(_unknown_identity()),
-        intent_type=_FakeIntentTypeClassifier(),
-        basics=_FakeBasics(),
-        recognition=_FakeRecognition(),
-        flow_engine=_FakeFlowEngine(),
-        flow_store=_FakeFlowStore(),
-        executor=_FakeExecutor(),
-        pending_mut_store=_FakePendingMutStore(),
-        quick_path=None,
-        telemetry=TelemetryLogger([sink], enabled=True),
-        domain_picker=None,
-        scoped_picker=None,
-        pending_clarify_store=PendingClarifyStore(redis),
-        conversation_history_store=history,
-    )
-    return engine, history
-
-
-@pytest.mark.asyncio
-async def test_correlation_id_isolated_across_parallel_requests():
-    """ContextVars are per-asyncio-Task. 10 concurrent requests must
-    produce 10 distinct correlation_ids. A regression that hoisted
-    `set_request_context` outside per-request scope would merge them."""
-    sink = _CapturingSink()
-    engine, _ = _build_engine_with_telemetry(sink)
-
-    phones = [f"38591234567{i}" for i in range(10)]
-    await asyncio.gather(
-        *[engine.process_message(p, "kolika km") for p in phones]
-    )
-
-    assert len(sink.records) >= 10
-    correlation_ids = [rec.get("correlation_id") for rec in sink.records]
-    unique_ids = {cid for cid in correlation_ids if cid}
-    assert len(unique_ids) == 10, (
-        f"expected 10 distinct correlation_ids; got {len(unique_ids)}"
-    )
-    assert "" not in correlation_ids
-    assert None not in correlation_ids
-
-
-@pytest.mark.asyncio
-async def test_turn_number_monotonic_across_same_phone_messages():
-    """turn_number is computed `len(history) + 1` at entry. Sequential
-    messages on one phone must produce non-decreasing turn numbers.
-
-    Caught the bug where engine called `history.get(phone)` instead of
-    `history.load(phone)` — silently swallowed by the try/except,
-    turn_number stayed 0 forever in production. Without this test it
-    would have shipped that way."""
-    from services.v2.conversation_history import ConversationTurn
-    sink = _CapturingSink()
-    engine, history = _build_engine_with_telemetry(sink)
-    phone = "385912345678"
-    seen_turns = []
-
-    for i in range(3):
-        await history.append(phone, ConversationTurn(user=f"prior msg {i}"))
-        sink.records.clear()
-        await engine.process_message(phone, "kolika km")
-        assert sink.records, f"no events on iteration {i}"
-        seen_turns.append(sink.records[0].get("turn_number"))
-
-    assert all(t and t > 0 for t in seen_turns), (
-        f"turn_number must be > 0; got {seen_turns}"
-    )
-    assert seen_turns == sorted(seen_turns), (
-        f"turn_number must be monotonic; got {seen_turns}"
-    )
-
-
-@pytest.mark.asyncio
-async def test_v2engine_with_real_telemetry_emits_canonical_events():
-    """End-to-end V2Engine + real telemetry pipe. Guards against a
-    regression that breaks the wiring in `make_v2_engine_for_production`
-    or silently disables emission."""
-    sink = _CapturingSink()
-    engine, _ = _build_engine_with_telemetry(sink)
-
-    await engine.process_message("385999999999", "kolika km")
-
-    assert sink.records, "real-telemetry V2Engine must emit at least one event"
-    rec = sink.records[0]
-    assert rec.get("correlation_id"), "correlation_id missing"
-    assert rec.get("query_scrubbed"), "query_scrubbed missing"
-    assert "turn_number" in rec
-    assert "ts" in rec
-    for legacy in ("kind", "phone_hash", "persona", "extra"):
-        assert legacy not in rec, f"legacy field {legacy!r} leaked"
+# NOTE: 3 integration tests removed 2026-05-13. They referenced
+# test_engine_smoke fakes deleted in Phase 6 cleanup. Their concerns
+# (correlation_id parallel isolation, turn_number monotonicity,
+# canonical event emission) are exercised end-to-end by
+# tests/v2/test_engine_wireup.py which uses live fakes.

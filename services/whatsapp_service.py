@@ -22,7 +22,7 @@ import logging
 import random
 import re
 import unicodedata
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 
 import httpx
@@ -628,37 +628,6 @@ class WhatsAppService:
             base_without_jitter = min(self.MAX_BACKOFF, max(min_delay, self.BASE_DELAY * (2 ** attempt)))
             return base_without_jitter + random.uniform(0, self.MAX_JITTER)
         return raw
-
-    # ---
-    # BATCH SENDING (FOR FUTURE USE)
-    # ---
-
-    async def send_batch(
-        self,
-        messages: List[Tuple[str, str]],
-        concurrency: int = 5
-    ) -> List[SendResult]:
-        """
-        Send multiple messages concurrently with rate limiting.
-
-        Args:
-            messages: List of (to, text) tuples
-            concurrency: Max concurrent sends (default 5)
-
-        Returns:
-            List of SendResult (same order as input)
-        """
-        semaphore = asyncio.Semaphore(concurrency)
-
-        async def _send_one(to: str, text: str) -> SendResult:
-            async with semaphore:
-                result = await self.send(to, text)
-                await asyncio.sleep(0.1)  # Rate limit spacing
-                return result
-
-        return list(await asyncio.gather(
-            *(_send_one(to, text) for to, text in messages)
-        ))
 
     # ---
     # STATS & HEALTH

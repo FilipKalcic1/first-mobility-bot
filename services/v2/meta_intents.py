@@ -31,12 +31,10 @@ _PATTERNS = {
         re.compile(r"\bare\s+you\s+(?:an?\s+)?(?:ai|bot|robot|chatgpt|claude|llm)\b", re.IGNORECASE),
         re.compile(r"\bwhat\s+(?:are|is)\s+(?:you|this)\b", re.IGNORECASE),
     ],
-    "human_handoff": [
-        re.compile(r"\b(?:hoću|zelim|želim|trebam)\s+(?:pravog?\s+)?(?:čovjeka|coveka|ljudsku\s+osobu|ljudsku\s+podršku|operatera)\b", re.IGNORECASE),
-        re.compile(r"\bspoji\s+me\s+s\s+(?:čovjekom|covjekom|operaterom|managerom)\b", re.IGNORECASE),
-        re.compile(r"\bhuman\s+(?:agent|support|operator)\b", re.IGNORECASE),
-        re.compile(r"\btalk\s+to\s+(?:a\s+)?(?:human|person|agent)\b", re.IGNORECASE),
-    ],
+    # NOTE: handoff/handover (čovjek/operater/human/agent) is handled by
+    # L1 special_intents.HANDOVER which carries the queue_human_handover
+    # side-effect. Do NOT duplicate the pattern here — meta_intents runs
+    # earlier in the engine pipeline and would jezuit the side-effect.
     "bug_report": [
         re.compile(r"\bjučer\s+si\s+mi\s+rekao\s+krivo\b", re.IGNORECASE),
         re.compile(r"\b(?:rekao|rekla|rekli)\s+(?:si|ste)?\s+(?:mi\s+)?krivo\b", re.IGNORECASE),
@@ -69,11 +67,6 @@ _RESPONSES = {
         "Da, ja sam AI asistent (model je gpt-4o-mini, hosted na Azure). "
         "Pomažem oko fleet-management upita — kilometraža, rezervacije, "
         "prijave kvarova. Ne čuvam osobne razgovore izvan ove sesije."
-    ),
-    "human_handoff": (
-        "Razumijem. Za živu osobu kontaktiraj svog managera ili podršku "
-        "kroz redovne kanale — ja kao AI ne mogu te direktno povezati. "
-        "Ako trebaš nešto vezano uz fleet, samo reci."
     ),
     "bug_report": (
         "Žao mi je ako je odgovor bio kriv. Možeš li mi reći koje pitanje "
