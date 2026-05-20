@@ -1639,6 +1639,45 @@ async def test_api_4xx_returns_croatian_translation():
 
 
 @pytest.mark.asyncio
+async def test_exe1_error_body_pii_scrubbed_before_translator():
+    """EXE-1 (Filip 2026-05-20): API error body must be PII-scrubbed BEFORE
+    it reaches the LLM translator. MobilityOne validation errors can echo
+    field values ("OIB 12345678901 already exists") — without scrubbing that
+    PII would land in the Azure OpenAI prompt (same GDPR risk as conv_history).
+    """
+    from dataclasses import dataclass as _dc
+    from services.v2.engine import V2Engine
+    from services.v2.pii_scrubber import PIIScrubber
+
+    @_dc
+    class _ExecResult:
+        success: bool = False
+        error: str = "http_409"
+        error_body: object = ""
+        status_code: int = 409
+
+    eng = object.__new__(V2Engine)
+    eng.pii = PIIScrubber()
+    eng.tkb_intents = {}
+    eng.api_error_translator = _StubTranslator(message="Taj zapis već postoji.")
+
+    exec_result = _ExecResult(
+        error_body="OIB 12345678901 already exists, IBAN HR1234567890123456789",
+        status_code=409,
+    )
+    reply = await eng._render_execution_failure(exec_result, "post_X")
+
+    # Translator was called, but the body it received must NOT contain raw PII.
+    calls = eng.api_error_translator.calls
+    assert len(calls) == 1
+    body_seen = str(calls[0]["response_body"])
+    assert "12345678901" not in body_seen, f"OIB leaked to translator: {body_seen}"
+    assert "HR1234567890123456789" not in body_seen, "IBAN leaked to translator"
+    # Croatian translation still returned
+    assert "već postoji" in reply
+
+
+@pytest.mark.asyncio
 async def test_api_4xx_fallback_when_translator_returns_none():
     """LLM translator returns None (e.g., transient error) → engine falls
     back to generic 'Tehnički problem' message. No crash."""

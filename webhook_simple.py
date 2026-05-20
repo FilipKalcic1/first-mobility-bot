@@ -465,7 +465,20 @@ async def _process_webhook(request: Request, request_id: str, span) -> dict:
             # we cache the "tried-and-not-found" verdict for 5 minutes via the
             # worker's identify_user (which already does this through user_service).
             # The webhook stays fast: zero API calls here.
-            tenant_id = await resolve_tenant_for_phone(sender)
+            # GW-A4 fix (Filip 2026-05-20): wrap tenant resolution. Without
+            # this, a transient Redis/DB blip raises → propagates to the outer
+            # handler (:650) which returns 200 "to prevent retries" → Infobip
+            # never retries → message PERMANENTLY LOST. Treating a resolve
+            # failure as "unknown phone" pushes the message to the stream
+            # anyway; the worker's onboarding path handles it gracefully.
+            try:
+                tenant_id = await resolve_tenant_for_phone(sender)
+            except Exception as e:  # noqa: BLE001 — never drop a message on resolve failure
+                logger.warning(
+                    "tenant resolve failed for ***%s (%s) — treating as unknown",
+                    sender[-4:], type(e).__name__,
+                )
+                tenant_id = None
             needs_onboarding = not tenant_id
             if needs_onboarding:
                 logger.info(

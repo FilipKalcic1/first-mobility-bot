@@ -794,6 +794,17 @@ class V2Engine:
         body = getattr(exec_result, "error_body", None)
         if status is None or body is None:
             return fallback
+        # EXE-1 fix (Filip 2026-05-20): scrub the API error body before it
+        # reaches the LLM translator. MobilityOne validation errors can echo
+        # back field values ("OIB 12345678901 already exists") — without this,
+        # that PII would land in the Azure OpenAI prompt. Same GDPR rationale
+        # as the conversation_history scrub (engine.py:209).
+        try:
+            body = self.pii.scrub(
+                body if isinstance(body, str) else str(body)
+            ).scrubbed_text
+        except Exception:  # noqa: BLE001 — scrub must never break the error path
+            pass
         try:
             tool_intent = (self.tkb_intents or {}).get(tool_id, "")
             translated = await self.api_error_translator.translate(
