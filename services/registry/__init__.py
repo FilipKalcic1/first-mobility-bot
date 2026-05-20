@@ -13,14 +13,12 @@ import asyncio
 import json
 import logging
 import os
-import threading
-from typing import Dict, List, Any, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from services.tool_contracts import UnifiedToolDefinition, DependencyGraph
 
 from .tool_store import ToolStore
 from .swagger_parser import SwaggerParser
-from .embedding_engine import EmbeddingEngine
 
 
 def _read_json_file(path: str) -> Any:
@@ -30,11 +28,7 @@ def _read_json_file(path: str) -> Any:
 
 logger = logging.getLogger(__name__)
 
-# Module-level cache — kept as a module var so tests can reset it to None.
-_documentation_cache: Optional[Dict[str, Any]] = None
-_documentation_cache_lock = threading.Lock()
-
-__all__ = ['ToolRegistry', 'ToolStore', 'SwaggerParser', 'EmbeddingEngine']
+__all__ = ['ToolRegistry', 'ToolStore', 'SwaggerParser']
 
 
 class ToolRegistry:
@@ -43,7 +37,7 @@ class ToolRegistry:
 
     Coordinates:
       - ToolStore: in-memory tool + dependency index
-      - EmbeddingEngine / SwaggerParser: offline build helpers (reused by scripts/sync_tools.py)
+      - SwaggerParser: offline build helper (reused by scripts/sync_tools.py)
       - tool_documentation.json: Croatian descriptions + origin guides
     """
 
@@ -52,43 +46,11 @@ class ToolRegistry:
 
         self._store = ToolStore()
         self._parser = SwaggerParser()
-        self._embedding = EmbeddingEngine()
-
-        self._tool_documentation: Dict[str, Any] = {}
 
         self.is_ready = False
         self._load_lock = asyncio.Lock()
 
-        self._load_documentation()
-
         logger.info("ToolRegistry initialized")
-
-    def _load_documentation(self) -> None:
-        global _documentation_cache
-
-        if _documentation_cache is not None:
-            self._tool_documentation = _documentation_cache
-            return
-
-        with _documentation_cache_lock:
-            if _documentation_cache is not None:
-                self._tool_documentation = _documentation_cache
-                return
-
-            base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            doc_path = os.path.join(base_path, "config", "tool_documentation.json")
-
-            if not os.path.exists(doc_path):
-                logger.info("No tool_documentation.json found - run generate_documentation.py first")
-                return
-
-            try:
-                self._tool_documentation = _read_json_file(doc_path)
-                _documentation_cache = self._tool_documentation
-                logger.info(f"Loaded documentation for {len(self._tool_documentation)} tools")
-            except Exception as e:
-                logger.warning(f"Could not load tool documentation: {e}")
-                self._tool_documentation = {}
 
     # ---
     # BACKWARD COMPATIBILITY PROPERTIES
@@ -161,33 +123,11 @@ class ToolRegistry:
                     f"{len(self._store.mutation_tools)} mutation)"
                 )
 
-                await self._initialize_faiss()
-
                 return True
 
             except Exception as e:
                 logger.error(f"Initialization failed: {e}", exc_info=True)
                 return False
-
-    async def _initialize_faiss(self) -> None:
-        try:
-            from services.faiss_vector_store import initialize_faiss_store
-
-            if not self._tool_documentation:
-                logger.warning("FAISS: tool_documentation empty — skipping init")
-                return
-
-            faiss_store = await initialize_faiss_store(
-                tool_documentation=self._tool_documentation,
-                tool_registry_tools=self._store.tools
-            )
-
-            logger.info(f"FAISS initialized: {faiss_store.get_stats()['total_tools']} tools indexed")
-
-        except ImportError as e:
-            logger.warning(f"FAISS not available: {e}")
-        except Exception as e:
-            logger.warning(f"FAISS initialization failed: {e}")
 
     # ---
     # TOOL ACCESS
@@ -203,64 +143,15 @@ class ToolRegistry:
     def list_tools(self) -> List[str]:
         return self._store.list_tools()
 
-    # ---
-    # DOCUMENTATION ACCESS
-    # ---
+    # NOTE: tool_documentation.json was deleted in Phase 0 cleanup. The
+    # legacy `get_tool_documentation` / `get_parameter_origin_guide` /
+    # `is_context_param` / `is_user_param` / `get_tool_with_documentation`
+    # methods were defensive no-ops and have been removed.
 
-    def get_tool_documentation(self, operation_id: str) -> Optional[Dict[str, Any]]:
-        return self._tool_documentation.get(operation_id)
-
-    def get_parameter_origin_guide(self, operation_id: str) -> Dict[str, str]:
-        doc = self._tool_documentation.get(operation_id, {})
-        return doc.get("parameter_origin_guide", {})
-
-    def get_tool_with_documentation(self, operation_id: str) -> Optional[Dict[str, Any]]:
-        tool = self._store.get_tool(operation_id)
-        if not tool:
-            return None
-
-        return {
-            "tool": tool.to_openai_function(),
-            "documentation": self._tool_documentation.get(operation_id, {})
-        }
-
-    def is_context_param(self, operation_id: str, param_name: str) -> bool:
-        origin_guide = self.get_parameter_origin_guide(operation_id)
-        origin = origin_guide.get(param_name, "")
-        return "CONTEXT" in origin.upper()
-
-    def is_user_param(self, operation_id: str, param_name: str) -> bool:
-        origin_guide = self.get_parameter_origin_guide(operation_id)
-        origin = origin_guide.get(param_name, "USER")
-        return "USER" in origin.upper()
-
-    # ---
-    # HIDDEN DEFAULTS
-    # ---
-
-    _HIDDEN_DEFAULTS: Dict[str, Dict[str, Any]] = {
-        "post_VehicleCalendar": {
-            "EntryType": 0,
-            "AssigneeType": 1,
-        },
-        "post_AddCase": {
-            "EntryType": "WhatsApp",
-        },
-    }
-
-    def get_hidden_defaults(self, operation_id: str) -> Dict[str, Any]:
-        return self._HIDDEN_DEFAULTS.get(operation_id, {})
-
-    def get_merged_params(
-        self,
-        operation_id: str,
-        user_params: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Merge hidden defaults with user params (user wins, None filtered)."""
-        merged = self.get_hidden_defaults(operation_id).copy()
-
-        if user_params:
-            clean_user_params = {k: v for k, v in user_params.items() if v is not None}
-            merged.update(clean_user_params)
-
-        return merged
+    # NOTE — `_HIDDEN_DEFAULTS` removed in 11.0.4.
+    # Tool-specific constants violate the agnostic-registry doctrine. The
+    # values previously baked here (post_VehicleCalendar EntryType=0,
+    # AssigneeType=1, post_AddCase EntryType="WhatsApp") are now applied
+    # explicitly by the matching flow handler with named enums from
+    # services/booking_contracts.py — protocol constants from the API spec,
+    # not hidden registry-level magic.
