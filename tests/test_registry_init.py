@@ -84,6 +84,34 @@ class TestInitialize:
         assert ok is False
         assert r.is_ready is False
 
+    @pytest.mark.asyncio
+    async def test_malformed_tool_skipped_not_fatal(self):
+        """One bad tool must NOT kill the whole registry — it is skipped with a
+        warning and the valid tools still load (resilience fix 2026-05-20)."""
+        registry_data = {
+            "tools": [
+                _sample_tool_dict("get_Good"),
+                {"operation_id": "bad_tool", "method": "NOTAMETHOD",  # invalid HTTP verb
+                 "path": "/x", "service_name": "s", "service_url": "u"},
+                _sample_tool_dict("post_AlsoGood", "POST"),
+            ],
+            "dependency_graph": [],
+        }
+
+        def _exists(p):
+            return str(p).endswith("processed_tool_registry.json")
+
+        with patch("os.path.exists", side_effect=_exists), \
+             patch("services.registry._read_json_file", return_value=registry_data):
+            r = ToolRegistry()
+            ok = await r.initialize()
+
+        assert ok is True          # registry still initializes
+        assert r.is_ready is True
+        assert "get_Good" in r.tools       # valid tools loaded
+        assert "post_AlsoGood" in r.tools
+        assert "bad_tool" not in r.tools   # malformed one skipped, not fatal
+
 
 # ---------------------------------------------------------------------------
 # Tool access

@@ -292,8 +292,20 @@ async def _write_dlq(dlq_entry: str) -> None:
     except Exception as file_err:
         logger.error(f"DLQ file write unexpected error (possible bug): {type(file_err).__name__}: {file_err}")
 
-    # Last resort: stderr (may be captured by log aggregator)
-    sys.stderr.write(f"DLQ_WEBHOOK: {dlq_entry}\n")
+    # Last resort: stderr (may be captured by log aggregator). Mask PII —
+    # never dump raw sender/text to stdout/stderr (GDPR). The full entry is
+    # already attempted in Redis + file (access-controlled); stderr is just a
+    # "we lost one here" breadcrumb for ops.
+    try:
+        _e = json.loads(dlq_entry)
+        masked = (
+            f"dlq={_e.get('dlq')} sender=***{str(_e.get('sender', ''))[-4:]} "
+            f"msg_id={_e.get('message_id')} text_len={len(_e.get('text') or '')} "
+            f"error={_e.get('error')}"
+        )
+    except Exception:  # noqa: BLE001 — masking must never break the last-resort path
+        masked = "DLQ entry (unparseable, masked for PII)"
+    sys.stderr.write(f"DLQ_WEBHOOK: {masked}\n")
     sys.stderr.flush()
 
 

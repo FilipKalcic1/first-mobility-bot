@@ -71,9 +71,12 @@ import sys
 # Add project root to path to allow imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from pathlib import Path
+
 from config import get_settings
 from services.registry.swagger_parser import SwaggerParser
 from services.registry.embedding_engine import EmbeddingEngine
+from services.v2.atomic_io import atomic_write_json
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sync_tools")
@@ -122,11 +125,12 @@ async def main():
     # Save to JSON file in config directory
     output_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'processed_tool_registry.json')
     
+    # Atomic write — the bot reads this file at startup; a half-written file
+    # would crash the factory. atomic_write_json writes temp + os.replace.
     try:
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(output_data, f, indent=2, ensure_ascii=False)
+        atomic_write_json(Path(output_path), output_data)
         logger.info(f"Successfully saved tool registry to {output_path}")
-    except IOError as e:
+    except OSError as e:
         logger.error(f"Failed to write to {output_path}. Error: {e}")
 
 if __name__ == "__main__":

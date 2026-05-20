@@ -103,13 +103,25 @@ class ToolRegistry:
                 logger.info(f"Loading pre-processed registry from {registry_path}")
                 registry_data = await asyncio.to_thread(_read_json_file, registry_path)
 
+                skipped = 0
                 for tool_data in registry_data.get("tools", []):
-                    tool = UnifiedToolDefinition(**tool_data)
-                    self._store.add_tool(tool)
+                    try:
+                        self._store.add_tool(UnifiedToolDefinition(**tool_data))
+                    except Exception as e:  # noqa: BLE001 — one bad tool must not kill the whole registry
+                        skipped += 1
+                        op_id = tool_data.get("operation_id", "?") if isinstance(tool_data, dict) else "?"
+                        logger.warning("skipping malformed tool %s: %s", op_id, e)
 
                 for dep_data in registry_data.get("dependency_graph", []):
-                    dep = DependencyGraph(**dep_data)
-                    self._store.add_dependency(dep)
+                    try:
+                        self._store.add_dependency(DependencyGraph(**dep_data))
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning("skipping malformed dependency: %s", e)
+
+                if skipped:
+                    logger.warning(
+                        "registry loaded with %d malformed tool(s) skipped", skipped
+                    )
 
                 logger.info(
                     f"Loaded {self._store.count()} tools and "
