@@ -845,7 +845,7 @@ class Worker:
 
         log("info", "processing", {
             "sender": sender[-4:] if sender else "",
-            "text_preview": text[:30] if text else "",
+            "text_len": len(text) if text else 0,
             "request_id": request_id,
         })
 
@@ -942,7 +942,7 @@ class Worker:
             except asyncio.TimeoutError:
               log("error", "process_timeout", {
                   "sender": sender[-4:] if sender else "",
-                  "text_preview": text[:30] if text else "",
+                  "text_len": len(text) if text else 0,
                   "timeout_sec": 90,
                   "request_id": request_id,
               })
@@ -957,7 +957,7 @@ class Worker:
               span.record_exception(e)
               log_exception("processing_error", e, {
                   "sender": sender[-4:] if sender else "",
-                  "text_preview": text[:50] if text else "",
+                  "text_len": len(text) if text else 0,
                   "message_id": message_id[:20] if message_id else "",
                   "request_id": request_id,
               })
@@ -1013,7 +1013,7 @@ class Worker:
         except Exception as e:
             log_exception("v2_engine_error", e, {
                 "sender": sender[-4:] if sender else "",
-                "text_preview": text[:50] if text else "",
+                "text_len": len(text) if text else 0,
             })
             raise
 

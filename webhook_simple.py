@@ -581,7 +581,7 @@ async def _process_webhook(request: Request, request_id: str, span) -> dict:
                         f"Message pushed to stream: {sender[-4:]}... "
                         f"msg_id={message_id} len={len(text)}"
                     )
-                    _diag_log("pushed", {"sender": sender[-4:], "text_preview": text[:30]})
+                    _diag_log("pushed", {"sender": sender[-4:], "text_len": len(text)})
                     break
 
                 except (ConnectionError, OSError, TimeoutError, RedisConnectionError, RedisError) as redis_err:
