@@ -603,9 +603,14 @@ async def _process_webhook(request: Request, request_id: str, span) -> dict:
                     _stats["last_error_at"] = datetime.now(timezone.utc).isoformat()
                     _stats["last_error"] = f"Redis push failed after 3 attempts: {redis_err}"
 
+                    # EDGE-6 completion (Filip 2026-05-20): do NOT log raw text.
+                    # PIIScrubFilter catches structured PII (IBAN/email/phone/
+                    # keyword-OIB) but NOT bare numbers / names / addresses in
+                    # free text. msg_id + len suffice for debugging; full text
+                    # is preserved in the DLQ entry (access-controlled).
                     logger.error(
                         f"REDIS PUSH FAILED after 3 attempts - MESSAGE TO DLQ! "
-                        f"sender={sender[-4:]}, text={text[:100]}, message_id={message_id}, "
+                        f"sender={sender[-4:]}, msg_id={message_id}, len={len(text)}, "
                         f"error={redis_err}",
                         exc_info=True
                     )

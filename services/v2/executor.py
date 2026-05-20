@@ -53,20 +53,26 @@ class ExecutionResult:
     data: Any = None
     status_code: Optional[int] = None
     error: Optional[str] = None
+    # Raw API response body for failed calls — used by ApiErrorTranslator
+    # (Faza 2 Filip 2026-05-17) to generate Croatian explanation for the user
+    # instead of generic "Tehnički problem". May be dict, str, or None.
+    error_body: Any = None
     circuit_open: bool = False
 
 
 class ToolExecutor:
     """Wraps gateway with circuit breaker + auth header injection."""
 
-    def __init__(self, gateway, tool_registry, validate_params_fn=None):
+    def __init__(self, gateway, tool_registry):
         self._gateway = gateway
         self._registry = tool_registry
         self._circuits: dict[str, CircuitState] = {}
-        # Param validation function (#85). Injected by orchestrator.
-        # Default no-op (returns valid). Architecture invariant: this
-        # module cannot import param_validator directly.
-        self._validate_params = validate_params_fn
+        # NOTE (Filip 2026-05-20 cleanup): the param-validation hook (#85) was
+        # removed. param_validator.py was deleted in the 2026-05-09 "simplify
+        # pass" — its required-check is covered by llm_router + param-asking,
+        # ISO-date by param_ui (Faza 4). MobilityOne API + ApiErrorTranslator
+        # validate the rest. The dead extension point is gone to avoid
+        # implying validation that doesn't happen.
 
     def method_of(self, tool_id: Optional[str]) -> Optional[str]:
         """Public accessor — keeps registry private to this layer."""
@@ -98,23 +104,6 @@ class ToolExecutor:
                 success=False,
                 error="missing_tenant_id",
             )
-
-        # Param validation (#85) — guards against LLM-hallucinated values
-        # like vehicle_id="xyz123" or dateFrom="someday". Injected via
-        # constructor (no private cross-module import).
-        if self._validate_params is not None:
-            v = self._validate_params(params or {}, spec)
-            if not getattr(v, "valid", True):
-                issues = []
-                if getattr(v, "missing_required", None):
-                    issues.append(f"missing:{','.join(v.missing_required)}")
-                if getattr(v, "errors", None):
-                    issues.extend(v.errors[:3])
-                return ExecutionResult(
-                    success=False,
-                    error="invalid_params:" + ";".join(issues),
-                )
-            params = getattr(v, "sanitized_params", params)
 
         service = spec.get("service")
         path = spec.get("path") or ""
@@ -152,9 +141,18 @@ class ToolExecutor:
         if not response.success:
             if response.status_code and response.status_code >= 500:
                 self._record_failure(service)
+            # Surface the raw body so the engine's ApiErrorTranslator can
+            # turn it into a Croatian explanation. Gateway puts the parsed
+            # body in `error_message` (string) for failed responses, and
+            # may also leave `data` populated for some 4xx with JSON body.
+            error_body = (
+                getattr(response, "error_message", None)
+                or getattr(response, "data", None)
+            )
             return ExecutionResult(
                 success=False, status_code=response.status_code,
                 error=f"http_{response.status_code}",
+                error_body=error_body,
             )
 
         self._record_success(service)
