@@ -1261,11 +1261,13 @@ class V2Engine:
         ):
             if param_ui.is_negative(text):
                 # User skipped optionals — finalize with required-only.
+                # ORCH-5: clear AFTER finalize (retry-safe), not before.
                 pending.optional_remaining = []
-                await self.pending_params_store.clear(phone)
-                return await self._finalize_after_params(
+                result = await self._finalize_after_params(
                     phone, pending, identity,
                 )
+                await self.pending_params_store.clear(phone)
+                return result
 
             # Free-text reply — single LLM extract over the offered set.
             # No iteration. LLM returns dict subset; we merge and finalize.
@@ -1295,8 +1297,13 @@ class V2Engine:
                         "filled": list(extracted.keys()),
                     },
                 )
+            # ORCH-5 fix (Filip 2026-05-20): clear AFTER finalize, not before —
+            # same rationale as branch 3c. If finalize raises, the user keeps
+            # collected params and can retry. (This optional-extraction path
+            # was missed in the first ORCH-5 pass; caught while writing tests.)
+            result = await self._finalize_after_params(phone, pending, identity)
             await self.pending_params_store.clear(phone)
-            return await self._finalize_after_params(phone, pending, identity)
+            return result
 
         # 3. Answer to a required param question (one-by-one collection).
         if not pending.required_remaining:

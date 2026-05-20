@@ -106,6 +106,94 @@ def _identity(tenant="tenant-123", vehicle="veh-9"):
 
 
 # ---------------------------------------------------------------------------
+# ORCH-5: pending_params cleared only AFTER finalize succeeds
+# ---------------------------------------------------------------------------
+
+
+class _ParamStore:
+    """Tracks clear() calls + holds saved state."""
+    def __init__(self):
+        self.clear_count = 0
+        self.saved = None
+
+    async def clear(self, phone):
+        self.clear_count += 1
+
+    async def save(self, phone, pending):
+        self.saved = pending
+
+
+def _make_param_engine(param_store, finalize_raises: bool):
+    """Engine stub for _resolve_pending_params 3c path (required drained,
+    no optionals → finalize)."""
+    eng = object.__new__(V2Engine)
+    eng.pending_params_store = param_store
+    eng.tool_parameters = {"post_AddMileage": {
+        "Value": {"required": True, "dependency_source": "user_input",
+                  "param_type": "integer"},
+    }}
+    eng.optional_extractor = None
+
+    async def _finalize(phone, pending, identity):
+        if finalize_raises:
+            raise RuntimeError("simulated finalize failure (e.g. Redis save)")
+        return "Potvrđuješ unos? Da/Ne"
+
+    eng._finalize_after_params = _finalize
+
+    async def _label_for(tool_id, name, pdef):
+        return name
+    eng._label_for = _label_for
+    return eng
+
+
+@pytest.mark.asyncio
+async def test_orch5_params_NOT_cleared_when_finalize_raises():
+    """ORCH-5: if finalize raises (e.g. Redis save of pending_mutation fails),
+    pending_params must NOT be cleared — user keeps collected params + retries.
+    The bug found while writing this test: 3 clear-before-finalize sites
+    existed, only 1 was fixed in the first ORCH-5 pass."""
+    from services.v2.pending_params import PendingParams
+
+    store = _ParamStore()
+    eng = _make_param_engine(store, finalize_raises=True)
+    # Last required param; user provides value → required drained → 3c finalize.
+    pending = PendingParams(
+        phone="385999", tool_id="post_AddMileage", collected={},
+        required_remaining=["Value"], optional_remaining=[],
+    )
+
+    with pytest.raises(RuntimeError):
+        await eng._resolve_pending_params(
+            "385999", pending, "145000", _identity(),
+        )
+
+    assert store.clear_count == 0, (
+        "pending_params must NOT be cleared when finalize raises"
+    )
+
+
+@pytest.mark.asyncio
+async def test_orch5_params_cleared_when_finalize_succeeds():
+    """Happy path: successful finalize → pending_params cleared exactly once."""
+    from services.v2.pending_params import PendingParams
+
+    store = _ParamStore()
+    eng = _make_param_engine(store, finalize_raises=False)
+    pending = PendingParams(
+        phone="385999", tool_id="post_AddMileage", collected={},
+        required_remaining=["Value"], optional_remaining=[],
+    )
+
+    reply = await eng._resolve_pending_params(
+        "385999", pending, "145000", _identity(),
+    )
+
+    assert store.clear_count == 1
+    assert "Potvr" in reply
+
+
+# ---------------------------------------------------------------------------
 # ORCH-1: flow execute carries real tenant identity
 # ---------------------------------------------------------------------------
 
