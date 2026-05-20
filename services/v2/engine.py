@@ -867,8 +867,10 @@ class V2Engine:
 
             # Silent filters: chosen action's methods + internal blacklist + persona.
             # Faza 14 (Filip 2026-05-19): persona filter RESTORED with HIERARCHY.
-            # Driver-tier user sees 18 tools (just driver scope). Manager-tier
-            # sees driver+manager (245). Admin sees all user-facing (481).
+            # Driver-tier sees driver scope (~18); manager-tier driver+manager;
+            # admin all user-facing. (Exact counts drift with registry changes —
+            # e.g. the 2026-05-19 _Agg unhide added ~47 manager tools — so we
+            # don't pin them here; the set-intersection logic is the contract.)
             # Backend ACL (MobilityOne 403) remains the security boundary —
             # this filter is purely a routing-accuracy aid (narrower candidate
             # set = better cosine + LLM disambiguation).
