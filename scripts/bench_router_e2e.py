@@ -138,13 +138,20 @@ async def main_async(args) -> None:
 
     settings = get_settings()
     embed_client = get_embedding_client()
+    print("  embedding client created; creating chat client...", flush=True)
     chat_client = get_openai_client()
+    print("  chat client created.", flush=True)
     embed_dep = settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT
     chat_dep = settings.AZURE_OPENAI_DEPLOYMENT_NAME
     print(f"Azure clients ready (embed={embed_dep}, chat={chat_dep}, "
           f"endpoint={settings.AZURE_OPENAI_ENDPOINT}). Building schemas...", flush=True)
 
+    _embed_batch_n = {"n": 0}
+
     async def _embed_fn(texts: list) -> list:
+        _embed_batch_n["n"] += 1
+        print(f"  embedding batch {_embed_batch_n['n']} ({len(texts)} phrases) "
+              f"via Azure...", flush=True)
         r = await embed_client.embeddings.create(input=texts, model=embed_dep)
         return [d.embedding for d in r.data]
 

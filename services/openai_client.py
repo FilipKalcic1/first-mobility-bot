@@ -137,6 +137,12 @@ def get_openai_client():
     """
     global _shared_client
     if _shared_client is None:
+        # Resolve the rate guard BEFORE taking _singleton_lock. get_azure_rate_guard()
+        # acquires the SAME lock, and _singleton_lock is a non-reentrant
+        # threading.Lock — calling it while holding the lock DEADLOCKS the first
+        # get_openai_client() call (when _rate_guard isn't pre-initialized). This
+        # hung the worker on engine init / any first chat call (Filip 2026-05-23).
+        guard = get_azure_rate_guard()
         with _singleton_lock:
             if _shared_client is None:
                 inner = AsyncAzureOpenAI(
@@ -146,7 +152,7 @@ def get_openai_client():
                     max_retries=0,
                     timeout=15.0  # Reduced from 30s - gpt-4o-mini responds in 1-5s typical
                 )
-                _shared_client = GuardedAzureClient(inner, get_azure_rate_guard())
+                _shared_client = GuardedAzureClient(inner, guard)
     return _shared_client
 
 

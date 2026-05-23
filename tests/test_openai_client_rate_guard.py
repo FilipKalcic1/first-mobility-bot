@@ -88,6 +88,43 @@ async def test_guarded_completions_passes_through_other_methods():
     assert proxy.token_count == 42  # __getattr__ fallback
 
 
+def test_get_openai_client_no_deadlock_on_first_call(monkeypatch):
+    """Regression (Filip 2026-05-23): get_openai_client() called
+    get_azure_rate_guard() WHILE holding the non-reentrant _singleton_lock —
+    get_azure_rate_guard() tries to re-acquire the same lock → DEADLOCK on the
+    first call (when _rate_guard wasn't pre-initialized). This hung the worker on
+    engine init / the first Azure chat call (never caught: /ready doesn't touch
+    Azure). Reset the singletons, call fresh in a daemon thread, assert it
+    returns quickly — a re-introduced nested lock leaves the thread alive."""
+    import threading
+    import services.openai_client as oc
+
+    class _StubSettings:
+        AZURE_OPENAI_ENDPOINT = "https://stub.openai.azure.com"
+        AZURE_OPENAI_API_KEY = "stub-key"
+        AZURE_OPENAI_API_VERSION = "2024-02-01"
+
+    class _StubAzure:
+        def __init__(self, **kwargs):
+            self.chat = type("_C", (), {"completions": object()})()
+
+    monkeypatch.setattr(oc, "_get_settings", lambda: _StubSettings())
+    monkeypatch.setattr(oc, "AsyncAzureOpenAI", _StubAzure)
+    monkeypatch.setattr(oc, "_shared_client", None)   # force a true "first call"
+    monkeypatch.setattr(oc, "_rate_guard", None)
+
+    result: dict = {}
+
+    def _call():
+        result["client"] = oc.get_openai_client()
+
+    t = threading.Thread(target=_call, daemon=True)
+    t.start()
+    t.join(timeout=5.0)
+    assert not t.is_alive(), "get_openai_client() DEADLOCKED (nested _singleton_lock)"
+    assert result.get("client") is not None
+
+
 def test_max_concurrent_from_env_default():
     import services.openai_client as oc
     import os
