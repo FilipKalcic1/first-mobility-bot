@@ -155,6 +155,51 @@ class ToolRegistry:
     def list_tools(self) -> List[str]:
         return self._store.list_tools()
 
+    # ---
+    # EXECUTOR CONTRACT (Filip 2026-05-22 fix)
+    # ---
+    # services/v2/executor.py calls `spec_for(tool_id)` and `method_of(tool_id)`.
+    # The 2026-05-09 simplify pass rewrote this registry and dropped both, but
+    # the executor still expects them — so EVERY tool execution crashed with
+    # AttributeError in production. It passed the suite only because
+    # tests/v2/test_engine_wireup.py injects a fake registry that has them.
+    # These rebuild the dict shape the executor reads (service/path/method/
+    # tenant_scoped). NOTE: gateway service segment uses service_name (matches
+    # the literal "tenantmgt"/"automation" identity.py uses) — smoke test should
+    # confirm the final URL against the live MobilityOne base path.
+
+    def spec_for(self, operation_id: str) -> Optional[dict]:
+        """Return the executor-facing spec dict for a tool, or None if unknown."""
+        tool = self._store.get_tool(operation_id)
+        if tool is None:
+            return None
+        return {
+            "service": tool.service_name,
+            "path": tool.path,
+            "method": tool.method,
+            "tenant_scoped": True,  # all MobilityOne tools enforce x-tenant
+            # Per-param HTTP location (path/query/body/header) so the executor
+            # can route each value correctly + substitute {id} path placeholders.
+            "param_locations": {
+                name: (getattr(pdef, "location", None) or "body").lower()
+                for name, pdef in (tool.parameters or {}).items()
+            },
+            # Params the executor must auto-inject from identity (never asked
+            # from the user). Maps param name → context_key (person_id/
+            # vehicle_id/tenant_id/...). dependency_source == "context".
+            "context_params": {
+                name: getattr(pdef, "context_key", None)
+                for name, pdef in (tool.parameters or {}).items()
+                if getattr(pdef, "dependency_source", None) == "context"
+                and getattr(pdef, "context_key", None)
+            },
+        }
+
+    def method_of(self, operation_id: str) -> Optional[str]:
+        """HTTP method for a tool, or None if unknown."""
+        tool = self._store.get_tool(operation_id)
+        return tool.method if tool is not None else None
+
     # NOTE: tool_documentation.json was deleted in Phase 0 cleanup. The
     # legacy `get_tool_documentation` / `get_parameter_origin_guide` /
     # `is_context_param` / `is_user_param` / `get_tool_with_documentation`

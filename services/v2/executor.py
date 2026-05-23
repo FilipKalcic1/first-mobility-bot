@@ -21,6 +21,7 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Optional
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,51 @@ class ToolExecutor:
         path = spec.get("path") or ""
         method = (spec.get("method") or "GET").upper()
 
+        # Inject `context` params from identity (Filip 2026-05-23 fix #3). The
+        # registry marks params like VehicleId/personId dependency_source=
+        # "context" with a context_key (vehicle_id/person_id/...). These are
+        # NEVER asked from the user and NEVER LLM-extracted, so without this the
+        # generic path sent e.g. post_AddMileage with no VehicleId → 422.
+        # tenant_id is handled separately (x-tenant header). company_id/
+        # org_unit_id aren't in identity → left unfilled (API reports if needed).
+        params = dict(params or {})
+        for pname, ckey in (spec.get("context_params") or {}).items():
+            if params.get(pname) in (None, "") and ckey:
+                val = identity_summary.get(ckey)
+                if val is not None:
+                    params[pname] = val
+
+        # Route each param to its HTTP location (path/query/body/header). The
+        # registry marks every param's `location` (derived from Swagger).
+        # Filip 2026-05-23 fix #2: previously ALL params were dumped into query
+        # (GET) or body (else) and {id} path placeholders were NEVER substituted
+        # → every by-id tool built a URL like /Roles/{id} → MobilityOne 404.
+        locations = spec.get("param_locations") or {}
+        default_loc = "query" if method == "GET" else "body"
+        path_vals: dict = {}
+        query: dict = {}
+        body: dict = {}
+        for name, value in (params or {}).items():
+            loc = locations.get(name, default_loc)
+            if loc == "path":
+                path_vals[name] = value
+            elif loc == "query":
+                query[name] = value
+            elif loc == "header":
+                # gateway.call has no header passthrough; send as query (rare).
+                query[name] = value
+            else:  # body
+                body[name] = value
+
+        for name, value in path_vals.items():
+            path = path.replace("{" + name + "}", quote(str(value), safe=""))
+        if "{" in path and "}" in path:
+            # A required path placeholder was not filled — refuse rather than
+            # send a malformed URL (would 404 at MobilityOne).
+            return ExecutionResult(
+                success=False, error="missing_path_param",
+            )
+
         # Circuit gate
         circuit = self._get_or_init_circuit(service)
         gate = self._check_circuit(circuit)
@@ -121,8 +167,8 @@ class ToolExecutor:
                     method=method,
                     service=service,
                     path=path,
-                    query_params=params if method == "GET" else None,
-                    body=params if method != "GET" else None,
+                    query_params=query or None,
+                    body=body or None,
                     tenant_id=tenant_id,
                 ),
                 timeout=TIMEOUT_SECONDS,

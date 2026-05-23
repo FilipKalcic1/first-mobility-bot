@@ -147,11 +147,17 @@ class V2Engine:
     # ---- Internal helpers (Tier-A simplification 2026-05-08) ----
     @classmethod
     def _minimal_identity(cls, identity: IdentitySnapshot) -> dict:
-        """Smallest identity dict accepted by `executor.execute()` —
-        tenant_id only. Used by quick-path / V3 / unified execute call
-        sites that don't need full identity context."""
+        """Identity context the executor needs at execute time:
+          - tenant_id → x-tenant header (multi-tenant isolation)
+          - person_id / vehicle_id → auto-injected into `context` params the
+            registry marks dependency_source="context" (Filip 2026-05-23 fix #3;
+            e.g. post_AddMileage's required VehicleId). Keyed by the param's
+            context_key, so the keys here MUST match those context_key values.
+        """
         return {
             "tenant_id": identity.tenant_id,
+            "person_id": identity.person_id,
+            "vehicle_id": identity.vehicle_id,
         }
 
     async def process_message_chunked(
@@ -885,13 +891,23 @@ class V2Engine:
             # Backend ACL (MobilityOne 403) remains the security boundary —
             # this filter is purely a routing-accuracy aid (narrower candidate
             # set = better cosine + LLM disambiguation).
-            # Note: identity.persona defaults to "driver" if no per-tenant
-            # personas.json override exists — see services/v2/identity.py.
+            # LAUNCH-OFF (Filip 2026-05-22): role filtering disabled with
+            # persona=None. We can't reliably derive a user's role yet —
+            # MobilityOne /Persons declares a TenantRoles field but we haven't
+            # verified the live API populates it or what values it carries, and
+            # identity.persona otherwise defaults everyone to "driver" (18 tools)
+            # which would BREAK managers/admins (incl. Damir). With persona=None
+            # the scoper applies tenant-subset + method + drop_internal only, so
+            # every user reaches their tools (MobilityOne 403 is the real ACL).
+            # UPGRADE PATH: once a real /Persons response confirms TenantRoles,
+            # add config/role_map.json + read it in identity._populate_from_persons,
+            # then restore persona=identity.persona here. FAZA 14 scoper logic is
+            # intentionally left intact (no-op while persona=None).
             tool_filter: Optional[frozenset[str]] = None
             if self.catalog_scoper is not None:
                 tool_filter = self.catalog_scoper.scope(
                     tenant_id=identity.tenant_id,
-                    persona=identity.persona,
+                    persona=None,
                     methods=frozenset(allowed_methods) if allowed_methods else None,
                     drop_internal=True,
                 )

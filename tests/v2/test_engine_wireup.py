@@ -200,7 +200,19 @@ class FakeRegistry:
         return self._tools.get(tool_id, {}).get("purpose", "")
 
     def spec_for(self, tool_id):
-        return self._tools.get(tool_id)
+        spec = self._tools.get(tool_id)
+        if spec is None:
+            return None
+        # Mirror the real ToolRegistry.spec_for: expose param_locations so the
+        # executor can substitute {id} path placeholders + route query/body.
+        # Derive path params from the path's {placeholders} (a {id} in the path
+        # IS a path param), unless the test already declared param_locations.
+        out = dict(spec)
+        if "param_locations" not in out:
+            import re
+            placeholders = re.findall(r"\{(\w+)\}", out.get("path", "") or "")
+            out["param_locations"] = {p: "path" for p in placeholders}
+        return out
 
 
 class FakeRouter:
@@ -512,17 +524,21 @@ async def test_mutation_single_confirm_then_execute_delete():
     gateway.queue(FakeApiResponse(success=True, data={"deleted": True}))
     reply = await engine.process_message("385955087196", "Da")
 
-    # Verify the saved mutation actually ran
+    # Verify the saved mutation actually ran. Fix #2 (Filip 2026-05-23): `id`
+    # is a PATH param → {id} is SUBSTITUTED into the URL (/VehicleCalendar/abc-123),
+    # NOT left literal and dumped in the body. (Old assertion pinned the bug:
+    # path=="/VehicleCalendar/{id}" + body=={"id":...}.)
     delete_call = next(
         (c for c in gateway.calls
-         if c.get("path") == "/VehicleCalendar/{id}"
+         if c.get("path") == "/VehicleCalendar/abc-123"
          and c.get("method") == "DELETE"),
         None,
     )
     assert delete_call is not None, (
         f"delete never called; gateway saw {[c.get('path') for c in gateway.calls]}"
     )
-    assert delete_call["body"] == {"id": "abc-123"}
+    assert "{id}" not in delete_call["path"]   # placeholder substituted
+    assert not delete_call.get("body")         # id went to path, body empty
     assert "uspješno" in reply.lower() or "izvršena" in reply.lower()
 
     # State must be cleared after execute (single turn, single confirm, done)
@@ -1529,11 +1545,13 @@ async def test_tool_with_only_array_optional_offers_nothing():
 
 
 @pytest.mark.asyncio
-async def test_model_a_scope_uses_identity_persona():
-    """Faza 14 (Filip 2026-05-19): catalog_scoper is called with
-    persona=identity.persona (restored after Filip 2026-05-17 had set
-    it to None). Hierarchy in scoper means driver sees 18, manager 245,
-    admin 481 — instead of all 594 user-facing for everyone."""
+async def test_model_a_scope_role_filter_disabled_for_launch():
+    """LAUNCH-OFF (Filip 2026-05-22): role filtering disabled — engine calls
+    catalog_scoper with persona=None (NOT identity.persona). Reason: we can't
+    verify MobilityOne returns usable role data yet, and defaulting everyone to
+    'driver' would break managers/admins. persona=None → tenant+method+
+    drop_internal filtering only. (Reverts to identity.persona once role_map
+    is wired — see engine.py comment + plan 🚦 LAUNCH-DAY ODLUKA.)"""
     captured: dict = {}
 
     class _StubScoper:
@@ -1557,9 +1575,8 @@ async def test_model_a_scope_uses_identity_persona():
     )
     await engine.process_message("+385955087196", "1")
 
-    # Engine MUST have passed identity.persona (default "driver" when no
-    # per-tenant personas.json override) to scoper.
-    assert captured.get("persona") == "driver"
+    # Role filtering OFF for launch → persona must be None (not "driver").
+    assert captured.get("persona") is None
     # drop_internal stays True — internal helpers always filtered
     assert captured.get("drop_internal") is True
 

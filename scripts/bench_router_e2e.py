@@ -78,6 +78,11 @@ async def main_async(args) -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.path.insert(0, str(REPO))
 
+    # Show INFO logs (anchor_index.build emits progress here) + flush so we
+    # can see exactly where a stall happens.
+    import logging
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
     if not args.tool_data.exists():
         print(f"ERROR: {args.tool_data} not found", file=sys.stderr)
         sys.exit(1)
@@ -90,9 +95,10 @@ async def main_async(args) -> None:
     queries = [q for q in (bench.get("queries") or []) if q.get("expected_tool")]
     if args.limit:
         queries = queries[: args.limit]
-    print(f"Loaded {len(queries)} labelled queries from {args.benchmark_file.name}.")
+    print(f"Loaded {len(queries)} labelled queries from {args.benchmark_file.name}.", flush=True)
 
     # --- tool_data + derived shapes (mirror engine factory) ---
+    print(f"Loading {args.tool_data.name} (~3.8MB)...", flush=True)
     tool_data = json.loads(args.tool_data.read_text(encoding="utf-8"))
     tool_entries = tool_data.get("tools", {})
     if not tool_entries:
@@ -117,8 +123,12 @@ async def main_async(args) -> None:
         for op, e in tool_entries.items()
         if e.get("anchors")
     }
+    n_anchor_phrases = sum(len(v) for v in anchors_dict.values())
+    print(f"tool_data: {len(tool_entries)} tools, {len(anchors_dict)} with anchors, "
+          f"{n_anchor_phrases} anchor phrases total.", flush=True)
 
     # --- wire the REAL router (same classes as production) ---
+    print("Importing router modules + reading .env settings...", flush=True)
     from config import get_settings
     from services.openai_client import get_openai_client, get_embedding_client
     from services.router.anchor_index import AnchorIndex
@@ -131,6 +141,8 @@ async def main_async(args) -> None:
     chat_client = get_openai_client()
     embed_dep = settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT
     chat_dep = settings.AZURE_OPENAI_DEPLOYMENT_NAME
+    print(f"Azure clients ready (embed={embed_dep}, chat={chat_dep}, "
+          f"endpoint={settings.AZURE_OPENAI_ENDPOINT}). Building schemas...", flush=True)
 
     async def _embed_fn(texts: list) -> list:
         r = await embed_client.embeddings.create(input=texts, model=embed_dep)
@@ -150,8 +162,12 @@ async def main_async(args) -> None:
         embed_fn=_embed_fn,
         deployment_name=chat_dep,
     )
-    print("Building anchor index (embeds all anchors once)...")
+    print(f"Building anchor index — embedding {n_anchor_phrases} anchor phrases via Azure "
+          f"(first run ~1-2 min; then cached to {ANCHOR_CACHE.name}). "
+          f"If it hangs HERE with no further log line, Azure embeddings are "
+          f"unreachable/throttled — check network + AZURE_OPENAI_* in .env.", flush=True)
     await router.initialize()
+    print("Anchor index ready. Routing queries...", flush=True)
     scoper = CatalogScoper(tool_data=tool_data, tenants_dir=REPO / "config" / "tenants")
 
     # --- run each query through the full pipeline ---
@@ -163,24 +179,30 @@ async def main_async(args) -> None:
 
     for i, q in enumerate(queries, 1):
         expected = q["expected_tool"]
-        persona = q.get("persona") or "driver"
+        bench_persona = q.get("persona") or "driver"  # only for reporting buckets
         method = method_of(expected, tool_entries)
         methods = (
             None if args.no_method_filter or method not in _METHODS
             else frozenset({method})
         )
 
+        # LAUNCH config (Filip 2026-05-22): role filtering is OFF in production
+        # (engine.py passes persona=None). Mirror that here by default so the
+        # number reflects what users actually get. --role-on re-enables the
+        # FAZA 14 hierarchy for future measurement once role data is wired.
+        scope_persona = bench_persona if args.role_on else None
+
         scope = scoper.scope(
-            tenant_id=args.tenant, persona=persona,
+            tenant_id=args.tenant, persona=scope_persona,
             methods=methods, drop_internal=True,
         )
 
         by_method.setdefault(method, [0, 0])[1] += 1
-        by_persona.setdefault(persona, [0, 0])[1] += 1
+        by_persona.setdefault(bench_persona, [0, 0])[1] += 1
 
         if expected not in scope:
             scope_miss += 1
-            scope_misses.append((q["query"], expected, persona, method, len(scope)))
+            scope_misses.append((q["query"], expected, bench_persona, method, len(scope)))
             continue
 
         res = await router.route(
@@ -192,7 +214,7 @@ async def main_async(args) -> None:
         if picked == expected:
             correct += 1
             by_method[method][0] += 1
-            by_persona[persona][0] += 1
+            by_persona[bench_persona][0] += 1
         else:
             route_miss += 1
             route_misses.append((q["query"], expected, picked, res.error))
@@ -204,6 +226,7 @@ async def main_async(args) -> None:
     n = len(queries)
     print(f"\n=== END-TO-END ROUTER ACCURACY ({args.benchmark_file.name}) ===")
     print(f"  tool_data:        {args.tool_data.name}")
+    print(f"  role filter:      {'ON (FAZA 14 hierarchy)' if args.role_on else 'OFF (persona=None — matches launch)'}")
     print(f"  method filter:    {'OFF (harder)' if args.no_method_filter else 'ON (simulates action pick)'}")
     print(f"  total queries:    {n}")
     if n:
@@ -232,6 +255,9 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--no-method-filter", action="store_true")
     ap.add_argument("--tenant", type=str, default=None)
+    ap.add_argument("--role-on", action="store_true",
+                    help="Re-enable FAZA 14 persona hierarchy (default OFF = "
+                         "persona=None, matching current launch config).")
     asyncio.run(main_async(ap.parse_args()))
 
 

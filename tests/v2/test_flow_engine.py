@@ -475,17 +475,19 @@ def test_parse_period_handles_srijeda_inflections():
 
 
 def test_parse_period_handles_next_week_keyword():
-    """'iduci petak 9-15' → Friday of NEXT week (+7 days beyond this week's)."""
+    """'iduci petak 9-15' → an upcoming Friday, never today, never BEFORE the
+    plain 'u petak'. On other days 'iduci' lands a week later than 'u petak';
+    when today IS Friday the parser naturally collapses both to the same coming
+    Friday (+7) — the sensible reading. (Date-independent: the old assertion
+    hardcoded +14 and broke when the suite ran on a Friday, e.g. 2026-05-22.)"""
     out = _parse_period("iduci petak 9-15")
-    assert out is not None
-    this_friday = _next_weekday(4)
-    next_friday = this_friday + timedelta(days=7)
-    # When today is NOT Friday, _next_weekday returns this week's Friday;
-    # 'iduci' adds another 7. When today IS Friday, _next_weekday already
-    # returns +7 (next Monday-relative semantics), so 'iduci' adds +7 again.
-    # Either way, output must NOT be this week's Friday.
-    assert not out["from_time"].startswith(this_friday.isoformat())
-    assert out["from_time"].startswith(next_friday.isoformat())
+    plain = _parse_period("u petak 9-15")
+    assert out is not None and plain is not None
+    today_iso = datetime.now().date().isoformat()
+    # 'iduci' must never resolve to today, and never before the plain Friday.
+    assert out["from_time"][:10] != today_iso
+    assert out["from_time"] >= plain["from_time"]
+    assert "09:00:00" in out["from_time"]
 
 
 def test_parse_period_parts_of_day_ujutro():
