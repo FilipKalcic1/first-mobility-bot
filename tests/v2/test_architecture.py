@@ -45,6 +45,8 @@ LEAF_MODULES = {
     "optional_extractor",    # L5.7 LLM extract free-text → optional dict
     "api_error_translator",  # L7.5 LLM translate 4xx body → Croatian message
     "param_labeler",         # L5.7 LLM generate Croatian param labels
+    "entity_detector",       # L5.7 detect a named vehicle registration in query
+    "filter_builder",        # L5.7 build a safe MobilityOne Filter clause
     "active_learning",       # offline: telemetry → actionable report
     "anchor_audit",          # offline: anchor quality → actionable report
     "executor",              # L7 API call + circuit breaker + idempotency

@@ -89,9 +89,13 @@ def test_v6_aliases_still_intact(registry):
     assert _find(registry, "get_MasterData").get("output_key_aliases") == {"Id": "VehicleId"}
     assert _find(registry, "get_Persons").get("output_key_aliases") == {"Id": "PersonId"}
 
+    # get_Persons.Filter was tagged context=person_id (vestigial; filter_template
+    # is dead code, identity builds the Phone filter directly). The 2026-05-24
+    # misclassification fix demoted it to user_input — a real Filter is a
+    # user-typed search expression (e.g. manager "lista zaposlenika"), not an
+    # auto-injected person UUID.
     persons_filter = _find(registry, "get_Persons")["parameters"]["Filter"]
-    assert persons_filter["dependency_source"] == "context"
-    assert persons_filter["filter_template"] == "Phone(=){phone}"
+    assert persons_filter["dependency_source"] == "user_input"
     assert _find(registry, "get_MasterData")["parameters"]["personId"]["required"] is True
 
 

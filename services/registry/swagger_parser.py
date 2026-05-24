@@ -22,6 +22,33 @@ from services.errors import BotError, ErrorCode
 
 logger = logging.getLogger(__name__)
 
+# Context-param appropriateness (Filip 2026-05-24 audit). An auto-injected
+# context value is always an identity UUID string (vehicle_id/person_id/
+# tenant_id/company_id/orgunit_id), so it only belongs in a STRING param that
+# names an entity reference. Used by both the parser (durable, on regen) and
+# scripts/fix_context_misclassification.py (one-off correction of the current
+# registry, since a live regen is blocked).
+_CONTEXT_ID_TOKENS = ("personid", "vehicleid", "companyid", "tenantid", "orgunitid")
+_CONTEXT_ACTOR_NAMES = frozenset({"createdby", "raisedby", "modifiedby", "updatedby"})
+
+
+def _context_value_appropriate(param_name: str, param_type) -> bool:
+    """True only if injecting an identity UUID string into this param is valid:
+    a string param named like an entity ref (*Id, personIdOrEmail) or an actor
+    field (CreatedBy → person_id). Non-string types and value fields
+    (Date/Code/Status/EntryType/Comment/...) return False → kept user_input."""
+    if (param_type or "string").lower() != "string":
+        return False
+    low = (param_name or "").lower()
+    if low.endswith("id"):
+        return True
+    if any(tok in low for tok in _CONTEXT_ID_TOKENS):
+        return True
+    if low in _CONTEXT_ACTOR_NAMES:
+        return True
+    return False
+
+
 # Config file path — anchored to repo root via this file's location, NOT
 # Path.cwd(), so the parser works regardless of where the worker was
 # launched from (K8s entrypoint, cron job, test runner in subdirectory).
@@ -329,6 +356,16 @@ class SwaggerParser:
         # 1a. HTTP query operators (filter/search/limit/...) — these are
         # user-typed, never auto-injected. See _NEVER_CONTEXT_NAMES above.
         if param_lower in self._NEVER_CONTEXT_NAMES:
+            return None, False
+
+        # 1b. Type/name appropriateness (Filip 2026-05-24 audit). An injected
+        # context value is ALWAYS an identity UUID *string*, so it only belongs
+        # in a string param that names an entity reference (*Id / personIdOrEmail
+        # / actor field). A non-string param (int/array/bool) or a value field
+        # (Date/Code/Status/EntryType/Comment/Visibility/...) tagged context would
+        # auto-inject a UUID into the wrong slot → 422/garbage (55 such params
+        # found across the registry). Reject so they stay user_input.
+        if not _context_value_appropriate(param_name, param_type):
             return None, False
 
         description_lower = description.lower()

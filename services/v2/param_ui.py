@@ -189,7 +189,15 @@ def parse_param_value(
             return None
 
     if ptype == "boolean":
-        return raw.lower() in {"da", "yes", "true", "1", "ok"}
+        # Explicit yes/no sets. Anything else → None (re-ask), NOT silently
+        # False — the old `raw in {affirmatives}` returned False for garbage
+        # AND for "ne", so a typo silently became False (Filip 2026-05-24).
+        low = raw.lower().rstrip(".!?")
+        if low in {"da", "yes", "true", "1", "ok", "može", "moze", "točno", "tocno"}:
+            return True
+        if low in {"ne", "no", "false", "0", "n", "nije", "netočno", "netocno"}:
+            return False
+        return None  # ambiguous → re-ask
 
     # String types — date-time / date formats get parsed to ISO 8601 so the
     # API gets the shape it expects. Plain strings pass through.

@@ -115,14 +115,30 @@ class ToolExecutor:
         # "context" with a context_key (vehicle_id/person_id/...). These are
         # NEVER asked from the user and NEVER LLM-extracted, so without this the
         # generic path sent e.g. post_AddMileage with no VehicleId → 422.
-        # tenant_id is handled separately (x-tenant header). company_id/
-        # org_unit_id aren't in identity → left unfilled (API reports if needed).
+        # tenant_id is handled separately (x-tenant header). As of 2026-05-24
+        # identity also provides company_id + orgunit_id (from /Persons), so
+        # those context params inject too (closed the 28-param gap).
         params = dict(params or {})
         for pname, ckey in (spec.get("context_params") or {}).items():
             if params.get(pname) in (None, "") and ckey:
                 val = identity_summary.get(ckey)
                 if val is not None:
                     params[pname] = val
+
+        # Completeness guard (Filip 2026-05-24): a REQUIRED context param that
+        # still couldn't be filled (identity genuinely lacks it, or it's
+        # misclassified to a context_key we don't have) must NOT go out as an
+        # incomplete call → refuse cleanly instead of a silent API 422. Required
+        # user_input params are already gated upstream by param-asking; this
+        # only catches the never-asked context ones.
+        missing_ctx = [
+            p for p in (spec.get("required_context_params") or [])
+            if params.get(p) in (None, "")
+        ]
+        if missing_ctx:
+            return ExecutionResult(
+                success=False, error=f"missing_required:{','.join(missing_ctx)}",
+            )
 
         # Route each param to its HTTP location (path/query/body/header). The
         # registry marks every param's `location` (derived from Swagger).

@@ -1,0 +1,4 @@
+{
+  "_comment": "Maps a detected entity type (services/v2/entity_detector.py) to the MobilityOne field name used in the Filter param (Field(=)Value). Global, extensible. registration -> LicencePlate confirmed from get_Vehicles/get_Master output_keys.",
+  "registration": "LicencePlate"
+}

@@ -133,7 +133,13 @@ def test_build_skips_tools_without_operation_id():
     assert schemas == []
 
 
-def test_required_params_from_required_params_field():
+# ANTI-FABRICATION (Filip 2026-05-24): the LLM schema intentionally emits an
+# EMPTY `required` so the model only fills params the user actually stated
+# (no guessing required values). Required-ness is enforced downstream from the
+# registry (engine._compute_missing_required → param-ask). These tests pin
+# that contract: the param still appears in `properties`, but NOT in `required`.
+
+def test_required_params_omitted_from_llm_schema_required():
     tool = _mk_tool(
         "post_X", method="POST",
         parameters={"name": _mk_param("name", "string")},
@@ -141,17 +147,21 @@ def test_required_params_from_required_params_field():
     )
     b = ToolSchemaBuilder.from_registry({"tools": [tool]})
     schemas = b.build_for_tools([tool], tkb={})
-    assert "name" in schemas[0]["function"]["parameters"]["required"]
+    params = schemas[0]["function"]["parameters"]
+    assert params["required"] == []          # never forced on the LLM
+    assert "name" in params["properties"]     # but still offered as a property
 
 
-def test_required_params_from_param_required_flag():
+def test_param_required_flag_not_forced_on_llm():
     tool = _mk_tool(
         "post_X", method="POST",
         parameters={"name": _mk_param("name", "string", required=True)},
     )
     b = ToolSchemaBuilder.from_registry({"tools": [tool]})
     schemas = b.build_for_tools([tool], tkb={})
-    assert "name" in schemas[0]["function"]["parameters"]["required"]
+    params = schemas[0]["function"]["parameters"]
+    assert params["required"] == []
+    assert "name" in params["properties"]
 
 
 def test_real_registry_three_aliased_tools_under_limit():

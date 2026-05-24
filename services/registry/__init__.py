@@ -193,6 +193,17 @@ class ToolRegistry:
                 if getattr(pdef, "dependency_source", None) == "context"
                 and getattr(pdef, "context_key", None)
             },
+            # REQUIRED context params — the executor refuses (clean error) if
+            # one of these can't be injected (identity lacks it / misclassified)
+            # rather than sending an incomplete call → silent 422
+            # (Filip 2026-05-24 completeness guard).
+            "required_context_params": [
+                name
+                for name, pdef in (tool.parameters or {}).items()
+                if getattr(pdef, "dependency_source", None) == "context"
+                and getattr(pdef, "context_key", None)
+                and getattr(pdef, "required", False)
+            ],
         }
 
     def method_of(self, operation_id: str) -> Optional[str]:

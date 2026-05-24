@@ -210,6 +210,68 @@ async def test_execute_context_param_not_overwritten_if_user_gave_it():
 
 
 @pytest.mark.asyncio
+async def test_execute_injects_company_and_orgunit_id_from_identity():
+    """Filip 2026-05-24: close the 28-param gap. CompanyId/OrgUnitId are
+    context params (context_key company_id/orgunit_id) — identity now provides
+    them (from /Persons) so they inject like VehicleId, instead of silently
+    falling through → 422."""
+    tool = UnifiedToolDefinition(
+        operation_id="put_OrgUnits_id", service_name="tenantmgt",
+        service_url="/tenantmgt", path="/OrgUnits/{id}", method="PUT",
+        parameters={
+            "id": ParameterDefinition(name="id", param_type="string", location="path"),
+            "Name": ParameterDefinition(name="Name", param_type="string", location="body",
+                                        dependency_source="user_input", required=True),
+            "CompanyId": ParameterDefinition(name="CompanyId", param_type="string", location="body",
+                                             dependency_source="context", context_key="company_id"),
+            "ParentOrgUnitId": ParameterDefinition(name="ParentOrgUnitId", param_type="string", location="body",
+                                                   dependency_source="context", context_key="orgunit_id"),
+        },
+    )
+    gw = _RecordingGateway(APIResponse(success=True, status_code=200, data={}))
+    ex = ToolExecutor(gw, _registry_with(tool))
+
+    res = await ex.execute(
+        tool_id="put_OrgUnits_id", params={"id": "42", "Name": "Prodaja EU"},
+        identity_summary={"tenant_id": "t1", "company_id": "comp-7", "orgunit_id": "ou-3"},
+    )
+    assert res.success is True
+    body = gw.calls[0]["body"]
+    assert body["Name"] == "Prodaja EU"
+    assert body["CompanyId"] == "comp-7"        # injected (← the fix)
+    assert body["ParentOrgUnitId"] == "ou-3"    # injected (← the fix)
+    assert gw.calls[0]["path"] == "/OrgUnits/42"
+
+
+@pytest.mark.asyncio
+async def test_execute_refuses_when_required_context_uninjectable():
+    """Completeness guard (Filip 2026-05-24): a REQUIRED context param that
+    can't be injected (identity lacks it) → refuse cleanly, not a silent 422."""
+    tool = UnifiedToolDefinition(
+        operation_id="put_OrgUnits_id", service_name="tenantmgt",
+        service_url="/tenantmgt", path="/OrgUnits/{id}", method="PUT",
+        parameters={
+            "id": ParameterDefinition(name="id", param_type="string", location="path"),
+            "CompanyId": ParameterDefinition(name="CompanyId", param_type="string", location="body",
+                                             dependency_source="context", context_key="company_id",
+                                             required=True),
+        },
+    )
+    gw = _RecordingGateway(APIResponse(success=True, status_code=200, data={}))
+    ex = ToolExecutor(gw, _registry_with(tool))
+
+    # identity has NO company_id → CompanyId can't be injected
+    res = await ex.execute(
+        tool_id="put_OrgUnits_id", params={"id": "42"},
+        identity_summary={"tenant_id": "t1"},
+    )
+    assert res.success is False
+    assert (res.error or "").startswith("missing_required:")
+    assert "CompanyId" in (res.error or "")
+    assert gw.calls == []  # never sent an incomplete call
+
+
+@pytest.mark.asyncio
 async def test_execute_unknown_tool_returns_error_not_crash():
     ex = ToolExecutor(_RecordingGateway(APIResponse(success=True, status_code=200, data={})),
                       ToolRegistry())

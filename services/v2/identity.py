@@ -70,9 +70,15 @@ class IdentitySnapshot:
     full_name: Optional[str] = None
     first_name: Optional[str] = None
     tenant_id: Optional[str] = None
-    # Org context from /Persons response — used in first-message greeting.
+    # Org context from /Persons response — names for the greeting, IDs for
+    # context-param injection (Filip 2026-05-24: 28 tools require CompanyId/
+    # OrgUnitId as context params; /Persons returns these IDs so we inject them
+    # the same way as person_id/vehicle_id instead of letting them silently
+    # fall through → 422).
     company_name: Optional[str] = None
     org_unit_name: Optional[str] = None
+    company_id: Optional[str] = None
+    org_unit_id: Optional[str] = None
     # Drives persona-restricted routing (Phase D 2026-05-16). Defaults to
     # "driver" if not overridden in config/tenants/{tenant_id}/personas.json.
     persona: Persona = _DEFAULT_PERSONA
@@ -98,6 +104,8 @@ class IdentitySnapshot:
             "tenant_id": self.tenant_id,
             "company_name": self.company_name,
             "org_unit_name": self.org_unit_name,
+            "company_id": self.company_id,
+            "org_unit_id": self.org_unit_id,
             "persona": self.persona,
             "vehicle_id": self.vehicle_id,
             "vehicle_name": self.vehicle_name,
@@ -120,6 +128,8 @@ class IdentitySnapshot:
             tenant_id=data.get("tenant_id"),
             company_name=data.get("company_name"),
             org_unit_name=data.get("org_unit_name"),
+            company_id=data.get("company_id"),
+            org_unit_id=data.get("org_unit_id"),
             persona=data.get("persona") or _DEFAULT_PERSONA,
             vehicle_id=data.get("vehicle_id"),
             vehicle_name=data.get("vehicle_name"),
@@ -175,6 +185,27 @@ class IdentityContext:
         if s.startswith("00"):
             s = s[2:]
         return s
+
+    @staticmethod
+    def _national_significant_number(phone: str) -> str:
+        """Reduce a phone to its national significant number (NSN), so we can
+        match across the formats MobilityOne actually stores Phone in.
+
+        Verified live 2026-05-24: one tenant holds `385955087196`,
+        `+385916659757` AND `0915245777` — the bot's old exact `Phone(=)`
+        match only hit the bare `385…` form, leaving `+`/`0`-stored users
+        unidentifiable. Steps: digits only → drop `00`/`385` country code
+        (length-guarded so a national number that merely starts with 385 is
+        not truncated) → drop one leading trunk `0`. All three examples
+        collapse to the same NSN (e.g. `955087196`/`916659757`/`915245777`)."""
+        digits = "".join(c for c in (phone or "") if c.isdigit())
+        if digits.startswith("00"):
+            digits = digits[2:]
+        if digits.startswith("385") and len(digits) >= 11:
+            digits = digits[3:]
+        if digits.startswith("0"):
+            digits = digits[1:]
+        return digits
 
     async def resolve(
         self,
@@ -405,8 +436,69 @@ class IdentityContext:
         except Exception as e:  # noqa: BLE001
             logger.warning("identity cache write failed: %s", e)
 
+    async def _query_persons(self, filter_str: str) -> tuple[bool, list]:
+        """GET /tenantmgt/Persons?Filter=... → (api_ok, [person dicts]).
+
+        `api_ok` distinguishes a SUCCESSFUL-but-empty result (genuine "no such
+        row") from a transient failure (503/timeout) — the caller only does the
+        contains fallback on a real empty, never on a failure. Uses
+        ``settings.MOBILITY_TENANT_ID`` as x-tenant (Damir pilot = one tenant)."""
+        try:
+            response = await self._gateway.call(
+                method="GET",
+                service="tenantmgt",
+                path="/Persons",
+                query_params={"Filter": filter_str},
+                tenant_id=self._settings.MOBILITY_TENANT_ID,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("persons lookup error: %s", type(e).__name__)
+            return False, []
+        if not response.success:
+            logger.warning(
+                "persons HTTP %s", response.status_code or "unknown",
+            )
+            return False, []
+        return True, self._extract_items(response.data)
+
+    async def _find_person_by_phone(self, phone: str) -> Optional[dict]:
+        """Find the UNIQUE Person whose stored Phone matches `phone`, robust to
+        MobilityOne's inconsistent phone formats (`385…`/`+385…`/`0…`).
+
+        EXACT-first (precise, and the common case — numbers stored as bare
+        `385…` resolve in one call, preserving prior behavior). Only when the
+        exact filter SUCCEEDS but finds nothing do we fall back to a
+        format-robust match: query ``Phone(contains){nsn}`` (substring catches
+        the `+`/`0`-stored variants), then post-verify by EXACT NSN equality
+        and require a UNIQUE match — `contains` could match a longer number and
+        we must never bind the wrong person. We do NOT fall back on a transient
+        API failure (no point re-querying a down endpoint)."""
+        api_ok, items = await self._query_persons(f"Phone(=){phone}")
+        if items:
+            return items[0]
+        nsn = self._national_significant_number(phone)
+        if api_ok and len(nsn) >= 8:
+            _, items = await self._query_persons(f"Phone(contains){nsn}")
+            matches = [
+                p for p in items
+                if self._national_significant_number(
+                    p.get("Phone") or p.get("phone") or ""
+                ) == nsn
+            ]
+            if len(matches) == 1:
+                return matches[0]
+            if len(matches) > 1:
+                logger.warning(
+                    "ambiguous phone match: %d persons share NSN ***%s — "
+                    "refusing to bind identity",
+                    len(matches), nsn[-3:],
+                )
+        return None
+
     async def _populate_from_persons(self, snap: IdentitySnapshot) -> None:
-        """GET /tenantmgt/Persons?Filter=Phone(=){phone} → personId, name.
+        """Resolve personId + name + tenant by matching the WhatsApp sender's
+        number against the Person ``Phone`` field (see _find_person_by_phone
+        for the format-robust matching).
 
         Uses ``settings.MOBILITY_TENANT_ID`` as the x-tenant header. For
         Damir's pilot (one tenant) this is the right call. The Persons
@@ -417,34 +509,13 @@ class IdentityContext:
         bottleneck and will need re-architecture once we know how MobilityOne
         wants to handle cross-tenant phone lookup. NOT solved here.
         """
-        try:
-            response = await self._gateway.call(
-                method="GET",
-                service="tenantmgt",
-                path="/Persons",
-                query_params={"Filter": f"Phone(=){snap.phone}"},
-                tenant_id=self._settings.MOBILITY_TENANT_ID,
-            )
-        except Exception as e:  # noqa: BLE001
-            logger.warning("persons lookup error: %s", type(e).__name__)
-            return
-
-        if not response.success:
-            logger.warning(
-                "persons HTTP %s for phone ****%s",
-                response.status_code or "unknown",
-                snap.phone[-4:] if snap.phone else "",
-            )
-            return
-
-        items = self._extract_items(response.data)
-        if not items:
-            # Phone not registered. Known-unknown — cached so we don't
-            # hammer the API on every poll.
+        person = await self._find_person_by_phone(snap.phone)
+        if person is None:
+            # Phone not registered (or no unique NSN match). Known-unknown —
+            # cached so we don't hammer the API on every poll.
             snap.is_known = False
             return
 
-        person = items[0]
         snap.person_id = person.get("Id") or person.get("id")
         first_name = person.get("FirstName") or person.get("firstName") or ""
         last_name = person.get("LastName") or person.get("lastName") or ""
@@ -456,6 +527,10 @@ class IdentityContext:
         # carries CompanyName + OrgUnitName per processed_tool_registry).
         snap.company_name = person.get("CompanyName") or person.get("companyName")
         snap.org_unit_name = person.get("OrgUnitName") or person.get("orgUnitName")
+        # IDs for context-param injection (Filip 2026-05-24). Verified live:
+        # /Persons returns CompanyId + OrgUnitId.
+        snap.company_id = person.get("CompanyId") or person.get("companyId")
+        snap.org_unit_id = person.get("OrgUnitId") or person.get("orgUnitId")
         # Strict tenant binding (multi-tenant safety): the TenantId field is
         # the ONLY authoritative source. If Persons omits it, treat the user
         # as unknown rather than silently routing into a default tenant.
@@ -507,7 +582,13 @@ class IdentityContext:
         if not isinstance(data, dict):
             return
 
-        snap.vehicle_id = data.get("VehicleId") or data.get("vehicleId")
+        # Verified live 2026-05-24: MasterData carries the vehicle's id under
+        # `Id` (cross-checked == Vehicles[plate].Id); `VehicleId` is null. The
+        # old code read only VehicleId → vehicle_id stayed None → every
+        # vehicle-scoped tool (context-param VehicleId) failed.
+        snap.vehicle_id = (
+            data.get("VehicleId") or data.get("vehicleId") or data.get("Id")
+        )
         snap.vehicle_name = (
             data.get("VehicleName")
             or data.get("FullVehicleName")
@@ -530,13 +611,18 @@ class IdentityContext:
 
     @staticmethod
     def _extract_items(data: Any) -> list:
-        """MobilityOne wraps lists in {data: [...]} sometimes."""
+        """MobilityOne wraps list responses under varying envelope keys.
+        Accept the common ones (the bot had never parsed a live /Persons
+        response, and the envelope key is not guaranteed to be `data`)."""
         if isinstance(data, list):
             return data
         if isinstance(data, dict):
-            inner = data.get("data") or data.get("Data") or data.get("items")
-            if isinstance(inner, list):
-                return inner
+            for key in (
+                "data", "Data", "items", "Items", "Result", "Results", "value",
+            ):
+                inner = data.get(key)
+                if isinstance(inner, list):
+                    return inner
             # Single-record dict acts like list of one.
             if "Id" in data or "id" in data:
                 return [data]

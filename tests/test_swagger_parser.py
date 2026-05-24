@@ -519,22 +519,40 @@ class TestClassifyContextParameter:
         assert context_key == "person_id"
 
     def test_classify_by_description_keywords_vehicle(self, parser_with_defaults):
-        # Use "integer" type so person_id (type_hints=["string"]) doesn't reach threshold
-        # vehicle_id: description "vehicle" = 3 points -> matches
+        # String + name endsWith "Id" passes the appropriateness gate (2026-05-24);
+        # then description "vehicle" classifies it vehicle_id.
         context_key, is_ctx = parser_with_defaults._classify_context_parameter(
-            "AssetId", "integer", None, "The vehicle asset identifier"
+            "AssetId", "string", "uuid", "The vehicle asset identifier"
         )
         assert is_ctx is True
         assert context_key == "vehicle_id"
 
     def test_classify_by_description_keywords_tenant(self, parser_with_defaults):
-        # Use "integer" type so earlier patterns don't reach threshold
-        # tenant_id: description "tenant" = 3 points -> matches
         context_key, is_ctx = parser_with_defaults._classify_context_parameter(
-            "OrgId", "integer", None, "The tenant organization"
+            "OrgId", "string", "uuid", "The tenant organization"
         )
         assert is_ctx is True
         assert context_key == "tenant_id"
+
+    def test_non_string_param_never_context(self, parser_with_defaults):
+        """2026-05-24 guard: identity injects UUID strings, so a non-string param
+        (int/array/bool) can NEVER be a context param — even if its name ends in
+        Id and its description matches (this was the misclassification bug:
+        EntryType/StatusId/Visibility int → vehicle_id/tenant_id UUID → 422)."""
+        for ptype in ("integer", "boolean", "array"):
+            ck, is_ctx = parser_with_defaults._classify_context_parameter(
+                "StatusId", ptype, None, "The vehicle status"
+            )
+            assert is_ctx is False, f"{ptype} param wrongly classified context"
+
+    def test_value_field_name_never_context(self, parser_with_defaults):
+        """A string param whose name isn't an entity reference (Date/Code/Name)
+        must not be context even if description mentions an entity."""
+        for name in ("Date", "Code", "VehicleName", "Comment"):
+            ck, is_ctx = parser_with_defaults._classify_context_parameter(
+                name, "string", None, "The vehicle related value"
+            )
+            assert is_ctx is False, f"{name} wrongly classified context"
 
     def test_classify_by_fallback_name(self, parser_with_defaults):
         context_key, is_ctx = parser_with_defaults._classify_context_parameter(

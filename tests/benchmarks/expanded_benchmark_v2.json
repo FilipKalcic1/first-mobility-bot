@@ -1,0 +1,1112 @@
+{
+  "name": "expanded_benchmark_v2",
+  "generated_by": "scripts/generate_benchmark_queries.py",
+  "seed": 42,
+  "per_method": 14,
+  "queries": [
+    {
+      "id": "v2_0001",
+      "query": "daj mi putovanje s id-om 123",
+      "persona": "manager",
+      "expected_domain": "Trips",
+      "expected_tool": "get_Trips_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0002",
+      "query": "trebam detalje za putovanje 456",
+      "persona": "manager",
+      "expected_domain": "Trips",
+      "expected_tool": "get_Trips_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0003",
+      "query": "daj mi sve grupe troskova",
+      "persona": "manager",
+      "expected_domain": "ExpenseGroups",
+      "expected_tool": "get_ExpenseGroups",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0004",
+      "query": "trebam pregled troskova, molim",
+      "persona": "manager",
+      "expected_domain": "ExpenseGroups",
+      "expected_tool": "get_ExpenseGroups",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0005",
+      "query": "daj mi agregirane podatke za osobe",
+      "persona": "internal",
+      "expected_domain": "Persons",
+      "expected_tool": "get_Persons_Agg",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0006",
+      "query": "trebam aggregate info o osobama",
+      "persona": "internal",
+      "expected_domain": "Persons",
+      "expected_tool": "get_Persons_Agg",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0007",
+      "query": "dokumente za opremu sa id-om",
+      "persona": "manager",
+      "expected_domain": "EquipmentCalendar",
+      "expected_tool": "get_EquipmentCalendar_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0008",
+      "query": "trebam dokumente za kalendar opreme",
+      "persona": "manager",
+      "expected_domain": "EquipmentCalendar",
+      "expected_tool": "get_EquipmentCalendar_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0009",
+      "query": "daj mi agregirane tipove putovanja",
+      "persona": "manager",
+      "expected_domain": "TripTypes",
+      "expected_tool": "get_TripTypes_Agg",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0010",
+      "query": "sta ima novo s putovanjima?",
+      "persona": "manager",
+      "expected_domain": "TripTypes",
+      "expected_tool": "get_TripTypes_Agg",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0011",
+      "query": "daj mi agregirane vrijednosti opreme",
+      "persona": "manager",
+      "expected_domain": "EquipmentCalendarOnPersonVehicle",
+      "expected_tool": "get_EquipmentCalendarOnPersonVehicle_on_Agg",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0012",
+      "query": "trebam podatke o opremi na vozilu",
+      "persona": "manager",
+      "expected_domain": "EquipmentCalendarOnPersonVehicle",
+      "expected_tool": "get_EquipmentCalendarOnPersonVehicle_on_Agg",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0013",
+      "query": "daj mi podatke o tom elementu",
+      "persona": "internal",
+      "expected_domain": "Metadata",
+      "expected_tool": "get_Metadata_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0014",
+      "query": "trebam metadata za id, molim",
+      "persona": "internal",
+      "expected_domain": "Metadata",
+      "expected_tool": "get_Metadata_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0015",
+      "query": "dali mogu vidit dokumente za trošak?",
+      "persona": "manager",
+      "expected_domain": "Expenses",
+      "expected_tool": "get_Expenses_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0016",
+      "query": "trebam dokumente za trošak s id-om",
+      "persona": "manager",
+      "expected_domain": "Expenses",
+      "expected_tool": "get_Expenses_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0017",
+      "query": "daj mi sve poolove",
+      "persona": "manager",
+      "expected_domain": "Pools",
+      "expected_tool": "get_Pools",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0018",
+      "query": "koji su poolovi dostupni?",
+      "persona": "manager",
+      "expected_domain": "Pools",
+      "expected_tool": "get_Pools",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0019",
+      "query": "daj mi dokumente za aktivnost",
+      "persona": "manager",
+      "expected_domain": "PersonActivityTypes",
+      "expected_tool": "get_PersonActivityTypes_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0020",
+      "query": "trebam dokumente za osobu s id-om",
+      "persona": "manager",
+      "expected_domain": "PersonActivityTypes",
+      "expected_tool": "get_PersonActivityTypes_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0021",
+      "query": "posalji mi pozivnicu za pridruživanje",
+      "persona": "admin",
+      "expected_domain": "Tenants",
+      "expected_tool": "get_Tenants_Join_invitationId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0022",
+      "query": "trebam pozivnicu za novog korisnika",
+      "persona": "admin",
+      "expected_domain": "Tenants",
+      "expected_tool": "get_Tenants_Join_invitationId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0023",
+      "query": "koji su svi tipovi vozila?",
+      "persona": "internal",
+      "expected_domain": "VehicleTypes",
+      "expected_tool": "get_VehicleTypes",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0024",
+      "query": "dajte mi popis vozila",
+      "persona": "internal",
+      "expected_domain": "VehicleTypes",
+      "expected_tool": "get_VehicleTypes",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0025",
+      "query": "daj mi mjesečne troškove za vozilo",
+      "persona": "manager",
+      "expected_domain": "VehiclesMonthlyExpenses",
+      "expected_tool": "get_VehiclesMonthlyExpenses_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0026",
+      "query": "kakvi su troškovi vozila po id-u?",
+      "persona": "manager",
+      "expected_domain": "VehiclesMonthlyExpenses",
+      "expected_tool": "get_VehiclesMonthlyExpenses_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0027",
+      "query": "dali mogu vidit dokumente za vozilo?",
+      "persona": "manager",
+      "expected_domain": "VehicleTypes",
+      "expected_tool": "get_VehicleTypes_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0028",
+      "query": "trebam dokumente za vrstu vozila",
+      "persona": "manager",
+      "expected_domain": "VehicleTypes",
+      "expected_tool": "get_VehicleTypes_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0029",
+      "query": "dodaj novi slucaj za auto",
+      "persona": "driver",
+      "expected_domain": "Cases",
+      "expected_tool": "post_Cases",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0030",
+      "query": "trebam prijavit novi problem",
+      "persona": "driver",
+      "expected_domain": "Cases",
+      "expected_tool": "post_Cases",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0031",
+      "query": "mogu li promijenit dodjelu vozila?",
+      "persona": "manager",
+      "expected_domain": "SyncExternalIdAndVIN",
+      "expected_tool": "post_SyncExternalIdAndVIN",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0032",
+      "query": "trebam sinkronizirat VIN i ID vozila",
+      "persona": "manager",
+      "expected_domain": "SyncExternalIdAndVIN",
+      "expected_tool": "post_SyncExternalIdAndVIN",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0033",
+      "query": "dodaj dokumente za metapodatak",
+      "persona": "internal",
+      "expected_domain": "Metadata",
+      "expected_tool": "post_Metadata_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0034",
+      "query": "trebam postavit nove dokumente",
+      "persona": "internal",
+      "expected_domain": "Metadata",
+      "expected_tool": "post_Metadata_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0035",
+      "query": "dodaj dokumente za opremu",
+      "persona": "admin",
+      "expected_domain": "Equipment",
+      "expected_tool": "post_Equipment_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0036",
+      "query": "trebam dodati nove papire za opremu",
+      "persona": "admin",
+      "expected_domain": "Equipment",
+      "expected_tool": "post_Equipment_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0037",
+      "query": "dodaj dokumente za vozilo 123",
+      "persona": "manager",
+      "expected_domain": "VehicleCalendar",
+      "expected_tool": "post_VehicleCalendar_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0038",
+      "query": "trebam uploadat papire za auto 456",
+      "persona": "manager",
+      "expected_domain": "VehicleCalendar",
+      "expected_tool": "post_VehicleCalendar_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0039",
+      "query": "dodaj dokumente za org jedinicu",
+      "persona": "admin",
+      "expected_domain": "PersonOrgUnits",
+      "expected_tool": "post_PersonOrgUnits_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0040",
+      "query": "trebam uploadat dokumente za jedinicu",
+      "persona": "admin",
+      "expected_domain": "PersonOrgUnits",
+      "expected_tool": "post_PersonOrgUnits_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0041",
+      "query": "dodaj dokumente za tip 5",
+      "persona": "admin",
+      "expected_domain": "DocumentTypes",
+      "expected_tool": "post_DocumentTypes_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0042",
+      "query": "trebam dodati nove dokumente",
+      "persona": "admin",
+      "expected_domain": "DocumentTypes",
+      "expected_tool": "post_DocumentTypes_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0043",
+      "query": "napravi novi objekt",
+      "persona": "admin",
+      "expected_domain": "Pools",
+      "expected_tool": "post_Pools",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0044",
+      "query": "dodaj novi pool",
+      "persona": "admin",
+      "expected_domain": "Pools",
+      "expected_tool": "post_Pools",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0045",
+      "query": "dodaj dokumente za troškove",
+      "persona": "admin",
+      "expected_domain": "ExpenseTypes",
+      "expected_tool": "post_ExpenseTypes_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0046",
+      "query": "trebam dodati nove papire za trošak",
+      "persona": "admin",
+      "expected_domain": "ExpenseTypes",
+      "expected_tool": "post_ExpenseTypes_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0047",
+      "query": "dodaj dokumente timu 123",
+      "persona": "admin",
+      "expected_domain": "Teams",
+      "expected_tool": "post_Teams_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0048",
+      "query": "trebam uploadat dokumente za tim",
+      "persona": "admin",
+      "expected_domain": "Teams",
+      "expected_tool": "post_Teams_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0049",
+      "query": "napravi novi raspored aktivnosti",
+      "persona": "admin",
+      "expected_domain": "PeriodicActivitiesSchedules",
+      "expected_tool": "post_PeriodicActivitiesSchedules",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0050",
+      "query": "dodaj periodicne aktivnosti u plan",
+      "persona": "admin",
+      "expected_domain": "PeriodicActivitiesSchedules",
+      "expected_tool": "post_PeriodicActivitiesSchedules",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0051",
+      "query": "dodaj dokumente za grupu troškova",
+      "persona": "manager",
+      "expected_domain": "ExpenseGroups",
+      "expected_tool": "post_ExpenseGroups_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0052",
+      "query": "trebam uploadat dokumente za troškove",
+      "persona": "manager",
+      "expected_domain": "ExpenseGroups",
+      "expected_tool": "post_ExpenseGroups_id_documents",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0053",
+      "query": "ukloni vozilo iz flote",
+      "persona": "manager",
+      "expected_domain": "VehicleBoard",
+      "expected_tool": "post_VehicleBoard_Defleet",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0054",
+      "query": "deflejtaj auto sad",
+      "persona": "manager",
+      "expected_domain": "VehicleBoard",
+      "expected_tool": "post_VehicleBoard_Defleet",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0055",
+      "query": "dodaj novi tag pls",
+      "persona": "admin",
+      "expected_domain": "Tags",
+      "expected_tool": "post_Tags",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0056",
+      "query": "napravi tag za vozila",
+      "persona": "admin",
+      "expected_domain": "Tags",
+      "expected_tool": "post_Tags",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0057",
+      "query": "mogu li azurirat dokument za clana?",
+      "persona": "admin",
+      "expected_domain": "TeamMembers",
+      "expected_tool": "put_TeamMembers_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0058",
+      "query": "trebam promijenit info o dokumentu",
+      "persona": "admin",
+      "expected_domain": "TeamMembers",
+      "expected_tool": "put_TeamMembers_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0059",
+      "query": "postavi ovaj dokument kao zadani",
+      "persona": "admin",
+      "expected_domain": "OrgUnits",
+      "expected_tool": "put_OrgUnits_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0060",
+      "query": "zelim promijeniti defaultni dokument",
+      "persona": "admin",
+      "expected_domain": "OrgUnits",
+      "expected_tool": "put_OrgUnits_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0061",
+      "query": "postavi ovaj dokument kao zadani",
+      "persona": "manager",
+      "expected_domain": "Expenses",
+      "expected_tool": "put_Expenses_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0062",
+      "query": "možeš li ga stavit kao default?",
+      "persona": "manager",
+      "expected_domain": "Expenses",
+      "expected_tool": "put_Expenses_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0063",
+      "query": "mogu li promijenit tip vozila?",
+      "persona": "admin",
+      "expected_domain": "VehicleTypes",
+      "expected_tool": "put_VehicleTypes_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0064",
+      "query": "trebam azurirat vozilo, kako?",
+      "persona": "admin",
+      "expected_domain": "VehicleTypes",
+      "expected_tool": "put_VehicleTypes_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0065",
+      "query": "promijeni info o dokumentu",
+      "persona": "admin",
+      "expected_domain": "OrgUnits",
+      "expected_tool": "put_OrgUnits_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0066",
+      "query": "ažuriraj dokument u org.jedinici",
+      "persona": "admin",
+      "expected_domain": "OrgUnits",
+      "expected_tool": "put_OrgUnits_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0067",
+      "query": "postavi taj dokument kao default",
+      "persona": "admin",
+      "expected_domain": "Vehicles",
+      "expected_tool": "put_Vehicles_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0068",
+      "query": "zelim da ovaj dokument bude glavni",
+      "persona": "admin",
+      "expected_domain": "Vehicles",
+      "expected_tool": "put_Vehicles_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0069",
+      "query": "postavi ovaj dokument kao zadnji",
+      "persona": "admin",
+      "expected_domain": "PersonTypes",
+      "expected_tool": "put_PersonTypes_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0070",
+      "query": "zelim da ovaj dokument bude default",
+      "persona": "admin",
+      "expected_domain": "PersonTypes",
+      "expected_tool": "put_PersonTypes_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0071",
+      "query": "postavi ovaj dokument kao zadani",
+      "persona": "admin",
+      "expected_domain": "DocumentTypes",
+      "expected_tool": "put_DocumentTypes_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0072",
+      "query": "zelim da ovaj dokument bude default",
+      "persona": "admin",
+      "expected_domain": "DocumentTypes",
+      "expected_tool": "put_DocumentTypes_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0073",
+      "query": "postavi ovaj dokument kao zadnji",
+      "persona": "manager",
+      "expected_domain": "VehicleCalendar",
+      "expected_tool": "put_VehicleCalendar_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0074",
+      "query": "zelim da ovaj dokument bude default",
+      "persona": "manager",
+      "expected_domain": "VehicleCalendar",
+      "expected_tool": "put_VehicleCalendar_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0075",
+      "query": "postavi ovaj dokument kao default",
+      "persona": "manager",
+      "expected_domain": "TripTypes",
+      "expected_tool": "put_TripTypes_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0076",
+      "query": "zelim da ovaj dokument bude zadnji",
+      "persona": "manager",
+      "expected_domain": "TripTypes",
+      "expected_tool": "put_TripTypes_id_documents_documentId_SetAsDefault",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0077",
+      "query": "mogu li azurirati dokument za putovanje?",
+      "persona": "manager",
+      "expected_domain": "Trips",
+      "expected_tool": "put_Trips_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0078",
+      "query": "trebam promijeniti metapodatke dokumenta",
+      "persona": "manager",
+      "expected_domain": "Trips",
+      "expected_tool": "put_Trips_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0079",
+      "query": "mogu li azurirati tag?",
+      "persona": "admin",
+      "expected_domain": "Tags",
+      "expected_tool": "put_Tags_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0080",
+      "query": "trebam promijeniti tag id",
+      "persona": "admin",
+      "expected_domain": "Tags",
+      "expected_tool": "put_Tags_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0081",
+      "query": "mogu li azurirat dokument?",
+      "persona": "internal",
+      "expected_domain": "DocumentTypes",
+      "expected_tool": "put_DocumentTypes_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0082",
+      "query": "trebam promijenit info o dokumentu",
+      "persona": "internal",
+      "expected_domain": "DocumentTypes",
+      "expected_tool": "put_DocumentTypes_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0083",
+      "query": "mogu li azurirat dokument za opremu?",
+      "persona": "internal",
+      "expected_domain": "EquipmentTypes",
+      "expected_tool": "put_EquipmentTypes_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0084",
+      "query": "trebam promijenit info o dokumentu",
+      "persona": "internal",
+      "expected_domain": "EquipmentTypes",
+      "expected_tool": "put_EquipmentTypes_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0085",
+      "query": "mogu li promijenit dodjelu za ovu osobu?",
+      "persona": "admin",
+      "expected_domain": "PersonOrgUnits",
+      "expected_tool": "patch_PersonOrgUnits_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0086",
+      "query": "trebam ažurirat organizacijsku jedinicu za id",
+      "persona": "admin",
+      "expected_domain": "PersonOrgUnits",
+      "expected_tool": "patch_PersonOrgUnits_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0087",
+      "query": "mogu li promijenit pool vozila?",
+      "persona": "manager",
+      "expected_domain": "Pools",
+      "expected_tool": "patch_Pools_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0088",
+      "query": "trebam ažurirat pool po id-u",
+      "persona": "manager",
+      "expected_domain": "Pools",
+      "expected_tool": "patch_Pools_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0089",
+      "query": "mogu li promijenit kalendar vozila?",
+      "persona": "driver",
+      "expected_domain": "VehicleCalendar",
+      "expected_tool": "patch_VehicleCalendar_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0090",
+      "query": "trebam ažurirat stavku u kalendaru",
+      "persona": "driver",
+      "expected_domain": "VehicleCalendar",
+      "expected_tool": "patch_VehicleCalendar_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0091",
+      "query": "mogu li promijenit tip vozila?",
+      "persona": "manager",
+      "expected_domain": "VehicleTypes",
+      "expected_tool": "patch_VehicleTypes_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0092",
+      "query": "trebam ažurirat vozilo s id-om",
+      "persona": "manager",
+      "expected_domain": "VehicleTypes",
+      "expected_tool": "patch_VehicleTypes_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0093",
+      "query": "mogu li promijenit raspored po id-u?",
+      "persona": "manager",
+      "expected_domain": "SchedulingModels",
+      "expected_tool": "patch_SchedulingModels_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0094",
+      "query": "trebam ažurirat model rasporeda",
+      "persona": "manager",
+      "expected_domain": "SchedulingModels",
+      "expected_tool": "patch_SchedulingModels_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0095",
+      "query": "mogu li promijenit opremu?",
+      "persona": "manager",
+      "expected_domain": "Equipment",
+      "expected_tool": "patch_Equipment_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0096",
+      "query": "trebam ažurirat opremu, kako?",
+      "persona": "manager",
+      "expected_domain": "Equipment",
+      "expected_tool": "patch_Equipment_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0097",
+      "query": "mogu li promijenit povijesne unose?",
+      "persona": "manager",
+      "expected_domain": "VehiclesHistoricalEntries",
+      "expected_tool": "patch_VehiclesHistoricalEntries_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0098",
+      "query": "trebam ažurirat podatke za vozilo",
+      "persona": "manager",
+      "expected_domain": "VehiclesHistoricalEntries",
+      "expected_tool": "patch_VehiclesHistoricalEntries_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0099",
+      "query": "mogu li promijenit metapodatak?",
+      "persona": "internal",
+      "expected_domain": "Metadata",
+      "expected_tool": "patch_Metadata_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0100",
+      "query": "trebam ažurirat metapodatak po id-u",
+      "persona": "internal",
+      "expected_domain": "Metadata",
+      "expected_tool": "patch_Metadata_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0101",
+      "query": "mogu li promijenit troškovni centar?",
+      "persona": "admin",
+      "expected_domain": "CostCenters",
+      "expected_tool": "patch_CostCenters_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0102",
+      "query": "trebam ažurirat jedan cost center",
+      "persona": "admin",
+      "expected_domain": "CostCenters",
+      "expected_tool": "patch_CostCenters_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0103",
+      "query": "mogu li promijenit tip aktivnosti?",
+      "persona": "admin",
+      "expected_domain": "PeriodicActivityTypes",
+      "expected_tool": "patch_PeriodicActivityTypes_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0104",
+      "query": "trebam ažurirat aktivnost po id-u",
+      "persona": "admin",
+      "expected_domain": "PeriodicActivityTypes",
+      "expected_tool": "patch_PeriodicActivityTypes_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0105",
+      "query": "mogu li promijenit putovanje?",
+      "persona": "manager",
+      "expected_domain": "Trips",
+      "expected_tool": "patch_Trips_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0106",
+      "query": "trebam ažurirat putovanje, kako?",
+      "persona": "manager",
+      "expected_domain": "Trips",
+      "expected_tool": "patch_Trips_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0107",
+      "query": "mogu li promijenit tim sa id-jem?",
+      "persona": "admin",
+      "expected_domain": "Teams",
+      "expected_tool": "patch_Teams_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0108",
+      "query": "trebam ažurirat tim, kako to?",
+      "persona": "admin",
+      "expected_domain": "Teams",
+      "expected_tool": "patch_Teams_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0109",
+      "query": "mogu li promijenit kilometražu?",
+      "persona": "manager",
+      "expected_domain": "MileageReports",
+      "expected_tool": "patch_MileageReports_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0110",
+      "query": "trebam ažurirat izvještaj o km",
+      "persona": "manager",
+      "expected_domain": "MileageReports",
+      "expected_tool": "patch_MileageReports_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0111",
+      "query": "mogu li promijenit aktivnost po id-u?",
+      "persona": "internal",
+      "expected_domain": "PersonPeriodicActivities",
+      "expected_tool": "patch_PersonPeriodicActivities_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0112",
+      "query": "trebam ažurirat aktivnost, daj mi id",
+      "persona": "internal",
+      "expected_domain": "PersonPeriodicActivities",
+      "expected_tool": "patch_PersonPeriodicActivities_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0113",
+      "query": "obriši sve izvještaje o km",
+      "persona": "admin",
+      "expected_domain": "MileageReports",
+      "expected_tool": "delete_MileageReports",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0114",
+      "query": "izbriši kilometražne izvještaje",
+      "persona": "admin",
+      "expected_domain": "MileageReports",
+      "expected_tool": "delete_MileageReports",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0115",
+      "query": "izbriši sve timove",
+      "persona": "admin",
+      "expected_domain": "Teams",
+      "expected_tool": "delete_Teams",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0116",
+      "query": "hoću obrisat timove",
+      "persona": "admin",
+      "expected_domain": "Teams",
+      "expected_tool": "delete_Teams",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0117",
+      "query": "izbriši tip prijave s id-om 123",
+      "persona": "admin",
+      "expected_domain": "CaseTypes",
+      "expected_tool": "delete_CaseTypes_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0118",
+      "query": "makni prijavu tipa 456",
+      "persona": "admin",
+      "expected_domain": "CaseTypes",
+      "expected_tool": "delete_CaseTypes_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0119",
+      "query": "izbrisi sve oznake pls",
+      "persona": "admin",
+      "expected_domain": "Tags",
+      "expected_tool": "delete_Tags",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0120",
+      "query": "ukloni oznake iz sustava",
+      "persona": "admin",
+      "expected_domain": "Tags",
+      "expected_tool": "delete_Tags",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0121",
+      "query": "izbrisi tenant s ovim id-om",
+      "persona": "admin",
+      "expected_domain": "Tenants",
+      "expected_tool": "delete_Tenants_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0122",
+      "query": "makni ovog tenanta po id-u",
+      "persona": "admin",
+      "expected_domain": "Tenants",
+      "expected_tool": "delete_Tenants_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0123",
+      "query": "obrisi taj dokument iz grupe",
+      "persona": "admin",
+      "expected_domain": "ExpenseGroups",
+      "expected_tool": "delete_ExpenseGroups_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0124",
+      "query": "izbriši dokument s id-om",
+      "persona": "admin",
+      "expected_domain": "ExpenseGroups",
+      "expected_tool": "delete_ExpenseGroups_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0125",
+      "query": "izbriši opremu s id-om 123",
+      "persona": "admin",
+      "expected_domain": "EquipmentTypes",
+      "expected_tool": "delete_EquipmentTypes_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0126",
+      "query": "hoću obrisat opremu, id je 456",
+      "persona": "admin",
+      "expected_domain": "EquipmentTypes",
+      "expected_tool": "delete_EquipmentTypes_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0127",
+      "query": "izbriši dokument za firmu",
+      "persona": "admin",
+      "expected_domain": "Companies",
+      "expected_tool": "delete_Companies_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0128",
+      "query": "hoću obrisat dokument kompanije",
+      "persona": "admin",
+      "expected_domain": "Companies",
+      "expected_tool": "delete_Companies_id_documents_documentId",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0129",
+      "query": "izbriši ovu organizacijsku jedinicu",
+      "persona": "admin",
+      "expected_domain": "OrgUnits",
+      "expected_tool": "delete_OrgUnits_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0130",
+      "query": "hoću obrisat org jedinicu po id-u",
+      "persona": "admin",
+      "expected_domain": "OrgUnits",
+      "expected_tool": "delete_OrgUnits_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0131",
+      "query": "izbriši zadnje aktivnosti",
+      "persona": "internal",
+      "expected_domain": "LatestPersonPeriodicActivities",
+      "expected_tool": "delete_LatestPersonPeriodicActivities",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0132",
+      "query": "hoću obrisat najnovije aktivnosti",
+      "persona": "internal",
+      "expected_domain": "LatestPersonPeriodicActivities",
+      "expected_tool": "delete_LatestPersonPeriodicActivities",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0133",
+      "query": "obriši zadnju aktivnost za tog lika",
+      "persona": "internal",
+      "expected_domain": "LatestPersonPeriodicActivities",
+      "expected_tool": "delete_LatestPersonPeriodicActivities_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0134",
+      "query": "skini tu najnoviju aktivnost",
+      "persona": "internal",
+      "expected_domain": "LatestPersonPeriodicActivities",
+      "expected_tool": "delete_LatestPersonPeriodicActivities_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0135",
+      "query": "briši opremu s id-om 123",
+      "persona": "admin",
+      "expected_domain": "Equipment",
+      "expected_tool": "delete_Equipment_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0136",
+      "query": "izbriši opremu id 456",
+      "persona": "admin",
+      "expected_domain": "Equipment",
+      "expected_tool": "delete_Equipment_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0137",
+      "query": "izbriši rezervaciju vozila",
+      "persona": "manager",
+      "expected_domain": "VehicleCalendar",
+      "expected_tool": "delete_VehicleCalendar_id",
+      "expected_field": ""
+    },
+    {
+      "id": "v2_0138",
+      "query": "ukloni vozilo iz kalendara",
+      "persona": "manager",
+      "expected_domain": "VehicleCalendar",
+      "expected_tool": "delete_VehicleCalendar_id",
+      "expected_field": ""
+    }
+  ]
+}

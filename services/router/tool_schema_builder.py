@@ -149,7 +149,6 @@ class ToolSchemaBuilder:
         # Build parameters schema — only user_input params.
         params_raw = tool.get("parameters") or {}
         properties: dict[str, dict] = {}
-        required: list[str] = []
         for pname, pdef in params_raw.items():
             if not isinstance(pdef, dict):
                 continue
@@ -161,14 +160,18 @@ class ToolSchemaBuilder:
             if prop is None:
                 continue
             properties[pname] = prop
-            if pdef.get("required"):
-                required.append(pname)
 
-        # Also honour `required_params` field if present and parameter exists
-        for rname in tool.get("required_params") or []:
-            if rname in properties and rname not in required:
-                required.append(rname)
-
+        # ANTI-FABRICATION (Filip 2026-05-24): emit an EMPTY `required` to the
+        # LLM on purpose. OpenAI tool-calling fills `required` properties even
+        # when the value isn't in the user's message → the model FABRICATES
+        # (e.g. a required enum with no options → guesses "1"; measured:
+        # "izmijeni rezervaciju 12" → {id:12, AssigneeType:1}). The system
+        # prompt already instructs "fill only what the user explicitly
+        # mentions" — the schema's required[] was fighting that prompt and
+        # winning. Required-ness is still enforced downstream from the registry
+        # (engine._compute_missing_required → param-ask), which ASKS the user
+        # rather than letting the LLM guess. The registry stays the source of
+        # truth for required; the LLM is just an extractor of STATED values.
         return {
             "type": "function",
             "function": {
@@ -177,7 +180,7 @@ class ToolSchemaBuilder:
                 "parameters": {
                     "type": "object",
                     "properties": properties,
-                    "required": required,
+                    "required": [],
                 },
             },
         }

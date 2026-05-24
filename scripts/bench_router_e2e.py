@@ -177,8 +177,23 @@ async def main_async(args) -> None:
     print("Anchor index ready. Routing queries...", flush=True)
     scoper = CatalogScoper(tool_data=tool_data, tenants_dir=REPO / "config" / "tenants")
 
-    # --- run each query through the full pipeline ---
-    correct = scope_miss = route_miss = 0
+    # L2b driver-basics shortcut. Production runs this BEFORE the L3 router for
+    # driver self-questions ("kolika km", "tablica", "marka", "potrošnja"). The
+    # router-only number under-counts driver accuracy because those queries
+    # never reach L3 in production — they're served by this anchor → get_MasterData.
+    from services.v2.driver_basics import DriverBasicsAnchor
+
+    class _BasicsEmbedder:
+        async def embed(self, text):
+            r = await embed_client.embeddings.create(input=[text], model=embed_dep)
+            return r.data[0].embedding
+
+    basics = DriverBasicsAnchor(_BasicsEmbedder())
+    await basics.initialize()
+    print("Driver-basics anchor ready. Running queries (L2b shortcut + L3)...", flush=True)
+
+    # --- run each query through L2b shortcut → L3 router (mirrors production) ---
+    correct = recall3 = scope_miss = route_miss = shortcut_hits = 0
     by_method: dict = {}
     by_persona: dict = {}
     route_misses: list = []
@@ -186,26 +201,41 @@ async def main_async(args) -> None:
 
     for i, q in enumerate(queries, 1):
         expected = q["expected_tool"]
-        bench_persona = q.get("persona") or "driver"  # only for reporting buckets
+        bench_persona = q.get("persona") or "driver"
         method = method_of(expected, tool_entries)
+        by_method.setdefault(method, [0, 0])[1] += 1
+        by_persona.setdefault(bench_persona, [0, 0])[1] += 1
+
+        # L2b shortcut: driver self-question → get_MasterData, bypassing L3.
+        # --no-l2b skips it entirely to measure the PURE L3 router capability
+        # (the production intent-classifier gate is not modelled here, so the
+        # shortcut over-fires on non-driver queries that merely contain
+        # "km"/"vozilo" — --no-l2b removes that confound). Measurement-only.
+        if not args.no_l2b:
+            bm = await basics.match(q["query"])
+            if bm.matched:
+                shortcut_hits += 1
+                if expected == "get_MasterData":
+                    correct += 1
+                    recall3 += 1
+                    by_method[method][0] += 1
+                    by_persona[bench_persona][0] += 1
+                else:
+                    route_miss += 1
+                    route_misses.append((q["query"], expected, "get_MasterData(L2b)",
+                                         "wrong_shortcut", [], None))
+                continue
+
+        # LAUNCH config: role filter OFF (persona=None). --role-on for FAZA 14.
         methods = (
             None if args.no_method_filter or method not in _METHODS
             else frozenset({method})
         )
-
-        # LAUNCH config (Filip 2026-05-22): role filtering is OFF in production
-        # (engine.py passes persona=None). Mirror that here by default so the
-        # number reflects what users actually get. --role-on re-enables the
-        # FAZA 14 hierarchy for future measurement once role data is wired.
         scope_persona = bench_persona if args.role_on else None
-
         scope = scoper.scope(
             tenant_id=args.tenant, persona=scope_persona,
             methods=methods, drop_internal=True,
         )
-
-        by_method.setdefault(method, [0, 0])[1] += 1
-        by_persona.setdefault(bench_persona, [0, 0])[1] += 1
 
         if expected not in scope:
             scope_miss += 1
@@ -217,17 +247,23 @@ async def main_async(args) -> None:
             conversation_history=[], tool_filter=scope,
         )
         picked = res.tool_id
+        all_cands = [tid for tid, _ in (res.top_candidates or [])]
+        top3 = all_cands[:3]
 
         if picked == expected:
             correct += 1
+            recall3 += 1
             by_method[method][0] += 1
             by_persona[bench_persona][0] += 1
         else:
+            if expected in top3:
+                recall3 += 1  # cascade shows top-3; user could still pick it
             route_miss += 1
-            route_misses.append((q["query"], expected, picked, res.error))
+            route_misses.append((q["query"], expected, picked, res.error,
+                                 top3, expected in set(all_cands)))
 
         if i % 10 == 0:
-            print(f"  ... {i}/{len(queries)} done")
+            print(f"  ... {i}/{len(queries)} done", flush=True)
 
     # --- report ---
     n = len(queries)
@@ -235,11 +271,14 @@ async def main_async(args) -> None:
     print(f"  tool_data:        {args.tool_data.name}")
     print(f"  role filter:      {'ON (FAZA 14 hierarchy)' if args.role_on else 'OFF (persona=None — matches launch)'}")
     print(f"  method filter:    {'OFF (harder)' if args.no_method_filter else 'ON (simulates action pick)'}")
+    print(f"  L2b shortcut:     {'OFF (pure L3)' if args.no_l2b else 'ON (driver self-Q → get_MasterData)'}")
     print(f"  total queries:    {n}")
     if n:
-        print(f"  CORRECT (p@1):    {correct}/{n} = {100 * correct / n:.1f}%   <-- real end-to-end")
-        print(f"  scope_miss:       {scope_miss}/{n} = {100 * scope_miss / n:.1f}%   (expected tool excluded by persona/method/subset)")
-        print(f"  route_miss:       {route_miss}/{n} = {100 * route_miss / n:.1f}%   (in scope, but LLM picked another)")
+        print(f"  CORRECT (p@1):    {correct}/{n} = {100 * correct / n:.1f}%   <-- end-to-end (L2b shortcut + L3 top-1)")
+        print(f"  RECALL@3:         {recall3}/{n} = {100 * recall3 / n:.1f}%   <-- expected in top-3 (what the cascade shows the user)")
+        print(f"  L2b shortcut hits:{shortcut_hits}/{n} = {100 * shortcut_hits / n:.1f}%   (driver self-questions served before L3)")
+        print(f"  scope_miss:       {scope_miss}/{n} = {100 * scope_miss / n:.1f}%   (expected tool not even a candidate)")
+        print(f"  route_miss:       {route_miss}/{n} = {100 * route_miss / n:.1f}%   (in scope/shortcut, but wrong pick)")
 
     _print_segment("By HTTP method", by_method)
     _print_segment("By persona", by_persona)
@@ -250,9 +289,14 @@ async def main_async(args) -> None:
             print(f"    '{query[:45]}' exp={exp} persona={per} method={meth} scope_size={nscope}")
 
     if route_misses:
-        print("\n  --- route_miss sample (LLM picked wrong) ---")
-        for query, exp, got, err in route_misses[:10]:
-            print(f"    '{query[:45]}' exp={exp} got={got or '(none)'} err={err or '-'}")
+        print("\n  --- route_miss sample (in scope/shortcut, wrong pick) ---")
+        print("    (exp_in_top50: was the expected tool even among the 50 the LLM saw?)")
+        for query, exp, got, err, top3, in_top50 in route_misses[:14]:
+            flag = "n/a" if in_top50 is None else ("YES" if in_top50 else "NO")
+            print(f"    '{query[:42]}' exp={exp} got={got or '(none)'} "
+                  f"err={err or '-'} exp_in_top50={flag}")
+            if top3:
+                print(f"        top3: {top3}")
 
 
 def main() -> None:
@@ -261,6 +305,10 @@ def main() -> None:
     ap.add_argument("--benchmark-file", type=Path, default=DEFAULT_BENCH_FILE)
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--no-method-filter", action="store_true")
+    ap.add_argument("--no-l2b", action="store_true",
+                    help="Skip the L2b driver-basics shortcut — measure the "
+                         "pure L3 router (measurement-only; does not change "
+                         "production routing).")
     ap.add_argument("--tenant", type=str, default=None)
     ap.add_argument("--role-on", action="store_true",
                     help="Re-enable FAZA 14 persona hierarchy (default OFF = "

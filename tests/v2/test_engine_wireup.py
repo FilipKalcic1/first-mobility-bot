@@ -1520,6 +1520,58 @@ async def test_object_optional_skipped_from_offer():
 
 
 @pytest.mark.asyncio
+async def test_pagination_params_not_offered():
+    """First/Rows/Sort/SortOrder are framework pagination, never offered to a
+    WhatsApp user (Filip 2026-05-23). A genuine domain optional (Name) still
+    is. Without this, every list query asked 'želiš dodati Rows, Sort?'."""
+    engine, gateway, _, _, _router, _fmt = await _build_engine(registry_tools={
+        "get_Vehicles": {
+            "method": "GET", "service": "auto", "path": "/v",
+            "purpose": "Lista vozila.",
+            "parameters": {
+                "First":     {"required": False, "dependency_source": "user_input",
+                              "param_type": "integer", "location": "query"},
+                "Rows":      {"required": False, "dependency_source": "user_input",
+                              "param_type": "integer", "location": "query"},
+                "Sort":      {"required": False, "dependency_source": "user_input",
+                              "param_type": "string", "location": "query"},
+                "SortOrder": {"required": False, "dependency_source": "user_input",
+                              "param_type": "integer", "location": "query"},
+                "Name":      {"required": False, "dependency_source": "user_input",
+                              "param_type": "string", "location": "query"},
+            },
+        },
+    })
+    await _bootstrap_known_user(engine, gateway)
+
+    friendly = engine._user_friendly_optionals("get_Vehicles", {})
+    assert friendly == ["Name"]  # only the real domain optional
+
+
+@pytest.mark.asyncio
+async def test_only_pagination_optionals_offers_nothing():
+    """A list tool whose only optionals are pagination → no offer at all;
+    engine goes straight to execute (API uses paging defaults)."""
+    engine, gateway, _, _, _router, _fmt = await _build_engine(registry_tools={
+        "get_PagedOnly": {
+            "method": "GET", "service": "auto", "path": "/p",
+            "purpose": "Lista.",
+            "parameters": {
+                "First": {"required": False, "dependency_source": "user_input",
+                          "param_type": "integer", "location": "query"},
+                "Rows":  {"required": False, "dependency_source": "user_input",
+                          "param_type": "integer", "location": "query"},
+            },
+        },
+    })
+    await _bootstrap_known_user(engine, gateway)
+    response = await engine._maybe_start_param_collection(
+        "+385955087196", "get_PagedOnly", {}, "lista",
+    )
+    assert response is None
+
+
+@pytest.mark.asyncio
 async def test_tool_with_only_array_optional_offers_nothing():
     """If a tool has ONLY array/object optionals + no required missing,
     engine skips the offer entirely and goes to mutation gate / execute."""
@@ -2095,3 +2147,172 @@ async def test_translator_disabled_uses_generic_message():
     reply = await engine.process_message("+385955087196", "Da")
 
     assert "Tehnič" in reply  # generic fallback
+
+
+# --------------------------------------------------------------------------
+# Filter-scope confirm (Filip 2026-05-23) — "samo za vozilo DA533?"
+# --------------------------------------------------------------------------
+
+_FILTERABLE_TOOL = {
+    "get_MonthlyMileages": {
+        "method": "GET", "service": "auto", "path": "/mm",
+        "purpose": "Kilometraža vozila.",
+        "parameters": {
+            "Filter": {
+                "name": "Filter", "param_type": "array", "required": False,
+                "location": "query", "dependency_source": "user_input",
+            },
+        },
+    },
+}
+
+
+async def _pick_filterable_tool(engine, gateway, original_query):
+    """Bootstrap a known user, enable filter_fields, pre-seed a tool-pick of
+    the filterable GET tool with `original_query`, then send '1'."""
+    await _bootstrap_known_user(engine, gateway)
+    engine.filter_fields = {"registration": "LicencePlate"}
+    await engine.pending_clarify_store.save(
+        phone="+385955087196",
+        candidates=[{
+            "tool_id": "get_MonthlyMileages", "method": "GET", "params": {},
+            "field_hint": None, "short_label": "Kilometraža", "description": "",
+        }],
+        original_query=original_query,
+        stage="tool",
+    )
+    return await engine.process_message("+385955087196", "1")
+
+
+@pytest.mark.asyncio
+async def test_filter_confirm_prompts_when_plate_named():
+    """User named a registration + tool is filterable → engine asks
+    'samo za vozilo DA533?' and saves a STAGE_FILTER pending mutation."""
+    from services.v2.pending_mutation import STAGE_FILTER
+    engine, gateway, _, _, _router, _fmt = await _build_engine(
+        registry_tools=dict(_FILTERABLE_TOOL),
+    )
+    reply = await _pick_filterable_tool(
+        engine, gateway, "daj mi kilometražu za škodu DA533",
+    )
+
+    assert "DA533" in reply
+    assert "Da" in reply and "Ne" in reply  # offers both choices
+    pending = await engine.pending_mut_store.load("+385955087196")
+    assert pending is not None
+    assert pending.stage == STAGE_FILTER
+    assert pending.params.get("__plate__") == "DA533"
+    # No execution yet (confirm-before-filter): only the 2 identity calls.
+    assert all(c.get("path") != "/mm" for c in gateway.calls)
+
+
+@pytest.mark.asyncio
+async def test_filter_confirm_da_injects_filter_clause():
+    """'Da' → engine injects Filter=LicencePlate(=)DA533 into the query and
+    executes the list call scoped to that vehicle."""
+    engine, gateway, _, _, _router, _fmt = await _build_engine(
+        registry_tools=dict(_FILTERABLE_TOOL),
+    )
+    await _pick_filterable_tool(engine, gateway, "km za DA533")
+
+    gateway.queue(FakeApiResponse(success=True, data=[{"Mileage": 30500}]))
+    reply = await engine.process_message("+385955087196", "Da")
+
+    exec_call = next((c for c in gateway.calls if c.get("path") == "/mm"), None)
+    assert exec_call is not None, "list call never executed"
+    assert exec_call["query_params"] == {"Filter": "LicencePlate(=)DA533"}
+    assert reply
+    # State cleared after execute.
+    assert await engine.pending_mut_store.load("+385955087196") is None
+
+
+@pytest.mark.asyncio
+async def test_filter_confirm_ne_executes_unfiltered():
+    """'Ne' → engine executes the full list (no Filter param injected)."""
+    engine, gateway, _, _, _router, _fmt = await _build_engine(
+        registry_tools=dict(_FILTERABLE_TOOL),
+    )
+    await _pick_filterable_tool(engine, gateway, "km za DA533")
+
+    gateway.queue(FakeApiResponse(success=True, data=[{"Mileage": 1}]))
+    reply = await engine.process_message("+385955087196", "Ne")
+
+    exec_call = next((c for c in gateway.calls if c.get("path") == "/mm"), None)
+    assert exec_call is not None, "unfiltered list call never executed"
+    assert exec_call["query_params"] is None  # no Filter → whole list
+    assert reply
+    assert await engine.pending_mut_store.load("+385955087196") is None
+
+
+@pytest.mark.asyncio
+async def test_filter_confirm_ambiguous_reasks():
+    """A hesitant reply ('možda') → re-ask, keep STAGE_FILTER pending, no
+    execution."""
+    from services.v2.pending_mutation import STAGE_FILTER
+    engine, gateway, _, _, _router, _fmt = await _build_engine(
+        registry_tools=dict(_FILTERABLE_TOOL),
+    )
+    await _pick_filterable_tool(engine, gateway, "km za DA533")
+
+    reply = await engine.process_message("+385955087196", "možda")
+
+    assert "DA533" in reply  # re-asks about the same vehicle
+    pending = await engine.pending_mut_store.load("+385955087196")
+    assert pending is not None and pending.stage == STAGE_FILTER
+    assert all(c.get("path") != "/mm" for c in gateway.calls)  # no execute
+
+
+@pytest.mark.asyncio
+async def test_no_filter_confirm_without_plate():
+    """No registration in the query → no filter confirm; the list executes
+    directly (Filter is array → not offered as an optional param)."""
+    engine, gateway, _, _, _router, _fmt = await _build_engine(
+        registry_tools=dict(_FILTERABLE_TOOL),
+    )
+    await _bootstrap_known_user(engine, gateway)
+    engine.filter_fields = {"registration": "LicencePlate"}
+    await engine.pending_clarify_store.save(
+        phone="+385955087196",
+        candidates=[{
+            "tool_id": "get_MonthlyMileages", "method": "GET", "params": {},
+            "field_hint": None, "short_label": "Kilometraža", "description": "",
+        }],
+        original_query="daj mi kilometražu",  # no plate
+        stage="tool",
+    )
+    gateway.queue(FakeApiResponse(success=True, data=[{"Mileage": 1}]))
+    reply = await engine.process_message("+385955087196", "1")
+
+    # Executed straight away — no "samo za vozilo" confirm.
+    assert any(c.get("path") == "/mm" for c in gateway.calls)
+    assert "samo za vozilo" not in reply.lower()
+    assert await engine.pending_mut_store.load("+385955087196") is None
+
+
+@pytest.mark.asyncio
+async def test_no_filter_confirm_when_tool_not_filterable():
+    """Tool has no Filter param → even with a plate in the query, no filter
+    confirm; the call executes directly."""
+    engine, gateway, _, _, _router, _fmt = await _build_engine(registry_tools={
+        "get_NoFilter": {
+            "method": "GET", "service": "auto", "path": "/nf",
+            "purpose": "Nešto.", "parameters": {},
+        },
+    })
+    await _bootstrap_known_user(engine, gateway)
+    engine.filter_fields = {"registration": "LicencePlate"}
+    await engine.pending_clarify_store.save(
+        phone="+385955087196",
+        candidates=[{
+            "tool_id": "get_NoFilter", "method": "GET", "params": {},
+            "field_hint": None, "short_label": "X", "description": "",
+        }],
+        original_query="nešto za DA533",  # plate present, but tool not filterable
+        stage="tool",
+    )
+    gateway.queue(FakeApiResponse(success=True, data=[{"x": 1}]))
+    reply = await engine.process_message("+385955087196", "1")
+
+    assert any(c.get("path") == "/nf" for c in gateway.calls)
+    assert "samo za vozilo" not in reply.lower()
+    assert await engine.pending_mut_store.load("+385955087196") is None

@@ -1,0 +1,39 @@
+{
+  "_meta": {
+    "purpose": "Honest ONE-SHOT extraction accuracy (Filip 2026-05-24). Measures whether the bot pulls STATED values from a single message into the RIGHT param, right value, right format. NOT routing (that's measured separately). Every expected value is explicitly present in the query, so missing/wrong = real extraction failure.",
+    "kinds": {
+      "path_id": "integer {id} in path — measured via LLM router tool-call args",
+      "body_num": "numeric body value — measured via LLM router tool-call args",
+      "registration": "vehicle plate → Filter — measured via entity_detector (deterministic, no LLM)",
+      "registration_negative": "no plate present — entity_detector must return None"
+    },
+    "param_names_verified_from": "config/tool_data.json 2026-05-24"
+  },
+  "queries": [
+    {"id": "e01", "kind": "path_id", "query": "obriši rezervaciju 45", "expected_tool": "delete_VehicleCalendar_id", "expected_params": {"id": 45}},
+    {"id": "e02", "kind": "path_id", "query": "otkaži rezervaciju broj 128", "expected_tool": "delete_VehicleCalendar_id", "expected_params": {"id": 128}},
+    {"id": "e03", "kind": "path_id", "query": "makni rezervaciju 7", "expected_tool": "delete_VehicleCalendar_id", "expected_params": {"id": 7}},
+    {"id": "e04", "kind": "path_id", "query": "daj mi detalje putovanja 123", "expected_tool": "get_Trips_id", "expected_params": {"id": 123}},
+    {"id": "e05", "kind": "path_id", "query": "pokaži putovanje 4567", "expected_tool": "get_Trips_id", "expected_params": {"id": 4567}},
+    {"id": "e06", "kind": "path_id", "query": "izmijeni rezervaciju 12", "expected_tool": "put_VehicleCalendar_id", "expected_params": {"id": 12}},
+    {"id": "e07", "kind": "path_id", "query": "obriši rezervaciju broj 999 odmah", "expected_tool": "delete_VehicleCalendar_id", "expected_params": {"id": 999}},
+
+    {"id": "e08", "kind": "body_num", "query": "dodaj 30500 km", "expected_tool": "post_AddMileage", "expected_params": {"Value": 30500}},
+    {"id": "e09", "kind": "body_num", "query": "upiši kilometražu 42500", "expected_tool": "post_AddMileage", "expected_params": {"Value": 42500}},
+    {"id": "e10", "kind": "body_num", "query": "stanje brojača 128000 km", "expected_tool": "post_AddMileage", "expected_params": {"Value": 128000}},
+    {"id": "e11", "kind": "body_num", "query": "nova kilometraža 75300", "expected_tool": "post_AddMileage", "expected_params": {"Value": 75300}},
+    {"id": "e12", "kind": "body_num", "query": "evidentiraj 42.500 km", "expected_tool": "post_AddMileage", "expected_params": {"Value": 42500}},
+
+    {"id": "e13", "kind": "registration", "query": "km za škodu DA053F", "expected_plate": "DA053F"},
+    {"id": "e14", "kind": "registration", "query": "tko vozi ZG1234AB", "expected_plate": "ZG1234AB"},
+    {"id": "e15", "kind": "registration", "query": "daj mi podatke za DA533", "expected_plate": "DA533"},
+    {"id": "e16", "kind": "registration", "query": "vozilo ZG-5678-CD", "expected_plate": "ZG5678CD"},
+    {"id": "e17", "kind": "registration", "query": "registracija st-211-ab", "expected_plate": "ST211AB"},
+    {"id": "e18", "kind": "registration", "query": "kilometraža za vozilo DA066F molim te", "expected_plate": "DA066F"},
+    {"id": "e19", "kind": "registration", "query": "obriši rezervaciju 45 za DA053F", "expected_plate": "DA053F"},
+
+    {"id": "e20", "kind": "registration_negative", "query": "dodaj 30500 km", "expected_plate": null},
+    {"id": "e21", "kind": "registration_negative", "query": "kolika mi je km", "expected_plate": null},
+    {"id": "e22", "kind": "registration_negative", "query": "za 30500 km", "expected_plate": null}
+  ]
+}

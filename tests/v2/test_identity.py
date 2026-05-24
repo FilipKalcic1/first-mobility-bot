@@ -455,3 +455,208 @@ async def test_persons_without_tenantid_is_treated_as_unknown():
     # MasterData call MUST be skipped — only Persons was called
     assert len(gateway.calls) == 1
     assert gateway.calls[0]["path"] == "/Persons"
+
+
+# --------------------------------------------------------------------------
+# Robust phone matching (Filip 2026-05-24) — MobilityOne stores Phone in
+# inconsistent formats (385…/+385…/0…); exact-first then NSN-contains fallback.
+# --------------------------------------------------------------------------
+
+
+def test_national_significant_number_collapses_all_formats():
+    """All stored variants of one number reduce to the same NSN."""
+    nsn = IdentityContext._national_significant_number
+    assert nsn("385955087196") == "955087196"     # bare E.164
+    assert nsn("+385916659757") == "916659757"     # with +
+    assert nsn("0915245777") == "915245777"        # local trunk 0
+    assert nsn("00385955087196") == "955087196"    # 00 intl prefix
+    assert nsn("385 95-508 7196") == "955087196"   # separators
+    # The same person reachable two ways collapses identically.
+    assert nsn("385955087196") == nsn("0955087196")
+
+
+@pytest.mark.asyncio
+async def test_exact_match_resolves_in_one_persons_call():
+    """Number stored as bare `385…` → exact filter hits immediately, no
+    contains fallback (preserves prior behavior + API load)."""
+    redis, gateway, settings = FakeRedis(), FakeGateway(), FakeSettings()
+    gateway.queue(FakeApiResponse(success=True, data=[
+        {"Id": "p1", "FirstName": "Filip", "LastName": "K",
+         "Phone": "385955087196", "TenantId": "t1"}
+    ]))
+    gateway.queue(FakeApiResponse(success=True, data={"VehicleName": "VW"}))
+    ctx = IdentityContext(redis, gateway, settings)
+
+    snap = await ctx.resolve("385955087196")
+
+    assert snap.is_known is True and snap.person_id == "p1"
+    # persons (exact) + masterdata = 2 calls; NO contains fallback
+    assert len(gateway.calls) == 2
+    assert gateway.calls[0]["query_params"]["Filter"] == "Phone(=)385955087196"
+
+
+@pytest.mark.asyncio
+async def test_phone_stored_with_plus_resolves_via_contains_fallback():
+    """Stored `+385916659757`; bot queries bare `385916659757` → exact empty →
+    NSN-contains fallback finds + post-verifies the record."""
+    redis, gateway, settings = FakeRedis(), FakeGateway(), FakeSettings()
+    gateway.queue(FakeApiResponse(success=True, data=[]))          # exact miss
+    gateway.queue(FakeApiResponse(success=True, data=[             # contains hit
+        {"Id": "pm", "FirstName": "Mladen", "LastName": "H",
+         "Phone": "+385916659757", "TenantId": "t1"}
+    ]))
+    gateway.queue(FakeApiResponse(success=True, data={"VehicleName": "Auto"}))
+    ctx = IdentityContext(redis, gateway, settings)
+
+    snap = await ctx.resolve("385916659757")
+
+    assert snap.is_known is True and snap.person_id == "pm"
+    assert gateway.calls[0]["query_params"]["Filter"] == "Phone(=)385916659757"
+    assert gateway.calls[1]["query_params"]["Filter"] == "Phone(contains)916659757"
+
+
+@pytest.mark.asyncio
+async def test_phone_stored_local_zero_resolves_via_contains_fallback():
+    """Stored `0915245777` (local) → resolved via NSN contains."""
+    redis, gateway, settings = FakeRedis(), FakeGateway(), FakeSettings()
+    gateway.queue(FakeApiResponse(success=True, data=[]))          # exact miss
+    gateway.queue(FakeApiResponse(success=True, data=[
+        {"Id": "pj", "FirstName": "marija", "LastName": "z",
+         "Phone": "0915245777", "TenantId": "t1"}
+    ]))
+    gateway.queue(FakeApiResponse(success=True, data={"VehicleName": "Auto"}))
+    ctx = IdentityContext(redis, gateway, settings)
+
+    snap = await ctx.resolve("385915245777")  # Infobip sends E.164
+
+    assert snap.is_known is True and snap.person_id == "pj"
+    assert gateway.calls[1]["query_params"]["Filter"] == "Phone(contains)915245777"
+
+
+@pytest.mark.asyncio
+async def test_contains_fallback_post_verifies_exact_nsn():
+    """A contains hit whose NSN does NOT equal the caller's is rejected (the
+    substring matched a different, longer number) → user stays unknown."""
+    redis, gateway, settings = FakeRedis(), FakeGateway(), FakeSettings()
+    gateway.queue(FakeApiResponse(success=True, data=[]))          # exact miss
+    gateway.queue(FakeApiResponse(success=True, data=[             # spurious
+        {"Id": "px", "FirstName": "Wrong", "LastName": "Person",
+         "Phone": "385915245777123", "TenantId": "t1"}  # NSN differs
+    ]))
+    ctx = IdentityContext(redis, gateway, settings)
+
+    snap = await ctx.resolve("385915245777")
+
+    assert snap.is_known is False
+    assert snap.person_id is None
+
+
+@pytest.mark.asyncio
+async def test_contains_fallback_ambiguous_refuses_to_bind():
+    """Two persons share the NSN → refuse to bind (never guess)."""
+    redis, gateway, settings = FakeRedis(), FakeGateway(), FakeSettings()
+    gateway.queue(FakeApiResponse(success=True, data=[]))          # exact miss
+    gateway.queue(FakeApiResponse(success=True, data=[
+        {"Id": "a", "FirstName": "A", "LastName": "A",
+         "Phone": "385915245777", "TenantId": "t1"},
+        {"Id": "b", "FirstName": "B", "LastName": "B",
+         "Phone": "+385915245777", "TenantId": "t1"},
+    ]))
+    ctx = IdentityContext(redis, gateway, settings)
+
+    snap = await ctx.resolve("385915245777")
+
+    assert snap.is_known is False
+    assert snap.person_id is None
+
+
+@pytest.mark.asyncio
+async def test_api_failure_does_not_trigger_contains_fallback():
+    """A 503 on the exact query must NOT trigger a second (contains) query —
+    no point re-hitting a down endpoint. Exactly one persons call."""
+    redis, gateway, settings = FakeRedis(), FakeGateway(), FakeSettings()
+    gateway.queue(FakeApiResponse(success=False, status_code=503))
+    ctx = IdentityContext(redis, gateway, settings)
+
+    snap = await ctx.resolve("385916659757")
+
+    assert snap.is_known is False
+    assert len(gateway.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_vehicle_id_falls_back_to_masterdata_id():
+    """MasterData carries the vehicle id under `Id` (VehicleId is null live).
+    vehicle_id must populate from `Id` so vehicle-scoped tools work."""
+    redis, gateway, settings = FakeRedis(), FakeGateway(), FakeSettings()
+    gateway.queue(FakeApiResponse(success=True, data=[
+        {"Id": "p1", "FirstName": "F", "LastName": "K",
+         "Phone": "385955087196", "TenantId": "t1"}
+    ]))
+    gateway.queue(FakeApiResponse(success=True, data={
+        "Id": "49ede20e-vehicle",      # vehicle id lives here
+        "VehicleId": None,
+        "FullVehicleName": "DA053F VW Passat",
+        "LicencePlate": "DA053F",
+        "LastMileage": 30000,
+    }))
+    ctx = IdentityContext(redis, gateway, settings)
+
+    snap = await ctx.resolve("385955087196")
+
+    assert snap.vehicle_id == "49ede20e-vehicle"
+    assert snap.vehicle_name == "DA053F VW Passat"
+    assert snap.licence_plate == "DA053F"
+
+
+def test_extract_items_handles_varied_envelope_keys():
+    """/Persons + list endpoints wrap rows under different keys; all parse."""
+    ex = IdentityContext._extract_items
+    row = {"Id": "x"}
+    assert ex([row]) == [row]
+    assert ex({"data": [row]}) == [row]
+    assert ex({"Items": [row]}) == [row]
+    assert ex({"Result": [row]}) == [row]
+    assert ex({"value": [row]}) == [row]
+    assert ex({"Id": "x"}) == [{"Id": "x"}]      # single-record dict
+    assert ex({"nope": 1}) == []
+
+
+@pytest.mark.asyncio
+async def test_company_and_orgunit_id_captured_and_cached():
+    """Filip 2026-05-24: /Persons returns CompanyId + OrgUnitId — capture them
+    (for context-param injection) + survive the Redis cache round-trip. Without
+    this, 28 tools that need CompanyId/OrgUnitId as context silently 422'd."""
+    redis, gateway, settings = FakeRedis(), FakeGateway(), FakeSettings()
+    gateway.queue(FakeApiResponse(success=True, data=[
+        {"Id": "p1", "FirstName": "F", "LastName": "K", "Phone": "385955087196",
+         "TenantId": "t1", "CompanyId": "comp-7", "OrgUnitId": "ou-3"}
+    ]))
+    gateway.queue(FakeApiResponse(success=True, data={"VehicleName": "VW"}))
+    ctx = IdentityContext(redis, gateway, settings)
+
+    snap = await ctx.resolve("385955087196")
+    assert snap.company_id == "comp-7"
+    assert snap.org_unit_id == "ou-3"
+
+    # Cache round-trip (2nd resolve = cache hit) must preserve them.
+    snap2 = await ctx.resolve("385955087196")
+    assert snap2.is_first_contact is False
+    assert snap2.company_id == "comp-7"
+    assert snap2.org_unit_id == "ou-3"
+
+
+def test_minimal_identity_exposes_company_and_orgunit_keys():
+    """_minimal_identity must expose company_id + orgunit_id with the EXACT
+    keys the registry uses as context_key ('orgunit_id', no underscore), else
+    the executor's identity_summary.get(context_key) misses."""
+    from services.v2.engine import V2Engine
+    snap = IdentitySnapshot(
+        phone="385955087196", tenant_id="t1", person_id="p1",
+        vehicle_id="v1", company_id="comp-7", org_unit_id="ou-3",
+    )
+    ident = V2Engine._minimal_identity(snap)
+    assert ident["company_id"] == "comp-7"
+    assert ident["orgunit_id"] == "ou-3"   # key matches registry context_key
+    assert ident["tenant_id"] == "t1"
+    assert ident["vehicle_id"] == "v1"
