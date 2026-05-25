@@ -2,16 +2,12 @@
 
 Companion to bench_router_e2e.py (which measures WHICH tool). This measures, for
 a tool-correct call, whether the bot pulls STATED values from a single message
-into the RIGHT param, right value, right format. Two parts:
+into the RIGHT param, right value, right format.
 
-  Part A (LLM extraction, needs Azure) — kinds path_id/body_num: run the REAL
+  LLM extraction (needs Azure) — kinds path_id/body_num: run the REAL
     router (scope → anchor cosine → LLM tool-call) and compare the extracted
     tool-call args (RouterResult.params) to expected_params. Only scored when
     the right tool was picked (else extraction is moot — reported as tool_miss).
-
-  Part B (deterministic, no Azure) — kinds registration/registration_negative:
-    run services.v2.entity_detector.detect_registration and check the plate
-    (this is how the bot actually gets a Filter — NOT via the LLM tool-call).
 
 Scope: ONE-SHOT extraction from the raw message. Param-asking (multi-turn fill
 of missing required) and context injection (executor adds VehicleId/personId)
@@ -21,7 +17,7 @@ Usage:
     python scripts/bench_extraction.py
         [--benchmark-file tests/benchmarks/extraction_eval.json]
         [--tenant TENANT_ID]
-Needs Azure for Part A (embeddings + chat). Part B always runs.
+Needs Azure (embeddings + chat).
 """
 from __future__ import annotations
 
@@ -64,36 +60,6 @@ def _method_of(tool_id, tools):
         return m
     p = tool_id.split("_", 1)[0].upper() if "_" in tool_id else ""
     return p if p in _METHODS else "UNKNOWN"
-
-
-def _run_part_b(queries) -> None:
-    """Deterministic registration extraction via entity_detector."""
-    from services.v2.entity_detector import detect_registration
-    from services.v2.filter_builder import build_filter_clause
-
-    pos = [q for q in queries if q.get("kind") == "registration"]
-    neg = [q for q in queries if q.get("kind") == "registration_negative"]
-    print("\n=== PART B — registration extraction (deterministic, entity_detector) ===")
-    pos_ok = 0
-    for q in pos:
-        got = detect_registration(q["query"])
-        exp = q["expected_plate"]
-        ok = got == exp
-        pos_ok += ok
-        clause = build_filter_clause("LicencePlate", got) if got else ""
-        mark = "OK " if ok else "BAD"
-        print(f"  [{mark}] {q['query'][:42]:44} exp={exp!r} got={got!r}  filter={clause!r}")
-    neg_ok = 0
-    for q in neg:
-        got = detect_registration(q["query"])
-        ok = got is None
-        neg_ok += ok
-        mark = "OK " if ok else "FALSE-POSITIVE"
-        print(f"  [{mark}] {q['query'][:42]:44} exp=None got={got!r}")
-    if pos:
-        print(f"  registration positives: {pos_ok}/{len(pos)} = {100*pos_ok/len(pos):.1f}%")
-    if neg:
-        print(f"  negatives (no false plate): {neg_ok}/{len(neg)} = {100*neg_ok/len(neg):.1f}%")
 
 
 async def _run_part_a(queries, tenant) -> None:
@@ -197,7 +163,6 @@ async def main_async(args) -> None:
     bench = json.loads(args.benchmark_file.read_text(encoding="utf-8"))
     queries = bench.get("queries") or []
     print(f"Loaded {len(queries)} extraction-eval queries from {args.benchmark_file.name}.")
-    _run_part_b(queries)        # deterministic, always
     try:
         await _run_part_a(queries, args.tenant)   # needs Azure
     except Exception as e:  # noqa: BLE001

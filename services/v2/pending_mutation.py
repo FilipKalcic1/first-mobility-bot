@@ -38,12 +38,6 @@ _DEFAULT_TTL_SECONDS = 300  # 5 minutes — short, safety against stale Da
 
 # Stage — single mutation confirm (Da/Ne → execute/cancel).
 STAGE_SINGLE = "single"
-# Stage — filter-scope confirm (Filip 2026-05-23): "samo za vozilo DA533?".
-# Differs from SINGLE: BOTH answers execute (Da = with Filter, Ne = full
-# list). The engine handles it separately (not via parse_reply, which is
-# execute/cancel only). Params carry reserved __plate__/__filter_field__
-# markers (stripped before execute).
-STAGE_FILTER = "filter"
 
 
 @dataclass
@@ -212,21 +206,4 @@ def parse_reply(text: str, stage: str) -> str:
     if norm in _AFFIRMATIVE:
         return "execute"
 
-    return "ambiguous"
-
-
-def parse_affirmation(text: str) -> str:
-    """Stage-independent yes/no/ambiguous for non-mutation confirms (e.g.
-    the filter-scope confirm "samo za vozilo DA533?"). Same whitelists as
-    parse_reply: affirmative is STRICT exact-match, negative allows a
-    word-split fallback. Unlike parse_reply this is not destructive, so a
-    rare false "yes" only adds a Filter the user can re-issue without.
-    """
-    norm = (text or "").strip().lower().rstrip(_TRAILING_PUNCT)
-    if not norm:
-        return "ambiguous"
-    if norm in _NEGATIVE or any(n in norm.split() for n in _NEGATIVE):
-        return "no"
-    if norm in _AFFIRMATIVE:
-        return "yes"
     return "ambiguous"

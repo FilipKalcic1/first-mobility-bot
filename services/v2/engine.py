@@ -51,10 +51,8 @@ from services.v2.special_intents import detect_special_intent
 from services.v2.executor import ToolExecutor
 from services.v2.pending_mutation import (
     PendingMutationStore,
-    STAGE_SINGLE, STAGE_FILTER, parse_reply, parse_affirmation,
+    STAGE_SINGLE, parse_reply,
 )
-from services.v2.filter_builder import build_filter_clause
-from services.v2.entity_detector import detect_registration
 from services.v2.pending_clarify import (
     PendingClarifyStore,
     STAGE_ACTION as PENDING_STAGE_ACTION,
@@ -124,10 +122,6 @@ class V2Engine:
     # required params, (b) list optional params, (c) parse user answers
     # by `param_type`. Empty dict disables param-asking entirely.
     tool_parameters: dict = field(default_factory=dict)
-    # entity_type → MobilityOne Filter field name (Filip 2026-05-23). Used to
-    # confirm + scope a list call when the user names a specific vehicle
-    # ("samo za DA533?"). Empty dict disables the filter-scope confirm.
-    filter_fields: dict = field(default_factory=dict)
     # LLM extractor for OPTIONAL params (Filip 2026-05-17). When set, the
     # engine collects all optionals in ONE turn from a free-text reply
     # instead of iterating one-by-one. None = degrade to "skip all optionals"
@@ -1065,17 +1059,6 @@ class V2Engine:
         # yet have. If yes, persist pending_params + ask. If all required
         # filled but optional exist, offer them. Otherwise fall through to
         # the existing mutation gate / execute path.
-        # Filter-scope confirm (Filip 2026-05-23): if the user named a
-        # specific vehicle registration and the tool is filterable, confirm
-        # scope FIRST. It takes precedence over the generic optional-param
-        # offer so the meaningful "samo za DA533?" isn't buried behind
-        # pagination params (First/Rows/Sort). Never auto-filters.
-        filter_response = await self._maybe_filter_confirm(
-            phone, tool_id, params, pending.original_query,
-        )
-        if filter_response is not None:
-            return filter_response
-
         param_response = await self._maybe_start_param_collection(
             phone, tool_id, params, pending.original_query,
         )
@@ -1431,16 +1414,11 @@ class V2Engine:
         )
         return result.text
 
-    # ------------------------------------------------------------------
-    # Filter-scope confirm (Filip 2026-05-23) — "samo za vozilo DA533?"
-    # ------------------------------------------------------------------
-
     async def _run_gate_and_execute(
         self, phone: str, tool_id: str, params: dict,
         identity: IdentitySnapshot, field_hint: Optional[str] = None,
     ) -> str:
-        """Mutation gate → confirm-or-execute → format. Shared execute tail
-        (also used by the filter-scope confirm path)."""
+        """Mutation gate → confirm-or-execute → format. Shared execute tail."""
         method = self.executor.method_of(tool_id) or "GET"
         mut = mutation_gate.decide_mutation(
             tool_id=tool_id, method=method, params=params,
@@ -1465,77 +1443,6 @@ class V2Engine:
         )
         return result.text
 
-    async def _maybe_filter_confirm(
-        self, phone: str, tool_id: str, params: dict, original_query: str,
-    ) -> Optional[str]:
-        """If the chosen tool exposes a `Filter` param AND the user named a
-        specific vehicle registration, save a pending filter-scope confirm
-        and return the prompt. Else return None (caller continues to
-        execute). Never auto-filters — Filip 2026-05-23: ALWAYS confirm.
-        """
-        if not self.filter_fields:
-            return None
-        spec = self.tool_parameters.get(tool_id) or {}
-        # Resolve the Filter param case-insensitively (registry has both
-        # "Filter" (156 tools) and "filter" (110 tools)).
-        filter_key = next(
-            (k for k in spec if k.lower() == "filter"), None,
-        )
-        if filter_key is None:
-            return None
-        if params.get(filter_key):
-            return None  # router/LLM already supplied a filter — respect it
-        plate = detect_registration(original_query or "")
-        if not plate:
-            return None
-        field = self.filter_fields.get("registration", "LicencePlate")
-        # Stash base params + reserved markers (stripped before execute).
-        staged = dict(params)
-        staged["__plate__"] = plate
-        staged["__filter_key__"] = filter_key
-        staged["__filter_field__"] = field
-        await self.pending_mut_store.save(
-            phone, tool_id=tool_id, params=staged, stage=STAGE_FILTER,
-        )
-        return (
-            f"Samo za vozilo {plate}? Odgovori \"Da\" za to vozilo "
-            "ili \"Ne\" za cijelu listu."
-        )
-
-    async def _continue_filter_confirm(
-        self, phone: str, pending, user_input: str,
-        identity: IdentitySnapshot,
-    ) -> str:
-        """Resolve "samo za vozilo DA533?". Da → apply Filter; Ne →
-        unfiltered list; both then execute. Ambiguous → re-ask (keep state).
-        """
-        answer = parse_affirmation(user_input)
-        plate = pending.params.get("__plate__")
-        if answer == "ambiguous":
-            await self.pending_mut_store.save(
-                phone, tool_id=pending.tool_id, params=pending.params,
-                stage=STAGE_FILTER,
-            )
-            return (
-                f"Nisam siguran. Samo za vozilo {plate}? "
-                "Odgovori \"Da\" ili \"Ne\"."
-            )
-
-        await self.pending_mut_store.clear(phone)
-        base = {
-            k: v for k, v in pending.params.items() if not k.startswith("__")
-        }
-        if answer == "yes" and plate:
-            field = pending.params.get("__filter_field__") or "LicencePlate"
-            filter_key = pending.params.get("__filter_key__") or "Filter"
-            clause = build_filter_clause(field, plate)
-            if clause:
-                base[filter_key] = clause
-        # answer == "no" → leave base unfiltered (whole list)
-        return await self._run_gate_and_execute(
-            phone, pending.tool_id, base, identity,
-        )
-
     async def _continue_pending_mutation(
         self, phone: str, pending, user_input: str,
         identity: IdentitySnapshot,
@@ -1547,13 +1454,6 @@ class V2Engine:
           cancel    → user said no; clear state
           ambiguous → re-prompt; keep state
         """
-        # Filter-scope confirm has its own non-destructive semantics
-        # (both Da and Ne execute), so branch before parse_reply.
-        if pending.stage == STAGE_FILTER:
-            return await self._continue_filter_confirm(
-                phone, pending, user_input, identity,
-            )
-
         action = parse_reply(user_input, pending.stage)
 
         if action == "cancel":
@@ -1862,22 +1762,6 @@ async def make_v2_engine_for_production(
             )
     except Exception as e:  # noqa: BLE001 — optional config
         logger.warning("failed to load risky_tools.json: %s", e)
-    # Filter-field map (Filip 2026-05-23): entity_type → MobilityOne Filter
-    # field name. Drives the "samo za vozilo DA533?" scope confirm. Missing
-    # file = empty = filter-scope confirm disabled (safe).
-    filter_fields: dict = {}
-    try:
-        import json as _ff_json
-        from pathlib import Path as _FfPath
-        ff_path = _FfPath(__file__).resolve().parents[2] / "config" / "filter_fields.json"
-        if ff_path.exists():
-            ff_data = _ff_json.loads(ff_path.read_text(encoding="utf-8"))
-            filter_fields = {
-                k: v for k, v in ff_data.items()
-                if not k.startswith("_") and isinstance(v, str)
-            }
-    except Exception as e:  # noqa: BLE001 — optional config
-        logger.warning("failed to load filter_fields.json: %s", e)
     conv_history = ConversationHistoryStore(redis_client)
     gdpr_audit = GdprAuditStore(redis_client)
 
@@ -2039,7 +1923,6 @@ async def make_v2_engine_for_production(
         catalog_scoper=catalog_scoper,
         pending_params_store=pending_params,
         tool_parameters=tool_parameters_index,
-        filter_fields=filter_fields,
         optional_extractor=optional_extractor,
         api_error_translator=api_error_translator,
         param_labeler=param_labeler,
