@@ -101,6 +101,23 @@ def test_build_skips_context_injected_params():
     assert "personId" not in props  # auto-injected, hidden from LLM
 
 
+def test_build_suppresses_filter_params():
+    """Filter/UseANDFor are hidden from the LLM schema (Filip 2026-05-25) —
+    the deterministic filter feature is reset to zero, so the LLM must not
+    free-fill a (possibly malformed) filter while it waits on the M1 schema."""
+    tool = _mk_tool("get_Vehicles", parameters={
+        "Filter": _mk_param("Filter", "string", dep="user_input"),
+        "UseANDFor": _mk_param("UseANDFor", "string", dep="user_input"),
+        "Rows": _mk_param("Rows", "integer", dep="user_input"),
+    })
+    b = ToolSchemaBuilder.from_registry({"tools": [tool]})
+    schemas = b.build_for_tools([tool], tkb={})
+    props = schemas[0]["function"]["parameters"]["properties"]
+    assert "Rows" in props
+    assert "Filter" not in props
+    assert "UseANDFor" not in props
+
+
 def test_build_includes_tkb_intent_in_description():
     tool = _mk_tool("get_VehicleContracts")
     tkb = {

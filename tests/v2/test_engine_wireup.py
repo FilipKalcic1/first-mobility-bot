@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pytest
 
@@ -28,7 +29,7 @@ from services.v2.flow_engine import FLOWS, FlowEngine, FlowStateStore
 from services.v2.driver_basics import DriverBasicsAnchor
 from services.v2.executor import ToolExecutor
 from services.v2.gdpr_audit import GdprAuditStore
-from services.v2.identity import IdentityContext
+from services.v2.identity import IdentityContext, IdentitySnapshot
 from services.v2.intent_type import IntentTypeClassifier
 from services.v2.pending_clarify import PendingClarifyStore
 from services.v2.pending_mutation import PendingMutationStore
@@ -262,6 +263,7 @@ class FakeFormatter:
     def __init__(self):
         self.calls: list[dict] = []
         self._template = "fake-formatted: {tool_id}"
+        self.fail = False  # when True, simulate an LLM failure (error result)
 
     def set_template(self, template: str):
         self._template = template
@@ -271,6 +273,8 @@ class FakeFormatter:
             "query": query, "tool_id": tool_id,
             "api_data": api_data, "identity_summary": identity_summary,
         })
+        if self.fail:
+            return FormatResult(text="", error="boom")
         return FormatResult(text=self._template.format(tool_id=tool_id))
 
 
@@ -2147,3 +2151,528 @@ async def test_translator_disabled_uses_generic_message():
     reply = await engine.process_message("+385955087196", "Da")
 
     assert "Tehnič" in reply  # generic fallback
+
+
+# --------------------------------------------------------------------------
+# L8 output formatting — LLM-primary (question-aware) + template fallback
+# --------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_format_reply_uses_llm_formatter():
+    """Tool-result formatting goes through the LLM formatter (question-aware);
+    the engine returns its text and threads query + tool_id + api_data."""
+    engine, _gw, _llm, _emb, _router, fmt = await _build_engine()
+    fmt.set_template("LLM-ODGOVOR za {tool_id}")
+    ident = SimpleNamespace(
+        is_known=True, first_name="Filip",
+        vehicle_name="Škoda Octavia", licence_plate="DA533",
+    )
+    reply = await engine._format_reply(
+        query="koje je moje vozilo", tool_id="get_Vehicles",
+        api_data={"VehicleName": "Škoda Octavia", "VIN": "X"},
+        identity=ident,
+    )
+    assert reply == "LLM-ODGOVOR za get_Vehicles"
+    assert fmt.calls and fmt.calls[-1]["query"] == "koje je moje vozilo"
+    assert fmt.calls[-1]["tool_id"] == "get_Vehicles"
+    assert fmt.calls[-1]["api_data"]["VehicleName"] == "Škoda Octavia"
+
+
+@pytest.mark.asyncio
+async def test_format_reply_falls_back_to_template_on_llm_error():
+    """If the LLM formatter errors, the engine falls back to the deterministic
+    template formatter (values verbatim) — the LLM error never leaks."""
+    engine, _gw, _llm, _emb, _router, fmt = await _build_engine()
+    fmt.fail = True
+    ident = SimpleNamespace(
+        is_known=True, first_name="Filip",
+        vehicle_name="Škoda", licence_plate="DA533",
+    )
+    reply = await engine._format_reply(
+        query="koje je moje vozilo", tool_id="get_Vehicles",
+        api_data={"VehicleName": "Škoda Octavia", "LicencePlate": "DA533"},
+        identity=ident,
+    )
+    assert "Škoda Octavia" in reply   # template rendered the data verbatim
+    assert "boom" not in reply        # LLM error must not leak to the user
+
+
+@pytest.mark.asyncio
+async def test_path_a_common_field_uses_template_no_llm():
+    """Driver self-question for a common field (km) resolves via the alias map
+    → instant template, NO LLM call (the hot path stays fast)."""
+    engine, _gw, _llm, _emb, _router, fmt = await _build_engine()
+    ident = SimpleNamespace(
+        is_known=True, first_name="Filip", full_name="Filip K", phone="385",
+        vehicle_name="Škoda", licence_plate="DA533", vin="X", last_mileage=30500,
+        leasing_company=None, co2_emission=None, registration_expiry=None,
+        person_id="p1", tenant_id="t1",
+        vehicle={"LastMileage": 30500, "Color": "crna"},
+    )
+    reply = await engine._format_basics(ident, "kolika mi je km")
+    assert "30500" in reply
+    assert not fmt.calls  # alias hit → LLM NOT called
+
+
+@pytest.mark.asyncio
+async def test_path_a_arbitrary_field_uses_llm_on_vehicle_object():
+    """Driver self-question for an arbitrary field (boja) misses the alias map
+    → LLM-formats the full cached vehicle object (parity with Path B)."""
+    engine, _gw, _llm, _emb, _router, fmt = await _build_engine()
+    fmt.set_template("Tvoj auto je crne boje.")
+    ident = SimpleNamespace(
+        is_known=True, first_name="Filip", full_name="Filip K", phone="385",
+        vehicle_name="Škoda", licence_plate="DA533", vin="X", last_mileage=30500,
+        leasing_company=None, co2_emission=None, registration_expiry=None,
+        person_id="p1", tenant_id="t1",
+        vehicle={"VehicleName": "Škoda", "Color": "crna", "Manufacturer": "Škoda"},
+    )
+    reply = await engine._format_basics(ident, "koja je boja")
+    assert reply == "Tvoj auto je crne boje."
+    assert fmt.calls and "Color" in fmt.calls[-1]["api_data"]
+
+
+# ---- NALAZ 1/2 (Filip 2026-05-25): LLM-param coercion + array refuse ----
+
+
+def test_coerce_llm_params_normalizes_strings():
+    """LLM-extracted string values get normalized to registry type before
+    execute (HR comma → float, HR date → ISO); native values pass through."""
+    eng = object.__new__(V2Engine)
+    eng.tool_parameters = {
+        "post_Expenses": {
+            "Quantity": {"param_type": "number"},
+            "Date": {"param_type": "string", "format": "date-time"},
+            "Note": {"param_type": "string"},
+            "Count": {"param_type": "integer"},
+        }
+    }
+    out = eng._coerce_llm_params("post_Expenses", {
+        "Quantity": "12,5",       # HR comma → 12.5
+        "Date": "17.05.2026",     # HR date → ISO
+        "Note": "12,5",           # plain string → unchanged
+        "Count": 45,              # native int → unchanged
+    })
+    assert out["Quantity"] == 12.5
+    assert out["Date"] == "2026-05-17T00:00:00"
+    assert out["Note"] == "12,5"
+    assert out["Count"] == 45
+
+
+def test_coerce_llm_params_improve_only_keeps_original_on_failure():
+    """If coercion returns None (e.g. decimal for an integer), keep the
+    original value — never regress a value the LLM may have gotten right."""
+    eng = object.__new__(V2Engine)
+    eng.tool_parameters = {"t": {"Count": {"param_type": "integer"}}}
+    out = eng._coerce_llm_params("t", {"Count": "12,5"})
+    assert out["Count"] == "12,5"
+    # already-ISO date stays ISO (parser passes it through)
+    eng.tool_parameters = {"t": {"D": {"param_type": "string", "format": "date"}}}
+    assert eng._coerce_llm_params("t", {"D": "2026-05-17"})["D"] == "2026-05-17"
+
+
+def test_coerce_llm_params_whole_float_to_int():
+    """R1 (Filip 2026-05-26): a native whole float (42.0) for an integer field
+    → int(42); a non-whole float (42.5) is left untouched (NOT rounded — that
+    would change the value); bool and number fields unaffected."""
+    eng = object.__new__(V2Engine)
+    eng.tool_parameters = {
+        "t": {
+            "Count": {"param_type": "integer"},
+            "Q": {"param_type": "number"},
+            "Flag": {"param_type": "boolean"},
+        }
+    }
+    out = eng._coerce_llm_params("t", {"Count": 42.0, "Q": 12.5, "Flag": True})
+    assert out["Count"] == 42 and isinstance(out["Count"], int)
+    assert out["Q"] == 12.5            # number field untouched
+    assert out["Flag"] is True         # bool not coerced to int
+    assert eng._coerce_llm_params("t", {"Count": 42.5})["Count"] == 42.5  # not rounded
+    assert eng._coerce_llm_params("t", {"Count": 42})["Count"] == 42      # native int
+
+
+@pytest.mark.asyncio
+async def test_required_array_param_refused_not_asked():
+    """A required array/object param can't be built from chat — refuse
+    honestly instead of asking + shipping a raw string (→ 422)."""
+    eng = object.__new__(V2Engine)
+    eng.pending_params_store = object()  # truthy; never reached on refuse path
+    eng.tool_parameters = {
+        "post_X_multipatch": {
+            "Ids": {"param_type": "array", "required": True,
+                    "dependency_source": "user_input"},
+        }
+    }
+    out = await eng._maybe_start_param_collection(
+        "+385", "post_X_multipatch", {}, "azuriraj sve",
+    )
+    assert out is not None
+    assert "strukturiran" in out.lower()
+
+
+@pytest.mark.asyncio
+async def test_finalize_coerces_optional_params():
+    """U2 (Filip 2026-05-26): values reaching _finalize_after_params (incl.
+    optional-extractor values that bypass per-param coercion) get the SAME
+    coercion as the LLM path — an optional date string → ISO before send."""
+    saved = {}
+
+    class _MutStore:
+        async def save(self, phone, *, tool_id, params, stage):
+            saved["params"] = params
+
+    eng = object.__new__(V2Engine)
+    eng.tool_parameters = {
+        "post_X": {"When": {"param_type": "string", "format": "date-time"}}
+    }
+    eng.risky_tool_ids = set()
+    eng.pending_mut_store = _MutStore()
+    eng.executor = SimpleNamespace(method_of=lambda t: "POST")
+    pending = SimpleNamespace(
+        tool_id="post_X",
+        collected={"When": "17.05.2026 09:00", "__internal": "x"},
+        original_query="q",
+    )
+    identity = SimpleNamespace(last_mileage=None, vehicle_name="Auto")
+    await eng._finalize_after_params("+385", pending, identity)
+    assert saved["params"]["When"] == "2026-05-17T09:00:00"  # coerced to ISO
+    assert "__internal" not in saved["params"]               # internal stripped
+
+
+# ---- *TypeId resolver (Filip 2026-05-27) ----
+
+def _typeid_identity():
+    return SimpleNamespace(
+        tenant_id="t1", person_id=None, vehicle_id=None,
+        company_id=None, org_unit_id=None,
+    )
+
+
+class _TypesExecutor:
+    """Stub executor whose execute() returns a /…Types list."""
+    def __init__(self, rows):
+        self._rows = rows
+    async def execute(self, *, tool_id, params, identity_summary):
+        return SimpleNamespace(success=True, data=self._rows)
+
+
+class _SaveStore:
+    def __init__(self):
+        self.saved = None
+    async def save(self, phone, state):
+        self.saved = state
+
+
+@pytest.mark.asyncio
+async def test_resolve_type_param_matches_word_to_id():
+    eng = object.__new__(V2Engine)
+    eng.typeid_map = {"expensetypeid": "get_ExpenseTypes"}
+    eng.executor = _TypesExecutor([{"Id": 3, "Name": "Gorivo"}, {"Id": 1, "Name": "Servis"}])
+    mid, pairs = await eng._resolve_type_param(
+        "ExpenseTypeId", "dodaj trošak za gorivo", _typeid_identity(),
+    )
+    assert mid == 3
+    assert (3, "Gorivo") in pairs
+
+
+@pytest.mark.asyncio
+async def test_resolve_type_param_unmapped_returns_none():
+    eng = object.__new__(V2Engine)
+    eng.typeid_map = {}  # not a resolvable *TypeId
+    eng.executor = _TypesExecutor([])
+    assert await eng._resolve_type_param("AcquiringTypeId", "x", _typeid_identity()) == (None, None)
+
+
+@pytest.mark.asyncio
+async def test_typeid_prefill_auto_resolves_from_query():
+    """Word in the query ('gorivo') → ExpenseTypeId auto-filled, no ask."""
+    eng = object.__new__(V2Engine)
+    eng.pending_params_store = _SaveStore()
+    eng.param_labeler = None
+    eng.tkb_intents = {}
+    eng.typeid_map = {"expensetypeid": "get_ExpenseTypes"}
+    eng.executor = _TypesExecutor([{"Id": 3, "Name": "Gorivo"}, {"Id": 1, "Name": "Servis"}])
+    eng.tool_parameters = {
+        "post_Expenses": {
+            "ExpenseTypeId": {"param_type": "integer", "required": True,
+                              "dependency_source": "user_input"},
+        }
+    }
+    collected = {}
+    out = await eng._maybe_start_param_collection(
+        "+385", "post_Expenses", collected, "dodaj trošak za gorivo", _typeid_identity(),
+    )
+    assert collected["ExpenseTypeId"] == 3   # auto-resolved into caller's dict
+    assert out is None                        # nothing left to ask
+
+
+@pytest.mark.asyncio
+async def test_typeid_ask_with_list_when_no_match():
+    """No type word in query → ask, LISTING the available names."""
+    eng = object.__new__(V2Engine)
+    eng.pending_params_store = _SaveStore()
+    eng.param_labeler = None
+    eng.tkb_intents = {}
+    eng.typeid_map = {"expensetypeid": "get_ExpenseTypes"}
+    eng.executor = _TypesExecutor([{"Id": 3, "Name": "Gorivo"}, {"Id": 1, "Name": "Servis"}])
+    eng.tool_parameters = {
+        "post_Expenses": {
+            "ExpenseTypeId": {"param_type": "integer", "required": True,
+                              "dependency_source": "user_input"},
+        }
+    }
+    out = await eng._maybe_start_param_collection(
+        "+385", "post_Expenses", {}, "dodaj trošak", _typeid_identity(),
+    )
+    assert out is not None
+    assert "Dostupno" in out and "Gorivo" in out and "Servis" in out
+    assert eng.pending_params_store.saved.type_options.get("ExpenseTypeId")
+
+
+# ---- L3 DEEP E2E: prove the WIRED chain through the REAL engine (Filip 2026-05-27) ----
+# These drive process_message() end-to-end (real V2Engine + real param/coercion/
+# resolver/executor wiring) and ASSERT on FakeGateway.calls — i.e. the actual
+# data that reaches the wire. Stronger than unit tests: proves the pieces CONNECT.
+
+def _post_call(gateway, path_suffix):
+    return [c for c in gateway.calls
+            if (c.get("method") == "POST") and (c.get("path") or "").endswith(path_suffix)]
+
+
+@pytest.mark.asyncio
+async def test_e2e_typeid_word_in_query_reaches_executor_body():
+    """'dodaj trošak za gorivo' → resolver fetches /Lookup → 'gorivo' resolved
+    to ExpenseTypeId=3 → that id reaches the POST body on the wire."""
+    engine, gateway, _, _, _router, _fmt = await _build_engine(registry_tools={
+        "post_Expenses": {
+            "method": "POST", "service": "automation", "path": "/Expenses",
+            "purpose": "Dodaj trošak.",
+            "parameters": {
+                "Amount": {"param_type": "number", "required": True, "dependency_source": "user_input"},
+                "ExpenseTypeId": {"param_type": "integer", "required": True, "dependency_source": "user_input"},
+            },
+        },
+        "get_Lookup_ExpenseTypeId": {
+            "method": "GET", "service": "automation", "path": "/Lookup/ExpenseTypeId",
+            "purpose": "Lookup.", "parameters": {},
+        },
+    })
+    engine.typeid_map = {"expensetypeid": "get_Lookup_ExpenseTypeId"}
+    await _bootstrap_known_user(engine, gateway)
+    await engine.pending_clarify_store.save(
+        phone="+385955087196",
+        candidates=[{"tool_id": "post_Expenses", "method": "POST",
+                     "params": {"Amount": 50}, "field_hint": None,
+                     "short_label": "Trošak", "description": ""}],
+        original_query="dodaj trošak za gorivo 50 eura",
+        stage="tool",
+    )
+    gateway.queue(FakeApiResponse(success=True, data=[
+        {"Id": 3, "Name": "Gorivo"}, {"Id": 1, "Name": "Servis"},
+    ]))  # /Lookup fetch
+    confirm = await engine.process_message("+385955087196", "1")
+    assert confirm is not None  # auto-resolved → straight to mutation confirm
+    gateway.queue(FakeApiResponse(success=True, data={"ok": True}))  # POST execute
+    await engine.process_message("+385955087196", "Da")
+
+    calls = _post_call(gateway, "/Expenses")
+    assert calls, f"no POST /Expenses; calls={[(c.get('method'), c.get('path')) for c in gateway.calls]}"
+    body = calls[-1].get("body") or {}
+    assert body.get("Amount") == 50
+    assert body.get("ExpenseTypeId") == 3   # word→id reached the wire
+
+
+@pytest.mark.asyncio
+async def test_e2e_typeid_ask_with_list_then_answer_reaches_body():
+    """No type word in query → ask listing names → user answers 'gorivo' →
+    resolved id reaches the body."""
+    engine, gateway, _, _, _router, _fmt = await _build_engine(registry_tools={
+        "post_Expenses": {
+            "method": "POST", "service": "automation", "path": "/Expenses",
+            "purpose": "Dodaj trošak.",
+            "parameters": {
+                "ExpenseTypeId": {"param_type": "integer", "required": True, "dependency_source": "user_input"},
+            },
+        },
+        "get_Lookup_ExpenseTypeId": {
+            "method": "GET", "service": "automation", "path": "/Lookup/ExpenseTypeId",
+            "purpose": "Lookup.", "parameters": {},
+        },
+    })
+    engine.typeid_map = {"expensetypeid": "get_Lookup_ExpenseTypeId"}
+    await _bootstrap_known_user(engine, gateway)
+    await engine.pending_clarify_store.save(
+        phone="+385955087196",
+        candidates=[{"tool_id": "post_Expenses", "method": "POST", "params": {},
+                     "field_hint": None, "short_label": "Trošak", "description": ""}],
+        original_query="dodaj trošak",
+        stage="tool",
+    )
+    gateway.queue(FakeApiResponse(success=True, data=[
+        {"Id": 3, "Name": "Gorivo"}, {"Id": 1, "Name": "Servis"},
+    ]))
+    ask = await engine.process_message("+385955087196", "1")
+    assert "Dostupno" in ask and "Gorivo" in ask     # ask-with-list
+    confirm = await engine.process_message("+385955087196", "gorivo")  # answer
+    assert confirm is not None                        # matched → confirm
+    gateway.queue(FakeApiResponse(success=True, data={"ok": True}))
+    await engine.process_message("+385955087196", "Da")
+
+    body = (_post_call(gateway, "/Expenses")[-1].get("body") or {})
+    assert body.get("ExpenseTypeId") == 3
+
+
+@pytest.mark.asyncio
+async def test_e2e_date_string_reaches_body_as_iso():
+    """Router extracts a HR date string → _coerce_llm_params → ISO on the wire."""
+    engine, gateway, _, _, _router, _fmt = await _build_engine(registry_tools={
+        "post_VehicleCalendar": {
+            "method": "POST", "service": "vehiclemgt", "path": "/VehicleCalendar",
+            "purpose": "Rezerviraj.",
+            "parameters": {
+                "FromTime": {"param_type": "string", "format": "date-time",
+                             "required": True, "dependency_source": "user_input"},
+            },
+        },
+    })
+    await _bootstrap_known_user(engine, gateway)
+    await engine.pending_clarify_store.save(
+        phone="+385955087196",
+        candidates=[{"tool_id": "post_VehicleCalendar", "method": "POST",
+                     "params": {"FromTime": "17.05.2026 09:00"}, "field_hint": None,
+                     "short_label": "Rezervacija", "description": ""}],
+        original_query="rezerviraj 17.05.2026 09:00",
+        stage="tool",
+    )
+    confirm = await engine.process_message("+385955087196", "1")
+    assert confirm is not None
+    gateway.queue(FakeApiResponse(success=True, data={"ok": True}))
+    await engine.process_message("+385955087196", "Da")
+
+    body = (_post_call(gateway, "/VehicleCalendar")[-1].get("body") or {})
+    assert body.get("FromTime") == "2026-05-17T09:00:00"   # coerced to ISO on the wire
+
+
+@pytest.mark.asyncio
+async def test_e2e_param_ask_path_id_substituted_in_url():
+    """Missing required path {id} → ask → answer '45' → executor substitutes it
+    into the URL path (no literal {id} on the wire)."""
+    engine, gateway, _, _, _router, _fmt = await _build_engine(registry_tools={
+        "delete_VehicleCalendar_id": {
+            "method": "DELETE", "service": "vehiclemgt", "path": "/VehicleCalendar/{id}",
+            "purpose": "Otkaži rezervaciju.",
+            "parameters": {
+                "id": {"param_type": "integer", "required": True, "dependency_source": "user_input"},
+            },
+        },
+    })
+    await _bootstrap_known_user(engine, gateway)
+    await engine.pending_clarify_store.save(
+        phone="+385955087196",
+        candidates=[{"tool_id": "delete_VehicleCalendar_id", "method": "DELETE",
+                     "params": {}, "field_hint": None, "short_label": "Otkaži", "description": ""}],
+        original_query="otkaži rezervaciju",
+        stage="tool",
+    )
+    ask = await engine.process_message("+385955087196", "1")      # → ask for id
+    assert ask is not None
+    confirm = await engine.process_message("+385955087196", "45")  # answer → confirm
+    assert confirm is not None
+    gateway.queue(FakeApiResponse(success=True, data={"ok": True}))
+    await engine.process_message("+385955087196", "Da")
+
+    del_calls = [c for c in gateway.calls if c.get("method") == "DELETE"]
+    assert del_calls, f"no DELETE call; calls={[(c.get('method'), c.get('path')) for c in gateway.calls]}"
+    path = del_calls[-1].get("path") or ""
+    assert path.endswith("/VehicleCalendar/45")   # {id} substituted
+    assert "{" not in path                          # no literal placeholder on the wire
+
+
+# ---- Unify (Filip 2026-05-27): flows now run through the mutation gate ----
+# These drive the CHANGED _continue_flow directly with a real IdentitySnapshot,
+# real FlowEngine + executor + FakeGateway — proving the flow path gains the
+# gate's range check + the booking EXEC_LOOKUP round-trip (was broken: "...").
+
+_FLOW_PHONE = "+385955087196"
+
+
+@pytest.mark.asyncio
+async def test_mileage_flow_confirm_is_plain_no_gate_warning():
+    """Uniform gate (Filip 2026-05-27): the mileage flow confirm is the plain
+    bespoke message — NO per-tool ⚠️ range warning, even for an absurd km value.
+    Value sanity is the user reading the confirm, not the gate."""
+    engine, gateway, _llm, _emb, _router, _fmt = await _build_engine(registry_tools={
+        "post_AddMileage": {"method": "POST", "service": "automation",
+                            "path": "/AddMileage", "purpose": "unos km"},
+    })
+    identity = IdentitySnapshot(
+        phone=_FLOW_PHONE, person_id="p1", tenant_id="t1",
+        vehicle_id="v1", vehicle_name="VW Golf", last_mileage=100000, is_known=True,
+    )
+    start = engine.flow_engine.start("mileage", identity_context={
+        "person_id": "p1", "vehicle_id": "v1", "vehicle_name": "VW Golf"})
+    # Even an absurd jump (100k → 600k) gets no ⚠️ — gate is method-only now.
+    out = await engine._continue_flow(_FLOW_PHONE, start.new_state, "600000", identity)
+    assert "⚠️" not in out
+    assert "Upisat ću 600000 km na vozilo VW Golf" in out   # readable confirm
+
+
+@pytest.mark.asyncio
+async def test_booking_flow_lookup_round_trip_to_execute():
+    """Booking's EXEC_LOOKUP now actually runs (was: engine returned '...').
+    period → lookup → choice → confirm → execute, with the chosen VehicleId
+    reaching the POST body on the wire."""
+    engine, gateway, _llm, _emb, _router, _fmt = await _build_engine(registry_tools={
+        "get_AvailableVehicles": {"method": "GET", "service": "vehiclemgt",
+                                  "path": "/AvailableVehicles", "purpose": "slobodna vozila"},
+        "post_VehicleCalendar": {"method": "POST", "service": "vehiclemgt",
+                                 "path": "/VehicleCalendar", "purpose": "rezervacija"},
+    })
+    identity = IdentitySnapshot(
+        phone=_FLOW_PHONE, person_id="p1", tenant_id="t1",
+        vehicle_name="VW Golf", is_known=True,
+    )
+    # Turn 1: period → engine runs the lookup (shape verified against live M1).
+    gateway.queue(FakeApiResponse(success=True, data={"Data": [
+        {"Id": "veh-A", "DisplayName": "Škoda Octavia", "LicencePlate": "DA066F"},
+        {"Id": "veh-B", "DisplayName": "Renault Clio", "LicencePlate": "ZG123"},
+    ]}))
+    start = engine.flow_engine.start("booking", identity_context={"person_id": "p1"})
+    r1 = await engine._continue_flow(_FLOW_PHONE, start.new_state, "16.12.2025 9-17", identity)
+    assert "Škoda Octavia" in r1 and "Renault Clio" in r1   # choices rendered
+    # The lookup hit the right endpoint with from/to.
+    look = [c for c in gateway.calls if (c.get("path") or "").endswith("/AvailableVehicles")]
+    assert look, "lookup never ran"
+
+    # Turn 2: pick #1 → ASK_CONFIRM preview (chosen label shown).
+    state2 = await engine.flow_store.load(_FLOW_PHONE)
+    r2 = await engine._continue_flow(_FLOW_PHONE, state2, "1", identity)
+    assert "Škoda Octavia" in r2
+
+    # Turn 3: confirm → execute POST /VehicleCalendar with chosen VehicleId.
+    gateway.queue(FakeApiResponse(success=True, data={"Id": "cal-1"}))
+    state3 = await engine.flow_store.load(_FLOW_PHONE)
+    await engine._continue_flow(_FLOW_PHONE, state3, "Da", identity)
+    posts = [c for c in gateway.calls
+             if c.get("method") == "POST" and (c.get("path") or "").endswith("/VehicleCalendar")]
+    assert posts, f"no POST /VehicleCalendar; calls={[(c.get('method'), c.get('path')) for c in gateway.calls]}"
+    body = posts[-1].get("body") or {}
+    assert body.get("VehicleId") == "veh-A"     # chosen vehicle reached the wire
+    assert body.get("AssignedToId") == "p1"     # booker from identity
+
+
+@pytest.mark.asyncio
+async def test_booking_flow_lookup_empty_aborts_cleanly():
+    """Lookup returns nothing → flow aborts with a clear message, not a wedge."""
+    engine, gateway, _llm, _emb, _router, _fmt = await _build_engine(registry_tools={
+        "get_AvailableVehicles": {"method": "GET", "service": "vehiclemgt",
+                                  "path": "/AvailableVehicles", "purpose": "x"},
+        "post_VehicleCalendar": {"method": "POST", "service": "vehiclemgt",
+                                 "path": "/VehicleCalendar", "purpose": "y"},
+    })
+    identity = IdentitySnapshot(phone=_FLOW_PHONE, person_id="p1", tenant_id="t1", is_known=True)
+    gateway.queue(FakeApiResponse(success=True, data={"Data": []}))
+    start = engine.flow_engine.start("booking", identity_context={"person_id": "p1"})
+    r = await engine._continue_flow(_FLOW_PHONE, start.new_state, "16.12.2025 9-17", identity)
+    assert "nema" in r.lower()
+    assert await engine.flow_store.load(_FLOW_PHONE) is None   # state cleared

@@ -37,6 +37,14 @@ logger = logging.getLogger(__name__)
 
 MAX_TOOL_NAME_LEN = 64
 
+# Params we deliberately HIDE from the LLM tool-call schema (Filip 2026-05-25).
+# `Filter`/`UseANDFor` build MobilityOne list-filter queries. The deterministic
+# filter builder was reset to zero (commit 8f9ba4d) pending a real M1 filter
+# schema, but these params stayed exposed — the LLM would free-fill them and
+# ship a malformed/hallucinated filter (e.g. wrong field name → M1 500). Hiding
+# them keeps filtering truly OFF until the data-driven redesign lands.
+_SUPPRESSED_PARAMS = frozenset({"Filter", "UseANDFor"})
+
 
 @dataclass
 class ToolSchemaBuilder:
@@ -151,6 +159,10 @@ class ToolSchemaBuilder:
         properties: dict[str, dict] = {}
         for pname, pdef in params_raw.items():
             if not isinstance(pdef, dict):
+                continue
+            if pname in _SUPPRESSED_PARAMS:
+                # Filter/UseANDFor — kept out of the schema so the LLM can't
+                # ship a free-form filter while the feature is reset to zero.
                 continue
             ds = pdef.get("dependency_source")
             if ds and ds != "user_input":

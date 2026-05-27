@@ -4,9 +4,11 @@
     "kinds": {
       "path_id": "integer {id} in path — measured via LLM router tool-call args",
       "body_num": "numeric body value — measured via LLM router tool-call args",
-      "registration": "vehicle plate → Filter — measured via entity_detector (deterministic, no LLM)",
-      "registration_negative": "no plate present — entity_detector must return None"
+      "registration": "DEAD (entity_detector removed in 8f9ba4d) — not scored by any bench part",
+      "registration_negative": "DEAD (entity_detector removed in 8f9ba4d) — not scored",
+      "datetime": "date / date-time / range params — measures whether the LLM-extracted value is in CORRECT ISO 8601 format. Scored format-aware (CORRECT/WRONG_FORMAT/WRONG_VALUE/MISSING), NOT digit-normalized. Router is forced to expected_tool (singleton tool_filter) to ISOLATE extraction-format from routing. 'expected' maps param_name -> {iso: '...'} (absolute) or {rel: {base, time?}} (relative, resolved at runtime). Note: relative dates (sutra/u petak) test whether the system can resolve them on the LLM path at all — llm_router does NOT inject today's date, so the LLM has no date context (param_ui coercion does, but only on the param-ASK path, not LLM extraction)."
     },
+    "datetime_params_verified_from": "config/tool_data.json 2026-05-25: post_PeriodicActivities.Date (req,date-time); post_VehicleCalendar.FromTime(req)/ToTime(opt) date-time; post_VehicleAssignments.FromTime/ToTime date-time",
     "param_names_verified_from": "config/tool_data.json 2026-05-24"
   },
   "queries": [
@@ -34,6 +36,24 @@
 
     {"id": "e20", "kind": "registration_negative", "query": "dodaj 30500 km", "expected_plate": null},
     {"id": "e21", "kind": "registration_negative", "query": "kolika mi je km", "expected_plate": null},
-    {"id": "e22", "kind": "registration_negative", "query": "za 30500 km", "expected_plate": null}
+    {"id": "e22", "kind": "registration_negative", "query": "za 30500 km", "expected_plate": null},
+
+    {"id": "d01", "kind": "datetime", "query": "evidentiraj aktivnost 17.05.2026", "expected_tool": "post_PeriodicActivities", "expected": {"Date": {"iso": "2026-05-17T00:00:00"}}},
+    {"id": "d02", "kind": "datetime", "query": "upiši aktivnost 1.6.2026", "expected_tool": "post_PeriodicActivities", "expected": {"Date": {"iso": "2026-06-01T00:00:00"}}},
+    {"id": "d03", "kind": "datetime", "query": "aktivnost 03.12.2026 u 14:30", "expected_tool": "post_PeriodicActivities", "expected": {"Date": {"iso": "2026-12-03T14:30:00"}}},
+    {"id": "d09", "kind": "datetime", "query": "aktivnost 2026-05-17", "expected_tool": "post_PeriodicActivities", "expected": {"Date": {"iso": "2026-05-17T00:00:00"}}},
+    {"id": "d07", "kind": "datetime", "query": "evidentiraj aktivnost 17. svibnja 2026.", "expected_tool": "post_PeriodicActivities", "expected": {"Date": {"iso": "2026-05-17T00:00:00"}}},
+
+    {"id": "d04", "kind": "datetime", "query": "evidentiraj aktivnost sutra", "expected_tool": "post_PeriodicActivities", "expected": {"Date": {"rel": {"base": "tomorrow"}}}},
+    {"id": "d05", "kind": "datetime", "query": "aktivnost danas u 9h", "expected_tool": "post_PeriodicActivities", "expected": {"Date": {"rel": {"base": "today", "time": "09:00"}}}},
+    {"id": "d08", "kind": "datetime", "query": "zakaži aktivnost prekosutra u 10", "expected_tool": "post_PeriodicActivities", "expected": {"Date": {"rel": {"base": "day_after", "time": "10:00"}}}},
+    {"id": "d06", "kind": "datetime", "query": "aktivnost u petak", "expected_tool": "post_PeriodicActivities", "expected": {"Date": {"rel": {"base": "next_friday"}}}},
+
+    {"id": "r01", "kind": "datetime", "query": "rezerviraj vozilo od 17.05.2026 09:00 do 17.05.2026 17:00", "expected_tool": "post_VehicleCalendar", "expected": {"FromTime": {"iso": "2026-05-17T09:00:00"}, "ToTime": {"iso": "2026-05-17T17:00:00"}}},
+    {"id": "r02", "kind": "datetime", "query": "rezerviraj auto 20.05.2026 od 8 do 16", "expected_tool": "post_VehicleCalendar", "expected": {"FromTime": {"iso": "2026-05-20T08:00:00"}, "ToTime": {"iso": "2026-05-20T16:00:00"}}},
+    {"id": "r05", "kind": "datetime", "query": "rezerviraj vozilo od 1.6.2026 do 5.6.2026", "expected_tool": "post_VehicleCalendar", "expected": {"FromTime": {"iso": "2026-06-01T00:00:00"}, "ToTime": {"iso": "2026-06-05T00:00:00"}}},
+    {"id": "r03", "kind": "datetime", "query": "rezerviraj vozilo sutra od 9 do 15", "expected_tool": "post_VehicleCalendar", "expected": {"FromTime": {"rel": {"base": "tomorrow", "time": "09:00"}}, "ToTime": {"rel": {"base": "tomorrow", "time": "15:00"}}}},
+
+    {"id": "a01", "kind": "datetime", "query": "dodijeli vozilo vozaču od 1.7.2026 do 31.7.2026", "expected_tool": "post_VehicleAssignments", "expected": {"FromTime": {"iso": "2026-07-01T00:00:00"}, "ToTime": {"iso": "2026-07-31T00:00:00"}}}
   ]
 }

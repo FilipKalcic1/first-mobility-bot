@@ -43,6 +43,7 @@ import argparse
 import asyncio
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -248,7 +249,13 @@ async def main_async(args) -> None:
         )
         picked = res.tool_id
         all_cands = [tid for tid, _ in (res.top_candidates or [])]
-        top3 = all_cands[:3]
+        # Mirror engine card composition: LLM pick leads, anchor fills the rest
+        # (deduped). recall@3 now measures what the user actually sees in the
+        # 3-card picker after the LLM-pick-leads change.
+        shown = ([picked] if picked in set(all_cands) else []) + [
+            t for t in all_cands if t != picked
+        ]
+        top3 = shown[:3]
 
         if picked == expected:
             correct += 1
@@ -279,6 +286,30 @@ async def main_async(args) -> None:
         print(f"  L2b shortcut hits:{shortcut_hits}/{n} = {100 * shortcut_hits / n:.1f}%   (driver self-questions served before L3)")
         print(f"  scope_miss:       {scope_miss}/{n} = {100 * scope_miss / n:.1f}%   (expected tool not even a candidate)")
         print(f"  route_miss:       {route_miss}/{n} = {100 * route_miss / n:.1f}%   (in scope/shortcut, but wrong pick)")
+
+        # EXACT route_miss taxonomy over the FULL list (not the [:14] sample
+        # printed below). in_top50 is checked BEFORE the got-none branch: if the
+        # anchor never surfaced the expected tool, that retrieval failure is the
+        # upstream cause regardless of whether the LLM then declined.
+        rm = Counter()
+        for _q, _exp, _got, _err, _t3, _in50 in route_misses:
+            if _err == "wrong_shortcut":
+                cat = "wrong_shortcut_L2b"   # L2b fired on a non-MasterData query
+            elif _in50 is False:
+                cat = "retrieval_miss"        # anchor cosine never surfaced expected
+            elif not _got or _got == "(none)":
+                cat = "no_tool_call"          # LLM saw expected in top-50, declined
+            else:
+                cat = "wrong_pick"            # LLM saw it, picked another
+            rm[cat] += 1
+        print(
+            "  route_miss breakdown: "
+            f"no_tool_call={rm['no_tool_call']} "
+            f"wrong_pick={rm['wrong_pick']} "
+            f"retrieval_miss={rm['retrieval_miss']} "
+            f"wrong_shortcut_L2b={rm['wrong_shortcut_L2b']} "
+            f"(sum={sum(rm.values())} == route_miss={route_miss})"
+        )
 
     _print_segment("By HTTP method", by_method)
     _print_segment("By persona", by_persona)

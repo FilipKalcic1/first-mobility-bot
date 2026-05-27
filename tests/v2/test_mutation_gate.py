@@ -1,8 +1,10 @@
 """Tests for L6 mutation_gate.decide_mutation().
 
-Single-confirm policy (Filip 2026-05-16): every POST/PUT/PATCH/DELETE
-requires exactly ONE Da/Ne confirm. DOUBLE-confirm flow was dropped as
-infeasible UX. AUTO is permitted only for GET (read-only).
+Pure method-based gate (Filip 2026-05-27, "maksimalna uniformnost"): the
+decision depends ONLY on the HTTP method — uniform across all 950 tools, zero
+per-tool data. GET → AUTO; every write → single Da/Ne CONFIRM (DELETE gets
+stronger wording). Value/field verification is the engine's echo, not the gate;
+earlier per-tool range/critical-field special cases were removed.
 """
 from __future__ import annotations
 
@@ -12,85 +14,78 @@ from services.v2.mutation_gate import (
 
 
 def test_get_is_auto():
-    d = decide_mutation("get_X", "GET", {})
+    d = decide_mutation("GET")
     assert d.decision == DECISION_AUTO
+    assert d.confirm_message == ""
+
+
+def test_post_is_single_confirm():
+    d = decide_mutation("POST", entity_label="novi unos")
+    assert d.decision == DECISION_CONFIRM
+    assert "novi unos" in d.confirm_message
+    assert d.confirm_message.endswith("Da/Ne")
+
+
+def test_put_is_single_confirm():
+    assert decide_mutation("PUT").decision == DECISION_CONFIRM
+
+
+def test_patch_is_single_confirm():
+    d = decide_mutation("PATCH", entity_label="osobu Marko")
+    assert d.decision == DECISION_CONFIRM
+    assert "Marko" in d.confirm_message
 
 
 def test_delete_is_single_confirm_with_strong_warning():
-    d = decide_mutation("delete_VehicleCalendar_id", "DELETE",
-                        {"id": "x"}, entity_label="rezervaciju")
+    d = decide_mutation("DELETE", entity_label="rezervaciju")
     assert d.decision == DECISION_CONFIRM
     assert "rezervaciju" in d.confirm_message
     assert "TRAJNO" in d.confirm_message
     assert "nepovratna" in d.confirm_message
 
 
-def test_critical_field_change_is_single_confirm_with_warning():
-    d = decide_mutation("patch_Vehicles_id", "PATCH",
-                        {"LicencePlate": "ZG-1234"})
+def test_method_is_case_insensitive():
+    assert decide_mutation("get").decision == DECISION_AUTO
+    assert decide_mutation("delete").decision == DECISION_CONFIRM
+
+
+def test_entity_label_defaults_when_missing():
+    d = decide_mutation("POST")
     assert d.decision == DECISION_CONFIRM
-    assert "kritične" in d.confirm_message
+    assert "akciju" in d.confirm_message
 
 
-def test_in_range_mileage_requires_single_confirm():
-    """In-range mutation no longer auto-executes — CLAUDE.md §1.3."""
-    d = decide_mutation("post_AddMileage", "POST",
-                        {"Value": 145000},
-                        last_known_values={"last_mileage": 144500},
-                        entity_label="VW Golf")
+def test_unknown_or_empty_method_is_confirm_not_auto():
+    """Defensive: only GET is AUTO. Anything unrecognized → CONFIRM (never a
+    silent write)."""
+    assert decide_mutation("").decision == DECISION_CONFIRM
+    assert decide_mutation("WEIRD").decision == DECISION_CONFIRM
+
+
+# ---- Uniformity (Filip 2026-05-27): no per-tool special-casing ----
+
+def test_former_critical_field_tool_gets_plain_confirm():
+    """patch_Vehicles_id changing LicencePlate used to get a special 'kritične
+    podatke' warning. Now it's a plain PATCH confirm like any other — the echo
+    shows the new value, the gate stays uniform."""
+    d = decide_mutation("PATCH", entity_label="vozilo")
     assert d.decision == DECISION_CONFIRM
-    assert "VW Golf" in d.confirm_message
+    assert "kritične" not in d.confirm_message
+    assert "⚠️" not in d.confirm_message      # no per-tool red flag
+    assert d.confirm_message == "Potvrđuješ vozilo? Da/Ne"
 
 
-def test_out_of_range_jump_is_single_confirm_with_warning():
-    """Out-of-range parameter is a red flag → CONFIRM with red-flag wording
-    (was DOUBLE in old policy)."""
-    d = decide_mutation("post_AddMileage", "POST",
-                        {"Value": 200000},  # jump 100k from last 100k
-                        last_known_values={"last_mileage": 100000},
-                        entity_label="VW Golf")
+def test_former_range_tool_gets_plain_confirm_regardless_of_value():
+    """post_AddMileage with an absurd value used to trip an out-of-range ⚠️.
+    Now every write confirms identically — value sanity is the echo's job."""
+    d = decide_mutation("POST", entity_label="VW Golf")
     assert d.decision == DECISION_CONFIRM
-    assert "VW Golf" in d.confirm_message
-    assert "izvan očekivanih granica" in d.confirm_message
+    assert "izvan" not in d.confirm_message
+    assert "⚠️" not in d.confirm_message
+    assert d.confirm_message == "Potvrđuješ VW Golf? Da/Ne"
 
 
-def test_negative_mileage_is_single_confirm_with_warning():
-    d = decide_mutation("post_AddMileage", "POST", {"Value": -100})
-    assert d.decision == DECISION_CONFIRM
-    assert "izvan" in d.confirm_message
-
-
-def test_huge_mileage_is_single_confirm_with_warning():
-    d = decide_mutation("post_AddMileage", "POST", {"Value": 99999999})
-    assert d.decision == DECISION_CONFIRM
-    assert "izvan" in d.confirm_message
-
-
-def test_non_numeric_mileage_is_single_confirm_with_warning():
-    d = decide_mutation("post_AddMileage", "POST", {"Value": "abc"})
-    assert d.decision == DECISION_CONFIRM
-    assert "nije broj" in d.confirm_message
-
-
-def test_unrecognized_post_tool_requires_confirm():
-    """Tools without range rules still require single confirm —
-    CLAUDE.md §1.3 doctrine: NO mutation without explicit Da."""
-    d = decide_mutation("post_NewTool", "POST", {"foo": "bar"},
-                        entity_label="novi unos")
-    assert d.decision == DECISION_CONFIRM
-    assert "novi unos" in d.confirm_message
-
-
-def test_put_without_critical_fields_requires_confirm():
-    d = decide_mutation("put_VehicleContracts_id", "PUT",
-                        {"description": "new desc"},
-                        entity_label="ugovor")
-    assert d.decision == DECISION_CONFIRM
-
-
-def test_patch_without_critical_fields_requires_confirm():
-    d = decide_mutation("patch_Persons_id", "PATCH",
-                        {"phone": "+385912345"},
-                        entity_label="osobu Marko")
-    assert d.decision == DECISION_CONFIRM
-    assert "Marko" in d.confirm_message
+def test_decision_has_no_warning_attribute():
+    """The reusable `warning` field was removed with the per-tool specials."""
+    d = decide_mutation("POST")
+    assert not hasattr(d, "warning")

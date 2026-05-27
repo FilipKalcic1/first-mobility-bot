@@ -346,6 +346,13 @@ def _strip_diacritics(text: str) -> str:
     return normalize_diacritics(text.lower())
 
 
+def field_hint_resolves(field_hint: Optional[str], available_keys: list) -> bool:
+    """Public: True if `field_hint` maps to one of `available_keys` via the
+    curated alias map. Callers outside this module use this (not the private
+    resolver) to decide the deterministic fast-path vs the LLM fallback."""
+    return _resolve_field_hint_to_key(field_hint, available_keys) is not None
+
+
 def _resolve_field_hint_to_key(
     field_hint: Optional[str], available_keys: list,
 ) -> Optional[str]:

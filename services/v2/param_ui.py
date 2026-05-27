@@ -22,6 +22,15 @@ from __future__ import annotations
 import re
 from datetime import datetime, time as dt_time, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
+
+# Resolve relative dates ("danas"/"sutra") against Croatia, not the host's TZ
+# (prod host may be UTC → off-by-one near midnight). Fall back to naive local
+# if the tz db is ever unavailable. tzdata ships in requirements.
+try:
+    _ZAGREB = ZoneInfo("Europe/Zagreb")
+except Exception:  # noqa: BLE001
+    _ZAGREB = None
 
 
 # Set of strings interpreted as "cancel the current param collection".
@@ -166,6 +175,12 @@ def parse_param_value(
     ptype = (param_def.get("param_type") or "string").lower()
 
     if ptype == "integer":
+        # A comma between digits is either a decimal ('12,5') or two separate
+        # numbers ('5, 30000') — both mean "don't silently merge digits into one
+        # integer". Re-ask. Allow whitespace so '5, 30000' is caught too
+        # (Filip 2026-05-26). Dot stays a thousand-separator below.
+        if re.search(r"\d\s*,\s*\d", raw):
+            return None
         # Strip non-digit/minus chars (handles '42.500 km' → 42500 — common
         # Croatian thousand-separator with dot).
         cleaned = re.sub(r"[^\d-]", "", raw)
@@ -177,11 +192,23 @@ def parse_param_value(
             return None
 
     if ptype == "number":
-        # Croatian decimal: comma → dot
-        cleaned = raw.replace(",", ".")
-        # Strip non-digit/./- chars
+        # A lone '.' grouping exactly 3 trailing digits and NO comma ('1.500')
+        # is almost certainly an HR thousands separator (1500), not a decimal
+        # 1.5 — too ambiguous to guess, so re-ask (Filip 2026-05-26). '3.14'
+        # (2 digits) and '1.500,75' (has comma) are unaffected.
+        if "," not in raw and re.search(r"\d\.\d{3}(?!\d)", raw):
+            return None
+        # HR numbers: with BOTH separators, '.' is the thousands grouping and
+        # ',' is the decimal ('1.500,75' → 1500.75). With only ',', it's the
+        # decimal ('12,5' → 12.5). A lone '.' stays a decimal point
+        # ('3.14' → 3.14) — ambiguous vs thousands, but decimal is the safer
+        # default for these fields. Multiple dots left over → re-ask.
+        if "." in raw and "," in raw:
+            cleaned = raw.replace(".", "").replace(",", ".")
+        else:
+            cleaned = raw.replace(",", ".")
         cleaned = re.sub(r"[^\d.\-]", "", cleaned)
-        if not cleaned:
+        if not cleaned or cleaned.count(".") > 1:
             return None
         try:
             return float(cleaned)
@@ -230,6 +257,40 @@ def parse_param_value(
 
 _DATE_DMY_RE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4})\.?")
 _TIME_HM_RE = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(?:h|sat[ai]?)?\b")
+_ISO_RE = re.compile(
+    r"\s*(\d{4})-(\d{2})-(\d{2})(?:[ t](\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*$",
+    re.IGNORECASE,
+)
+
+# Weekday + part-of-day maps mirror services/v2/flow_engine.py (kept in sync by
+# hand — both small, rarely change) so the param-ask path resolves the SAME
+# Croatian phrases as the booking-flow range parser (NALAZ 4, Filip 2026-05-25).
+_WEEKDAYS_HR = {
+    "ponedjeljak": 0, "pon": 0, "utorak": 1, "uto": 1,
+    "srijed": 2, "sri": 2, "četvrt": 3, "cetvrt": 3, "čet": 3, "cet": 3,
+    "petak": 4, "pet": 4, "subot": 5, "sub": 5, "nedjelj": 6, "ned": 6,
+}
+# Part of day → start hour (single point in time; flow_engine uses ranges).
+_PART_OF_DAY_HR = {
+    "ujutro": 9, "prijepodne": 9, "popodne": 13,
+    "navečer": 18, "naveer": 18, "uvece": 18,
+}
+
+
+def _resolve_weekday_hr(today_date, lower: str):
+    """Date of the upcoming weekday named in `lower`, or None. 'idući'/'sljedeći'
+    skips to the week after. Mirrors flow_engine._resolve_weekday."""
+    next_week = bool(re.search(r"\b(?:iduć|iduci|sljedeć|sljedeci|drugi)\b", lower))
+    wd = today_date.weekday()
+    for kw, target in _WEEKDAYS_HR.items():
+        if kw in lower:
+            delta = (target - wd) % 7
+            if delta == 0 and not next_week:
+                delta = 7
+            if next_week:
+                delta = 7 if delta == 0 else delta + 7
+            return today_date + timedelta(days=delta)
+    return None
 
 
 def parse_datetime_hr(text: str, want_time: bool = True) -> Optional[str]:
@@ -255,8 +316,23 @@ def parse_datetime_hr(text: str, want_time: bool = True) -> Optional[str]:
         return None
     lower = text.lower().strip()
 
+    # Already ISO 8601 — normalize + pass through. Lets the coercion-pass keep
+    # LLM-emitted ISO unchanged, and accepts ISO in param-ask too.
+    iso = _ISO_RE.match(lower)
+    if iso:
+        y, mo, d, hh, mi, ss = iso.groups()
+        try:
+            if not want_time:
+                return datetime(int(y), int(mo), int(d)).date().isoformat()
+            return datetime(
+                int(y), int(mo), int(d),
+                int(hh or 0), int(mi or 0), int(ss or 0),
+            ).isoformat(timespec="seconds")
+        except ValueError:
+            return None
+
     # Resolve date component
-    today = datetime.now().date()
+    today = datetime.now(_ZAGREB).date()
     date = None
 
     if "prekosutra" in lower:
@@ -266,13 +342,15 @@ def parse_datetime_hr(text: str, want_time: bool = True) -> Optional[str]:
     elif "danas" in lower:
         date = today
     else:
-        m = _DATE_DMY_RE.search(lower)
-        if m:
-            d, mo, y = m.groups()
-            try:
-                date = datetime(int(y), int(mo), int(d)).date()
-            except ValueError:
-                return None
+        date = _resolve_weekday_hr(today, lower)  # "u petak", "idući utorak"
+        if date is None:
+            m = _DATE_DMY_RE.search(lower)
+            if m:
+                d, mo, y = m.groups()
+                try:
+                    date = datetime(int(y), int(mo), int(d)).date()
+                except ValueError:
+                    return None
 
     if date is None:
         # No date hint anywhere — can't construct ISO output
@@ -289,6 +367,7 @@ def parse_datetime_hr(text: str, want_time: bool = True) -> Optional[str]:
     for kw in ("prekosutra", "sutra", "danas", "u "):
         stripped = stripped.replace(kw, " ")
     tm = _TIME_HM_RE.search(stripped)
+    matched_numeric = False
     if tm:
         h, mm = tm.groups()
         try:
@@ -296,8 +375,19 @@ def parse_datetime_hr(text: str, want_time: bool = True) -> Optional[str]:
             mi = int(mm) if mm else 0
             if 0 <= hi <= 23 and 0 <= mi <= 59:
                 hour, minute = hi, mi
+                matched_numeric = True
         except ValueError:
             pass
+
+    # Part-of-day ("ujutro"/"popodne"/"navečer"). With no numeric hour it sets
+    # the default; with one ("u 2 popodne") it shifts a 1-11 hour into PM.
+    part = next((v for k, v in _PART_OF_DAY_HR.items() if k in lower), None)
+    if part is not None:
+        if matched_numeric:
+            if part >= 12 and 1 <= hour <= 11:
+                hour += 12  # "u 2 popodne" → 14:00
+        else:
+            hour = part      # "popodne" → 13:00
 
     return datetime.combine(date, dt_time(hour, minute)).isoformat(
         timespec="seconds",

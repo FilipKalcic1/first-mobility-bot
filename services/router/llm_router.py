@@ -25,12 +25,30 @@ import json
 import logging
 import random
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from services.router.anchor_index import AnchorIndex, EmbedFn
 from services.router.tool_schema_builder import ToolSchemaBuilder
 
 logger = logging.getLogger(__name__)
+
+# Croatian weekday names (Mon=0). Given to the LLM so it can resolve relative
+# dates ("sutra", "u petak") — without today's date the model hallucinates a
+# date from its training era (measured 2026-05-25: "sutra" → 2023-10-04).
+_WEEKDAYS_HR = (
+    "ponedjeljak", "utorak", "srijeda", "četvrtak",
+    "petak", "subota", "nedjelja",
+)
+
+# Pin the bot's "today" to Croatia. The prod host may run UTC (Dockerfile sets
+# no TZ); naive now() would shift "danas"/"sutra" by a day near midnight.
+# tzdata ships in requirements; fall back to naive local if it's ever missing.
+try:
+    _ZAGREB = ZoneInfo("Europe/Zagreb")
+except Exception:  # noqa: BLE001 — never let a missing tz db crash routing
+    _ZAGREB = None
 
 
 # Sensible defaults — overridable via constructor kwargs.
@@ -154,20 +172,37 @@ class LLMRouter:
             )
 
         # Stage C — LLM tool-calling
+        _now = datetime.now(_ZAGREB)
+        # Next 7 days as an explicit lookup table — the model knows today but
+        # mis-counts weekday arithmetic ("u petak" → wrong day, measured
+        # 2026-05-25). A literal table removes the arithmetic.
+        _next7 = ", ".join(
+            f"{_WEEKDAYS_HR[(_now + timedelta(days=i)).weekday()]} "
+            f"{(_now + timedelta(days=i)).strftime('%Y-%m-%d')}"
+            for i in range(7)
+        )
+        date_line = (
+            f"Današnji datum je {_now.strftime('%Y-%m-%d')} "
+            f"({_WEEKDAYS_HR[_now.weekday()]}), vrijeme {_now.strftime('%H:%M')}. "
+            f"Sljedećih 7 dana: {_next7}. "
+        )
         system = (
             "Ti si router za Croatian fleet-management WhatsApp bot. "
+            + date_line +
             "Korisnikov upit ide kroz tebe i ti odabireš JEDAN backend "
             "endpoint koji najbolje rješava upit. Endpoint pozivaš preko "
             "tool-calling — odabri tool i popuni argumente. "
             "PRAVILA: "
             "1) Odaberi TOČNO JEDAN tool od ponuđenih. NE izmišljaj tool koji nije u listi. "
             "2) Argumenti: popuni samo one koje korisnik eksplicitno spominje. "
-            "Brojevi (npr. 'rezervacija 123' → id=123). Datumi: ISO format. "
-            "Filtere koristi samo ako korisnik filtrira ('za vozilo DA053F'). "
+            "Brojevi (npr. 'rezervacija 123' → id=123). "
+            "Datumi: UVIJEK vrati u ISO 8601 ('YYYY-MM-DDTHH:MM:SS', ili 'YYYY-MM-DD' bez vremena). "
+            "Relativne izraze ('danas','sutra','prekosutra','u petak','idući tjedan') "
+            "PRETVORI u konkretan datum prema današnjem datumu navedenom gore — NE vraćaj riječ. "
             "3) Razlikuj kardinalnost: 'sve vozila' = LIST tool; 'vozilo 123' = BY_ID tool; "
             "'ukupno' = AGGREGATE. Pogledaj sufikse u tool nazivima. "
-            "4) Ako NIJEDAN tool ne pristaje, NE pozivaj nijedan tool — odgovori "
-            'kratkom tekstom "Ne razumijem zahtjev." '
+            "4) UVIJEK odaberi tool koji je NAJBLIŽI namjeri korisnika, čak i ako "
+            "nije savršen — korisnik na kraju bira i potvrđuje izbor. "
             "5) Akcija mora odgovarati: GET za čitanje, POST za kreiranje, "
             "PUT/PATCH za promjenu, DELETE za brisanje."
         )
@@ -215,7 +250,7 @@ class LLMRouter:
                         {"role": "user", "content": user_prompt},
                     ],
                     tools=tools_param,
-                    tool_choice="auto",
+                    tool_choice="required",
                     temperature=ROUTER_TEMPERATURE,
                     max_tokens=ROUTER_MAX_TOKENS,
                     timeout=ROUTER_CALL_TIMEOUT_S,

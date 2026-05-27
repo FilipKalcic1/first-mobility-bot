@@ -92,6 +92,9 @@ def _make_engine(executor, flow_store) -> V2Engine:
     # set to None so it falls back to the generic message (no LLM in tests).
     eng.api_error_translator = None
     eng.tkb_intents = {}
+    # _continue_flow now coerces params before execute (same as [C] path) —
+    # _coerce_llm_params reads self.tool_parameters; empty = no-op here.
+    eng.tool_parameters = {}
     return eng
 
 

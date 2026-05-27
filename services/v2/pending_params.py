@@ -48,6 +48,9 @@ class PendingParams:
     optional_remaining: list = field(default_factory=list)
     optional_offered: bool = False
     original_query: str = ""
+    # *TypeId resolver (Filip 2026-05-27): fetched {param: [[id, name], …]} so the
+    # ask-with-list render + answer-match don't re-fetch /…Types each turn.
+    type_options: dict = field(default_factory=dict)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False)

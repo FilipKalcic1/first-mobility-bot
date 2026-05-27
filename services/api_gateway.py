@@ -463,6 +463,10 @@ class APIGateway:
                 parts = []
                 for k, v in clean.items():
                     encoded_key = quote(str(k), safe='')
+                    if isinstance(v, bool):
+                        # JSON-style 'true'/'false', not Python str(True)='True'
+                        # (NALAZ 5, Filip 2026-05-25).
+                        v = "true" if v else "false"
                     if k == "Filter":
                         # Don't encode '=' as '%3D' because the API rejects it
                         # safe='=' keeps the equals sign unencoded in the value

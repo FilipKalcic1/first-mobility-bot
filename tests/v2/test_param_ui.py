@@ -1,6 +1,8 @@
 """Tests for param_ui: question rendering + answer parsing."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
 from services.v2 import param_ui
 
 
@@ -212,6 +214,15 @@ def test_parse_integer_returns_none_for_no_digits():
     assert param_ui.parse_param_value("", {"param_type": "integer"}) is None
 
 
+def test_parse_integer_decimal_comma_reasks():
+    """'12,5' for an integer field is a DECIMAL → re-ask (None), not a silent
+    125 (Filip 2026-05-25). Dot stays a thousand-separator ('42.500'→42500)."""
+    assert param_ui.parse_param_value("12,5", {"param_type": "integer"}) is None
+    assert param_ui.parse_param_value("3,75", {"param_type": "integer"}) is None
+    assert param_ui.parse_param_value("42.500", {"param_type": "integer"}) == 42500
+    assert param_ui.parse_param_value("42500", {"param_type": "integer"}) == 42500
+
+
 def test_parse_number_handles_croatian_decimal_comma():
     assert param_ui.parse_param_value("12,5", {"param_type": "number"}) == 12.5
     assert param_ui.parse_param_value("3.14", {"param_type": "number"}) == 3.14
@@ -339,3 +350,51 @@ def test_parse_empty_returns_none():
 def test_parse_no_param_def_returns_raw():
     """Defensive: missing param_def should fall back to raw text."""
     assert param_ui.parse_param_value("hello", None) == "hello"
+
+
+# ---- NALAZ 3/4/5 (Filip 2026-05-25): HR number separators + weekday/parts ----
+
+
+def test_parse_number_hr_thousands_and_decimal():
+    """Dot=thousands + comma=decimal when both present; multiple dots → re-ask;
+    a lone dot with 3 trailing digits is ambiguous (HR thousands) → re-ask;
+    2-digit decimal stays."""
+    assert param_ui.parse_param_value("1.500,75", {"param_type": "number"}) == 1500.75
+    assert param_ui.parse_param_value("3.14", {"param_type": "number"}) == 3.14
+    assert param_ui.parse_param_value("12,5", {"param_type": "number"}) == 12.5
+    assert param_ui.parse_param_value("1.500.000", {"param_type": "number"}) is None
+    # U1 (Filip 2026-05-26): "1.500" (lone dot, 3 digits) is ambiguous → re-ask
+    assert param_ui.parse_param_value("1.500", {"param_type": "number"}) is None
+
+
+def test_parse_integer_multiple_numbers_reasks():
+    """U3 (Filip 2026-05-26): a comma-separated second number ('5, 30000') must
+    not be merged into one integer (→530000) — re-ask instead. Dot thousands
+    ('42.500'→42500) unaffected."""
+    assert param_ui.parse_param_value("5, 30000", {"param_type": "integer"}) is None
+    assert param_ui.parse_param_value("12,5", {"param_type": "integer"}) is None
+    assert param_ui.parse_param_value("42.500", {"param_type": "integer"}) == 42500
+    assert param_ui.parse_param_value("42500", {"param_type": "integer"}) == 42500
+
+
+def test_parse_datetime_iso_passthrough():
+    """Already-ISO input is normalized + returned (so coercion keeps LLM ISO)."""
+    assert param_ui.parse_datetime_hr("2026-05-17T09:00:00") == "2026-05-17T09:00:00"
+    assert param_ui.parse_datetime_hr("2026-05-17") == "2026-05-17T00:00:00"
+    assert param_ui.parse_datetime_hr("2026-05-17", want_time=False) == "2026-05-17"
+
+
+def test_parse_datetime_weekday_resolves_to_future():
+    """'u petak' → the upcoming Friday (deterministic vs real 'today')."""
+    today = datetime.now(param_ui._ZAGREB).date()
+    out = param_ui.parse_datetime_hr("u petak", want_time=False)
+    d = datetime.fromisoformat(out).date()
+    assert d.weekday() == 4          # Friday
+    assert today < d <= today + timedelta(days=7)
+
+
+def test_parse_datetime_parts_of_day():
+    """'popodne' → 13:00 default; 'u 2 popodne' → 14:00 (PM shift)."""
+    assert param_ui.parse_datetime_hr("danas popodne").endswith("T13:00:00")
+    assert param_ui.parse_datetime_hr("danas u 2 popodne").endswith("T14:00:00")
+    assert param_ui.parse_datetime_hr("danas ujutro").endswith("T09:00:00")

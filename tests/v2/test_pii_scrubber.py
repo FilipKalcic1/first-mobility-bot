@@ -27,6 +27,15 @@ def test_phone_number_redacted():
     assert any(red.kind == "PHONE" for red in r.redactions)
 
 
+def test_phone_boundary_does_not_redact_14plus_digit_number():
+    """Digit boundary (Filip 2026-05-26): a 14+ digit run is not phone-shaped
+    and must stay intact — previously the regex matched its first 12 digits."""
+    s = PIIScrubber()
+    r = s.scrub("Broj 12345678901234 ostaje")
+    assert "12345678901234" in r.scrubbed_text
+    assert not any(red.kind == "PHONE" for red in r.redactions)
+
+
 def test_oib_redacted():
     s = PIIScrubber()
     r = s.scrub("Moj OIB je 12345678901")

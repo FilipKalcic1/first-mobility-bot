@@ -72,8 +72,10 @@ _PATTERNS: list[tuple[str, str, re.Pattern]] = [
 
     # Phone numbers: 8-12 digits, optionally prefixed by + or 00.
     # Matches Croatian mobile (385XX...) and landline (0XX...).
+    # Digit boundaries (like OIB/JMBG) so it doesn't redact a SUBSTRING of a
+    # longer number, nor a legitimate 14+ digit field value (Filip 2026-05-26).
     ("PHONE", "[PHONE_REDACTED]",
-     re.compile(r"(?:\+|00)?\d{8,12}")),
+     re.compile(r"(?<!\d)(?:\+|00)?\d{8,12}(?!\d)")),
 ]
 
 

@@ -220,8 +220,8 @@ async def test_happy_path_returns_tool_and_params(tmp_path):
     assert r.error is None
     # Confidence non-zero
     assert r.confidence > 0.5
-    # tool_choice=auto and tools passed
-    assert llm.completions.last_kwargs["tool_choice"] == "auto"
+    # tool_choice=required (force a pick from top-K) and tools passed
+    assert llm.completions.last_kwargs["tool_choice"] == "required"
     assert len(llm.completions.last_kwargs["tools"]) == 2
 
 

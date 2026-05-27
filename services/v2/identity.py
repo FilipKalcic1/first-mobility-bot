@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Optional
 
@@ -43,6 +43,14 @@ logger = logging.getLogger(__name__)
 # (hit at second 29, served until next refresh). Trade-off: 1 extra
 # Persons+MasterData call per minute of conversation. Worth the safety.
 _CACHE_TTL_SECONDS = 30
+
+# Privacy (Filip 2026-05-25): MasterData fields excluded from the cached driver
+# vehicle object used for Path-A LLM formatting. Financial amounts must never
+# surface in a self-service reply. Everything else (marka/model/status/boja/
+# registracija/km/…) is driver-relevant and kept.
+_VEHICLE_FIELD_BLOCKLIST = frozenset({
+    "InitialAmount", "MonthlyAmount", "RemainingAmount", "AcquiryComment",
+})
 
 # Redis key prefix.
 _REDIS_PREFIX = "v2:identity:"
@@ -91,6 +99,10 @@ class IdentitySnapshot:
     leasing_company: Optional[str] = None
     co2_emission: Optional[float] = None
     registration_expiry: Optional[str] = None  # ISO date
+    # Full whitelisted MasterData record (financial amounts excluded) — lets
+    # Path-A driver self-questions answer ANY vehicle field via the LLM
+    # formatter, not just the curated subset above (Filip 2026-05-25).
+    vehicle: dict = field(default_factory=dict)
 
     is_first_contact: bool = False
     is_known: bool = False
@@ -115,6 +127,7 @@ class IdentitySnapshot:
             "leasing_company": self.leasing_company,
             "co2_emission": self.co2_emission,
             "registration_expiry": self.registration_expiry,
+            "vehicle": self.vehicle,
             "is_known": self.is_known,
         }
 
@@ -139,6 +152,7 @@ class IdentitySnapshot:
             leasing_company=data.get("leasing_company"),
             co2_emission=data.get("co2_emission"),
             registration_expiry=data.get("registration_expiry"),
+            vehicle=data.get("vehicle") or {},
             is_first_contact=False,  # cache-hit means we've seen them
             is_known=bool(data.get("is_known", False)),
         )
@@ -589,6 +603,12 @@ class IdentityContext:
         snap.vehicle_id = (
             data.get("VehicleId") or data.get("vehicleId") or data.get("Id")
         )
+        # Cache the full vehicle record minus financial fields (Filip 2026-05-25)
+        # so Path-A self-questions can answer arbitrary vehicle fields via the
+        # LLM formatter — not just the curated columns set below.
+        snap.vehicle = {
+            k: v for k, v in data.items() if k not in _VEHICLE_FIELD_BLOCKLIST
+        }
         snap.vehicle_name = (
             data.get("VehicleName")
             or data.get("FullVehicleName")

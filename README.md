@@ -30,6 +30,13 @@ Infobip POST → webhook → Redis stream → worker → V2Engine.process_messag
    → Redis outbound list → Infobip POST
 ```
 
+## Known limits (honest status, 2026-05-25)
+
+- **Routing accuracy is the real cap.** Common/driver tools p@1 ~70–83%; the ~920 long-tail tools ~20% p@1 (+ gpt-4o-mini run-to-run `no_tool_call` variance). If the wrong tool is picked, nothing downstream matters. A real-data bench re-run is the highest-value next step — see [docs/ACCURACY_HONEST_2026-05-24.md](docs/ACCURACY_HONEST_2026-05-24.md).
+- **Filter is disabled (reset to zero).** The bot builds no `Filter` query param; the redesign is data-driven and waits on a MobilityOne filter-schema — see [docs/FILTER_REDESIGN_2026-05-25.md](docs/FILTER_REDESIGN_2026-05-25.md) + [docs/M1_ZAHTJEV_filter_2026-05-25.md](docs/M1_ZAHTJEV_filter_2026-05-25.md).
+- **~half the tool base isn't chat-drivable yet** due to backend Swagger gaps: 0 enums, 196 mutations without a named body-schema, only 28% of required params have descriptions. The fix is backend enrichment ([docs/M1_ZAHTJEV_params_2026-05-25.md](docs/M1_ZAHTJEV_params_2026-05-25.md)), not bot code.
+- **Output is bounded by what the tool returns.** L8 LLM formatter selects the relevant field(s) per the user's question, values verbatim from the JSON (grounded, no hallucination), with a deterministic template fallback — but it can only surface fields the response actually contains.
+
 ## Repository layout
 
 | Path | Purpose |

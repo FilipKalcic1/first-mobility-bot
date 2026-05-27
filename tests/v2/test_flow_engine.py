@@ -289,6 +289,35 @@ def test_confirm_unrecognized_input_re_asks():
     assert "Da" in out.response and "Ne" in out.response
 
 
+# ---- Unify (Filip 2026-05-27): shared parse_reply + booking label ----
+
+
+def test_confirm_parse_is_consistent_with_pending_mutation():
+    """Flow confirm uses the shared parse_reply: exact 'može' executes, but a
+    hesitant 'može biti' re-asks (not execute) — same as the general [C] path."""
+    engine = FlowEngine(FLOWS)
+
+    def _at_confirm():
+        o = engine.start("mileage", identity_context={
+            "person_id": "p1", "vehicle_id": "v1", "vehicle_name": "X"})
+        return engine.handle(o.new_state, "100000").new_state
+
+    assert engine.handle(_at_confirm(), "može").kind == OUTCOME_EXECUTE
+    assert engine.handle(_at_confirm(), "može biti").kind == OUTCOME_INVALID
+    assert engine.handle(_at_confirm(), "ne hvala").kind == OUTCOME_CANCELLED
+
+
+def test_render_prompt_shows_dict_label_not_repr():
+    """Booking's {chosen_vehicle} slot is a picked row dict — the confirm must
+    show its label, not the raw dict repr."""
+    from services.v2.flow_engine import _render_prompt
+    out = _render_prompt(
+        "Rezervirat ću vozilo {chosen_vehicle}.",
+        {"chosen_vehicle": {"Id": "veh-A", "label": "Škoda Octavia DA066F"}},
+    )
+    assert out == "Rezervirat ću vozilo Škoda Octavia DA066F."
+
+
 # --------------------------------------------------------------------------
 # Edge cases
 # --------------------------------------------------------------------------

@@ -45,6 +45,7 @@ LEAF_MODULES = {
     "optional_extractor",    # L5.7 LLM extract free-text → optional dict
     "api_error_translator",  # L7.5 LLM translate 4xx body → Croatian message
     "param_labeler",         # L5.7 LLM generate Croatian param labels
+    "type_resolver",         # L5.7 *TypeId FK word→id (fetch /…Types + match)
     "active_learning",       # offline: telemetry → actionable report
     "anchor_audit",          # offline: anchor quality → actionable report
     "executor",              # L7 API call + circuit breaker + idempotency
@@ -94,6 +95,11 @@ SIBLING_IMPORTS_ALLOWED = {
     # Lazy-imported inside _context_fallback to avoid import cycles —
     # this is a single-direction render-helper composition.
     "confidence_gate": {"clarify_ui"},
+    # flow_engine (L4) reuses pending_mutation's (L6) single Da/Ne classifier
+    # (`parse_reply`) so flow confirms parse IDENTICALLY to the general [C]
+    # path — one source of truth for "Da"/"Ne"/"može biti". Single-direction
+    # util reuse, no cycle (pending_mutation imports nothing from v2).
+    "flow_engine": {"pending_mutation"},
 }
 
 

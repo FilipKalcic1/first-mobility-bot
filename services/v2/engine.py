@@ -64,6 +64,7 @@ from services.v2.optional_extractor import OptionalParamExtractor
 from services.v2.api_error_translator import ApiErrorTranslator
 from services.v2.param_labeler import ParamLabeler
 from services.v2 import param_ui
+from services.v2 import type_resolver
 from services.v2.conversation_history import (
     ConversationHistoryStore, ConversationTurn,
 )
@@ -122,6 +123,8 @@ class V2Engine:
     # required params, (b) list optional params, (c) parse user answers
     # by `param_type`. Empty dict disables param-asking entirely.
     tool_parameters: dict = field(default_factory=dict)
+    # {param_name_lower: get_tool_id} for *TypeId FK resolution (Filip 2026-05-27)
+    typeid_map: dict = field(default_factory=dict)
     # LLM extractor for OPTIONAL params (Filip 2026-05-17). When set, the
     # engine collects all optionals in ONE turn from a free-text reply
     # instead of iterating one-by-one. None = degrade to "skip all optionals"
@@ -478,7 +481,7 @@ class V2Engine:
                     tenant_id=identity.tenant_id or "",
                     query=safe_query,
                 )
-                return self._format_basics(identity, safe_query)
+                return await self._format_basics(identity, safe_query)
 
         # ---- Flow request? Start flow directly ----
         if itype.kind == KIND_FLOW_REQUEST:
@@ -648,7 +651,7 @@ class V2Engine:
                 logger.warning("side_effect dispatch failed (%s): %s — action=%s",
                                type(e).__name__, e, action)
 
-    def _format_basics(
+    async def _format_basics(
         self, identity: IdentitySnapshot, query: str,
     ) -> str:
         data = {
@@ -664,12 +667,21 @@ class V2Engine:
             "PersonId":           identity.person_id,
             "TenantId":           identity.tenant_id,
         }
-        result = formatter.format_response(
-            template_id="vehicle_data_field",
-            api_response_data=data,
-            field_hint=query,  # match against natural-language query
+        # Alias-first (fast, deterministic, no LLM) for the common driver
+        # fields (km/registracija/vozilo…). On a miss (arbitrary field like
+        # "boja"/"dobavljač"), LLM-format the full cached vehicle object so
+        # Path-A answers ANY field (parity with Path-B), values verbatim.
+        if formatter.field_hint_resolves(query, list(data.keys())):
+            return formatter.format_response(
+                template_id="vehicle_data_field",
+                api_response_data=data,
+                field_hint=query,
+            ).text
+        return await self._format_reply(
+            query=query, tool_id="get_MasterData",
+            api_data=identity.vehicle or data, identity=identity,
+            field_hint=query, template_id="vehicle_data_field",
         )
-        return result.text
 
     def _identity_summary(self, identity: IdentitySnapshot) -> str:
         if not identity.is_known:
@@ -682,6 +694,45 @@ class V2Engine:
         if identity.licence_plate:
             bits.append(f"({identity.licence_plate})")
         return ", ".join(bits) or "(driver)"
+
+    async def _format_reply(
+        self, *, query: Optional[str], tool_id: str, api_data,
+        identity: IdentitySnapshot,
+        field_hint: Optional[str] = None,
+        template_id: Optional[str] = None,
+        extra_context: Optional[dict] = None,
+    ) -> str:
+        """Question-aware LLM formatting of a tool result, grounded in the
+        JSON (values are taken verbatim from the source → no hallucination;
+        the LLM only selects which field(s) answer the user's question). Falls
+        back to the deterministic template formatter if the LLM call fails."""
+        try:
+            res = await self.formatter_llm.format(
+                query=query or "",
+                tool_id=tool_id,
+                api_data=api_data,
+                identity_summary=self._identity_summary(identity),
+            )
+            if res.error is None and res.text:
+                return res.text
+        except Exception as e:  # noqa: BLE001 — never let formatting break the reply
+            logger.warning("LLM formatter failed (%s); template fallback", e)
+        return formatter.format_response(
+            template_id=template_id, api_response_data=api_data,
+            field_hint=field_hint, extra_context=extra_context,
+        ).text
+
+    async def _invalidate_identity(self, phone: str) -> None:
+        """Best-effort: drop the identity cache after a mutation so the next
+        read refetches fresh. Never raises — invalidation is an optimization
+        (the 30s TTL is the safety net), and some wirings lack the context."""
+        ctx = getattr(self, "identity", None)
+        if ctx is None:
+            return
+        try:
+            await ctx.invalidate(phone)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("identity invalidate failed: %s", e)
 
     @staticmethod
     def _guess_flow_name(query: str) -> Optional[str]:
@@ -716,6 +767,39 @@ class V2Engine:
     ) -> str:
         outcome = self.flow_engine.handle(state, user_input)
 
+        # Resolve EXEC_LOOKUP steps inline: the flow signals a read call with
+        # OUTCOME_PROMPT + tool_id + response=None. We run it, shape the rows
+        # into ASK_CHOICE options, feed them back, and loop until the flow asks
+        # the USER something or finishes. Bounded against malformed flow data.
+        # (This is what makes the booking lookup actually run — previously the
+        # engine returned the literal "..." here, so booking died on this step.)
+        for _ in range(4):
+            if not (
+                outcome.kind == OUTCOME_PROMPT
+                and outcome.tool_id
+                and outcome.response is None
+            ):
+                break
+            lookup_state = outcome.new_state or state
+            choices = await self._run_flow_lookup(
+                outcome.tool_id, outcome.params, identity,
+            )
+            if choices is None:  # lookup call failed
+                await self.flow_store.clear(phone)
+                return (
+                    "Trenutno ne mogu dohvatiti podatke za ovaj korak. "
+                    "Pokušaj ponovo malo kasnije."
+                )
+            if not choices:  # call ok but nothing available
+                await self.flow_store.clear(phone)
+                return (
+                    "Nema dostupnih opcija za traženo. "
+                    "Pokušaj s drugim parametrima."
+                )
+            outcome = self.flow_engine.handle(
+                lookup_state, "", lookup_result=choices,
+            )
+
         if outcome.kind == OUTCOME_INVALID:
             if outcome.new_state is not None:
                 await self.flow_store.save(phone, outcome.new_state)
@@ -724,9 +808,6 @@ class V2Engine:
         if outcome.kind == OUTCOME_PROMPT:
             if outcome.new_state is not None:
                 await self.flow_store.save(phone, outcome.new_state)
-            # If the engine wants a tool lookup (EXEC_LOOKUP step),
-            # the caller can run it and feed lookup_result back in
-            # the next call. For POC v2 this is single-turn UI.
             return outcome.response or "..."
 
         if outcome.kind == OUTCOME_CANCELLED:
@@ -736,27 +817,30 @@ class V2Engine:
         if outcome.kind == OUTCOME_EXECUTE:
             # ORCH-1 fix (Filip 2026-05-20): pass real tenant identity, not {}.
             # executor.execute refuses tenant-scoped tools with missing_tenant_id
-            # if identity_summary lacks tenant_id — which silently broke ALL
-            # flows (booking/mileage/case) end-to-end after the user confirmed.
+            # if identity_summary lacks tenant_id.
             identity_summary = (
                 self._minimal_identity(identity) if identity is not None else {}
             )
+            # Same coercion as the [C] path so flow params ship normalized too
+            # (HR "12,5"→12.5, "17.05.2026"→ISO, whole-float→int).
+            params = self._coerce_llm_params(outcome.tool_id, outcome.params)
             exec_result = await self.executor.execute(
                 tool_id=outcome.tool_id,
-                params=outcome.params,
+                params=params,
                 identity_summary=identity_summary,
             )
             if not exec_result.success:
                 # ORCH-4 fix: do NOT clear flow state on failure — keep it so
                 # the user can retry the confirm instead of losing all progress.
-                # (Previously state was cleared before execute → fail = dead flow.)
-                translated = await self._render_execution_failure(
+                return await self._render_execution_failure(
                     exec_result, outcome.tool_id,
                     generic=f"Akcija nije uspjela: {exec_result.error}",
                 )
-                return translated
             # Success → now safe to clear flow state.
             await self.flow_store.clear(phone)
+            # Driver data may have changed (e.g. mileage write) → drop identity
+            # cache so the next read refetches fresh (Filip 2026-05-25).
+            await self._invalidate_identity(phone)
             r = formatter.format_response(
                 template_id="mutation_success",
                 api_response_data=exec_result.data,
@@ -770,13 +854,153 @@ class V2Engine:
 
         return "Postupak."
 
+    @staticmethod
+    def _extract_rows(data: object) -> list:
+        """Unwrap a MobilityOne list response (bare list or `{Data:[...]}` /
+        other common envelope keys) into a list of row dicts. Local copy keeps
+        the flow-lookup self-contained (no cross-module private access)."""
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            for k in ("Data", "data", "Result", "Results", "Items", "items", "value"):
+                if isinstance(data.get(k), list):
+                    return data[k]
+            if data.get("Id") is not None or data.get("id") is not None:
+                return [data]
+        return []
+
+    async def _run_flow_lookup(
+        self, tool_id: str, params: dict,
+        identity: Optional[IdentitySnapshot],
+    ) -> Optional[list]:
+        """Run a flow EXEC_LOOKUP read call and shape the rows into ASK_CHOICE
+        options. Returns a list of `{**row, "label", "Id"}` dicts, `[]` if the
+        call succeeded but returned nothing, or `None` if the call failed.
+
+        Defensive on shape (M1 response shape is verified at smoke, not here):
+        envelope is unwrapped via the shared extractor; `Id` is taken with
+        fallbacks (it's the load-bearing field for the follow-up mutation);
+        `label` falls back through the common vehicle display fields."""
+        try:
+            res = await self.executor.execute(
+                tool_id=tool_id, params=params or {},
+                identity_summary=(
+                    self._minimal_identity(identity) if identity is not None else {}
+                ),
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("flow lookup %s raised: %s", tool_id, e)
+            return None
+        if not res.success:
+            logger.warning("flow lookup %s failed: %s", tool_id, res.error)
+            return None
+        rows = self._extract_rows(res.data)
+        choices: list = []
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            rid = r.get("Id") or r.get("id") or r.get("VehicleId")
+            if rid is None:
+                continue
+            # Field order verified against a live get_AvailableVehicles row
+            # (Filip's dev creds 2026-05-27): DisplayName + LicencePlate exist;
+            # FullVehicleName/Name do not — kept as harmless fallbacks for
+            # other future lookup flows.
+            label = (
+                r.get("DisplayName") or r.get("LicencePlate")
+                or r.get("FullVehicleName") or r.get("Name") or str(rid)
+            )
+            choices.append({**r, "label": str(label), "Id": rid})
+        return choices
+
     _RISKY_WARN_HR = (
         "Napomena: ovaj alat je nedovoljno opisan u sustavu i možda neće "
         "raditi iz prve. Ako javi grešku, kontaktiraj managera.\n\n"
     )
 
-    def _render_confirm_pending(self, mut, tool_id: str = "") -> str:
-        base = mut.confirm_message
+    @staticmethod
+    def _fmt_echo_value(value) -> str:
+        """Human-readable value for the pre-execute echo: ISO date →
+        dd.mm.yyyy (+ HH:MM if present), bool → da/ne, else verbatim."""
+        if isinstance(value, bool):
+            return "da" if value else "ne"
+        if (
+            isinstance(value, str) and len(value) >= 10
+            and value[4] == "-" and value[7] == "-" and value[:4].isdigit()
+        ):
+            out = f"{value[8:10]}.{value[5:7]}.{value[:4]}"
+            if len(value) >= 16 and value[10] in ("T", " ") and value[13] == ":":
+                out += f" {value[11:16]}"
+            return out
+        return str(value)
+
+    # Context params the user never types but that ARE the action's target —
+    # shown resolved to a human NAME (Vozilo: DA053F), never the raw UUID. Only
+    # these are meaningful to surface; person_id (= you) and tenant_id are
+    # implicit plumbing and stay hidden.
+    _CONTEXT_ECHO_LABELS = {
+        "vehicle_id": "Vozilo",
+        "company_id": "Tvrtka",
+        "org_unit_id": "Org. jedinica",
+    }
+
+    def _build_context_display(self, tool_id: str, identity) -> dict:
+        """{HR-label: name} for the meaningful context params THIS tool injects
+        (vehicle / company / org-unit), resolved to identity names. Lets the echo
+        show 'Vozilo: DA053F' (the target) even though the UUID is injected later
+        in the executor and is never in `params` at confirm time."""
+        spec = self.tool_parameters.get(tool_id) or {}
+        name_by_key = {
+            "vehicle_id": getattr(identity, "vehicle_name", None),
+            "company_id": getattr(identity, "company_name", None),
+            "org_unit_id": getattr(identity, "org_unit_name", None),
+        }
+        out: dict = {}
+        for pdef in spec.values():
+            if not isinstance(pdef, dict):
+                continue
+            if (pdef.get("dependency_source") or "") != "context":
+                continue
+            label = self._CONTEXT_ECHO_LABELS.get(pdef.get("context_key"))
+            value = name_by_key.get(pdef.get("context_key"))
+            if label and value:
+                out[label] = str(value)
+        return out
+
+    def _render_param_echo(
+        self, tool_id: str, params: dict, type_display: Optional[dict] = None,
+        context_display: Optional[dict] = None,
+    ) -> str:
+        """Echo the FULL human-readable input before a mutation confirm so the
+        user can verify it (QB-style transparency):
+          1) the target context as a NAME ('Vozilo: DA053F' — never the UUID),
+          2) each user-provided value (`*TypeId` FKs shown as 'Gorivo', not 3).
+        Hides plumbing (person/tenant ids, params the user never set). Field
+        labels are humanized (HR label file deferred). Returns "" if empty."""
+        spec = self.tool_parameters.get(tool_id) or {}
+        disp = type_display or {}
+        lines: list[str] = []
+        # 1) Target context first — the WHO/WHERE of the action.
+        for label, value in (context_display or {}).items():
+            if value not in (None, ""):
+                lines.append(f"• {label}: {value}")
+        # 2) User-provided values — the WHAT.
+        for name, value in (params or {}).items():
+            if value is None or value == "":
+                continue
+            pdef = spec.get(name) or {}
+            if (pdef.get("dependency_source") or "user_input") != "user_input":
+                continue
+            label = param_ui.humanize_param_name(name) or name
+            label = label[:1].upper() + label[1:]
+            shown = disp.get(name) or self._fmt_echo_value(value)
+            lines.append(f"• {label}: {shown}")
+        if not lines:
+            return ""
+        return "Provjeri prije slanja:\n" + "\n".join(lines) + "\n\n"
+
+    def _render_confirm_pending(self, mut, tool_id: str = "", echo: str = "") -> str:
+        base = (echo or "") + mut.confirm_message
         if tool_id and tool_id in self.risky_tool_ids:
             return self._RISKY_WARN_HR + base
         return base
@@ -943,7 +1167,19 @@ class V2Engine:
                 extra={"action": chosen_label},
             )
 
-            top_cands = list(route_result.top_candidates or [])[:3]
+            # LLM pick leads the picker: it read the candidates' intent_summaries
+            # to disambiguate, so its choice (when valid) is a better card #1 than
+            # raw anchor cosine. Anchor candidates fill the remaining slots, deduped.
+            # Falls back to pure anchor order when the LLM declined/hallucinated
+            # (tool_id absent → not in the anchor set).
+            _score_by_id = dict(route_result.top_candidates or [])
+            _llm_pick = route_result.tool_id
+            _anchor_ids = [tid for tid, _ in (route_result.top_candidates or [])]
+            _ordered_ids = (
+                ([_llm_pick] if _llm_pick in _score_by_id else [])
+                + [tid for tid in _anchor_ids if tid != _llm_pick]
+            )
+            top_cands = [(tid, _score_by_id.get(tid, 0.0)) for tid in _ordered_ids[:3]]
             if not top_cands:
                 await self.pending_clarify_store.clear(phone)
                 return (
@@ -1059,8 +1295,10 @@ class V2Engine:
         # yet have. If yes, persist pending_params + ask. If all required
         # filled but optional exist, offer them. Otherwise fall through to
         # the existing mutation gate / execute path.
+        type_display: dict = {}
         param_response = await self._maybe_start_param_collection(
-            phone, tool_id, params, pending.original_query,
+            phone, tool_id, params, pending.original_query, identity,
+            type_display=type_display,
         )
         if param_response is not None:
             return param_response
@@ -1068,6 +1306,8 @@ class V2Engine:
         return await self._run_gate_and_execute(
             phone, tool_id, params, identity,
             field_hint=chosen.get("field_hint"),
+            query=pending.original_query,
+            type_display=type_display,
         )
 
     # ------------------------------------------------------------------
@@ -1188,9 +1428,47 @@ class V2Engine:
                 out[pname] = label
         return out
 
+    async def _resolve_type_param(self, param_name, text, identity):
+        """Resolve a `*TypeId` FK param from the user's words: fetch the
+        `/…Types` list via the executor + match the text to a Name. Returns
+        `(matched_id|None, pairs|None)`. `pairs is None` → not a resolvable
+        *TypeId (caller falls back to normal param-ask). `pairs` set with id
+        None → found the list but no unique match (use it as a pick-list)."""
+        tmap = getattr(self, "typeid_map", None) or {}
+        get_tool = tmap.get((param_name or "").lower())
+        if not get_tool:
+            return None, None
+        try:
+            res = await self.executor.execute(
+                tool_id=get_tool, params={},
+                identity_summary=self._minimal_identity(identity),
+            )
+            rows = res.data if getattr(res, "success", False) else None
+        except Exception as e:  # noqa: BLE001
+            logger.warning("type-resolve fetch failed for %s: %s", param_name, e)
+            rows = None
+        if rows is None:
+            return None, None
+        pairs = type_resolver.rows_to_pairs(rows)
+        if not pairs:
+            return None, None
+        mid, _ = type_resolver.match(text or "", pairs)
+        return mid, pairs
+
+    async def _render_type_question(self, tool_id, param, pairs):
+        """Ask for a *TypeId by LISTING the available type names (the user
+        types a word, which the answer-matcher resolves to the id)."""
+        pdef = (self.tool_parameters.get(tool_id) or {}).get(param)
+        label = (await self._label_for(tool_id, param, pdef)) or param
+        names = ", ".join(str(n) for _, n in pairs[:20])
+        return (
+            f"Koji {label}? Dostupno: {names}. "
+            "Napiši naziv ili 'odustani' za otkaz."
+        )
+
     async def _maybe_start_param_collection(
         self, phone: str, tool_id: str, collected: dict,
-        original_query: str,
+        original_query: str, identity=None, type_display: Optional[dict] = None,
     ) -> Optional[str]:
         """Decide whether the chosen tool needs to ask for missing params.
 
@@ -1202,6 +1480,40 @@ class V2Engine:
         if self.pending_params_store is None or not self.tool_parameters:
             return None  # feature disabled / no registry → skip
         missing = self._compute_missing_required(tool_id, collected)
+        # *TypeId resolver (Filip 2026-05-27): auto-resolve FK type params from
+        # the original query (fetch /…Types + match Name), and pre-fetch option
+        # lists so the ask can show names. Mutates `collected` in place so an
+        # auto-resolved id flows to execute. Degrades to normal ask if /…Types
+        # is unreachable (e.g. M1 token down).
+        type_options: dict = {}
+        if missing and identity is not None:
+            for pname in list(missing):
+                mid, pairs = await self._resolve_type_param(pname, original_query, identity)
+                if pairs:
+                    if mid is not None:
+                        collected[pname] = mid
+                        if type_display is not None:
+                            nm = next(
+                                (n for i, n in pairs if str(i) == str(mid)), None
+                            )
+                            if nm:
+                                type_display[pname] = nm
+                    else:
+                        type_options[pname] = pairs
+            missing = self._compute_missing_required(tool_id, collected)
+        # NALAZ 2 (Filip 2026-05-25): a required array/object param can't be
+        # built from free-text — asking for it would ship a raw string where
+        # the API wants a structured array (→ 422). Refuse honestly instead.
+        # Affects *_multipatch bulk tools (not chat-drivable anyway).
+        _spec = self.tool_parameters.get(tool_id) or {}
+        if any(
+            (_spec.get(n) or {}).get("param_type", "").lower() in ("array", "object")
+            for n in missing
+        ):
+            return (
+                "Ova akcija traži strukturiran unos (npr. popis stavki) koji "
+                "ne mogu pouzdano složiti iz poruke. Za ovu radnju javi se timu."
+            )
         optionals = self._user_friendly_optionals(tool_id, collected)
         if not missing and not optionals:
             return None  # nothing to ask, fall through
@@ -1216,9 +1528,12 @@ class V2Engine:
                     optional_remaining=list(optionals),
                     optional_offered=False,
                     original_query=original_query,
+                    type_options=type_options,
                 ),
             )
             first = missing[0]
+            if first in type_options:
+                return await self._render_type_question(tool_id, first, type_options[first])
             pdef = (self.tool_parameters.get(tool_id) or {}).get(first)
             label = await self._label_for(tool_id, first, pdef)
             return param_ui.render_param_question(
@@ -1336,13 +1651,21 @@ class V2Engine:
 
         param_name = pending.required_remaining[0]
         pdef = spec.get(param_name) or {}
-        value = param_ui.parse_param_value(text, pdef)
-        if value is None:
-            # Re-ask (don't advance) — keep state intact.
-            label = await self._label_for(tool_id, param_name, pdef)
-            return param_ui.render_param_reask(
-                param_name, pdef, label_override=label,
-            )
+        _opts = (pending.type_options or {}).get(param_name)
+        if _opts:
+            # *TypeId: match the user's word to a Name → id; else re-ask the list.
+            mid, _ = type_resolver.match(text, _opts)
+            if mid is None:
+                return await self._render_type_question(tool_id, param_name, _opts)
+            value = mid
+        else:
+            value = param_ui.parse_param_value(text, pdef)
+            if value is None:
+                # Re-ask (don't advance) — keep state intact.
+                label = await self._label_for(tool_id, param_name, pdef)
+                return param_ui.render_param_reask(
+                    param_name, pdef, label_override=label,
+                )
 
         # Store + advance.
         pending.collected[param_name] = value
@@ -1352,6 +1675,10 @@ class V2Engine:
         if pending.required_remaining:
             await self.pending_params_store.save(phone, pending)
             nxt = pending.required_remaining[0]
+            if nxt in (pending.type_options or {}):
+                return await self._render_type_question(
+                    tool_id, nxt, pending.type_options[nxt],
+                )
             nxt_pdef = spec.get(nxt)
             label = await self._label_for(tool_id, nxt, nxt_pdef)
             return param_ui.render_param_question(
@@ -1390,58 +1717,114 @@ class V2Engine:
             k: v for k, v in pending.collected.items()
             if not k.startswith("__")
         }
+        # U2 (Filip 2026-05-26): coerce here too so optional-extractor values
+        # (which merge into collected without per-param coercion) get the same
+        # normalization as the LLM path — no required/optional asymmetry.
+        params = self._coerce_llm_params(tool_id, params)
+        # Reverse-map asked *TypeId ids → names for the confirm echo (so it shows
+        # "Gorivo", not the id). pending.type_options holds (id,name) pairs for
+        # params that were asked with a pick-list.
+        type_display: dict = {}
+        for _p, _pairs in (getattr(pending, "type_options", None) or {}).items():
+            _v = params.get(_p)
+            if _v is not None:
+                _nm = next((n for i, n in _pairs if str(i) == str(_v)), None)
+                if _nm:
+                    type_display[_p] = _nm
         method = self.executor.method_of(tool_id) or "GET"
         mut = mutation_gate.decide_mutation(
-            tool_id=tool_id, method=method, params=params,
-            last_known_values={"last_mileage": identity.last_mileage},
-            entity_label=identity.vehicle_name or "zapis",
+            method=method, entity_label=identity.vehicle_name or "zapis",
         )
         if mut.decision != mutation_gate.DECISION_AUTO:
             await self.pending_mut_store.save(
                 phone, tool_id=tool_id, params=params, stage=STAGE_SINGLE,
             )
-            return self._render_confirm_pending(mut, tool_id=tool_id)
+            ctx_display = self._build_context_display(tool_id, identity)
+            echo = self._render_param_echo(
+                tool_id, params, type_display, ctx_display,
+            )
+            return self._render_confirm_pending(mut, tool_id=tool_id, echo=echo)
         exec_result = await self.executor.execute(
             tool_id=tool_id, params=params,
             identity_summary=self._minimal_identity(identity),
         )
         if not exec_result.success:
             return await self._render_execution_failure(exec_result, tool_id)
-        result = formatter.format_response(
-            template_id=None, api_response_data=exec_result.data,
+        return await self._format_reply(
+            query=pending.original_query, tool_id=tool_id,
+            api_data=exec_result.data, identity=identity,
             field_hint=pending.original_query or None,
             extra_context={"entity_label": identity.vehicle_name or "rezultata"},
         )
-        return result.text
+
+    def _coerce_llm_params(self, tool_id: str, params: dict) -> dict:
+        """Normalize LLM-extracted string values to their registry type before
+        execute (NALAZ 1, Filip 2026-05-25). The LLM path skips param_ui (only
+        param-ask coerces), so a HR-comma number ('12,5') or HR-format date
+        ('17.05.2026') could ship raw. Reuse param_ui.parse_param_value,
+        IMPROVE-ONLY: replace only when coercion succeeds AND the value is a
+        string of a coercible type; otherwise keep the original (native ints/
+        floats from the LLM and already-ISO dates pass through unchanged)."""
+        spec = self.tool_parameters.get(tool_id) or {}
+        if not spec:
+            return params
+        out = {}
+        for name, val in params.items():
+            pdef = spec.get(name)
+            if isinstance(val, str) and isinstance(pdef, dict):
+                ptype = (pdef.get("param_type") or "string").lower()
+                fmt = (pdef.get("format") or "").lower()
+                if ptype in ("integer", "number", "boolean") or fmt in ("date", "date-time"):
+                    coerced = param_ui.parse_param_value(val, pdef)
+                    if coerced is not None:
+                        out[name] = coerced
+                        continue
+            # R1 (Filip 2026-05-26): LLM sometimes emits a native float (42.0)
+            # for an integer field — normalize a WHOLE float to int. A non-whole
+            # float (42.5) is a wrong value, NOT ours to round → leave it (API
+            # rejects). bool is excluded (it's an int subclass, not float).
+            elif (
+                isinstance(pdef, dict)
+                and isinstance(val, float)
+                and (pdef.get("param_type") or "").lower() == "integer"
+                and val.is_integer()
+            ):
+                out[name] = int(val)
+                continue
+            out[name] = val
+        return out
 
     async def _run_gate_and_execute(
         self, phone: str, tool_id: str, params: dict,
         identity: IdentitySnapshot, field_hint: Optional[str] = None,
+        query: str = "", type_display: Optional[dict] = None,
     ) -> str:
         """Mutation gate → confirm-or-execute → format. Shared execute tail."""
+        params = self._coerce_llm_params(tool_id, params)
         method = self.executor.method_of(tool_id) or "GET"
         mut = mutation_gate.decide_mutation(
-            tool_id=tool_id, method=method, params=params,
-            last_known_values={"last_mileage": identity.last_mileage},
-            entity_label=identity.vehicle_name or "zapis",
+            method=method, entity_label=identity.vehicle_name or "zapis",
         )
         if mut.decision != mutation_gate.DECISION_AUTO:
             await self.pending_mut_store.save(
                 phone, tool_id=tool_id, params=params, stage=STAGE_SINGLE,
             )
-            return self._render_confirm_pending(mut, tool_id=tool_id)
+            ctx_display = self._build_context_display(tool_id, identity)
+            echo = self._render_param_echo(
+                tool_id, params, type_display, ctx_display,
+            )
+            return self._render_confirm_pending(mut, tool_id=tool_id, echo=echo)
         exec_result = await self.executor.execute(
             tool_id=tool_id, params=params,
             identity_summary=self._minimal_identity(identity),
         )
         if not exec_result.success:
             return await self._render_execution_failure(exec_result, tool_id)
-        result = formatter.format_response(
-            template_id=None, api_response_data=exec_result.data,
-            field_hint=field_hint,
+        return await self._format_reply(
+            query=query, tool_id=tool_id, api_data=exec_result.data,
+            identity=identity, field_hint=field_hint,
             extra_context={"entity_label": identity.vehicle_name or "rezultata"},
         )
-        return result.text
 
     async def _continue_pending_mutation(
         self, phone: str, pending, user_input: str,
@@ -1591,6 +1974,8 @@ class V2Engine:
                 )
             # Success — clear pending so the next "Da" doesn't replay it.
             await self.pending_mut_store.clear(phone)
+            # Mutation may have changed driver data → invalidate identity cache.
+            await self._invalidate_identity(phone)
         finally:
             await self.pending_mut_store.release_execution(phone)
         r = formatter.format_response(
@@ -1923,6 +2308,7 @@ async def make_v2_engine_for_production(
         catalog_scoper=catalog_scoper,
         pending_params_store=pending_params,
         tool_parameters=tool_parameters_index,
+        typeid_map=type_resolver.build_typeid_map(tool_entries),
         optional_extractor=optional_extractor,
         api_error_translator=api_error_translator,
         param_labeler=param_labeler,

@@ -80,6 +80,23 @@ class TestAPIGatewayInit:
         assert gw.base_url == "https://api.example.com"
 
 
+class TestQuerySerialization:
+    """_build_url value serialization (NALAZ 5, Filip 2026-05-25)."""
+
+    @patch("services.api_gateway.TokenManager")
+    @patch("services.api_gateway._get_settings")
+    def test_bool_query_param_is_json_lowercase(self, mock_settings_fn, mock_tm):
+        ms = MagicMock()
+        ms.MOBILITY_API_URL = "https://api.example.com"
+        ms.tenant_id = "t"
+        mock_settings_fn.return_value = ms
+        gw = APIGateway()
+        url = gw._build_url("/things", {"importScenario": True, "keepOld": False})
+        assert "importScenario=true" in url
+        assert "keepOld=false" in url
+        assert "True" not in url and "False" not in url
+
+
 class TestRowsDefault:
     """Test the GET request Rows default behavior.
 

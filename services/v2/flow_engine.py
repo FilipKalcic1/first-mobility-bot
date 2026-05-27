@@ -38,7 +38,18 @@ import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, time as dt_time, timedelta
+from zoneinfo import ZoneInfo
+
+# Resolve relative dates against Croatia, not the host TZ (prod may be UTC).
+try:
+    _ZAGREB = ZoneInfo("Europe/Zagreb")
+except Exception:  # noqa: BLE001
+    _ZAGREB = None
 from typing import Any, Callable, Optional
+
+# Reuse the single Da/Ne classifier so flow confirms parse IDENTICALLY to the
+# general [C] path (strict execute, lenient cancel, "može biti"→ambiguous).
+from services.v2.pending_mutation import STAGE_SINGLE, parse_reply
 
 logger = logging.getLogger(__name__)
 
@@ -302,9 +313,14 @@ class FlowEngine:
     def _handle_confirm(
         self, flow: Flow, state: FlowState, step: Step, user_input: str
     ) -> FlowOutcome:
-        """Final Da/Ne. Da → EXECUTE, Ne → CANCELLED."""
-        normalized = (user_input or "").strip().lower()
-        if normalized in ("da", "yes", "potvrdujem", "ok"):
+        """Final Da/Ne. Da → EXECUTE, Ne → CANCELLED, else re-ask.
+
+        Uses the shared `parse_reply` so flow confirms behave EXACTLY like the
+        general [C] confirm: strict execute (exact "da"/"može"/…), lenient
+        cancel ("ne hvala" still cancels), hesitant ("može biti") → re-ask.
+        """
+        action = parse_reply(user_input, STAGE_SINGLE)
+        if action == "execute":
             params = flow.final_params_builder(state.collected_params)
             return FlowOutcome(
                 kind=OUTCOME_EXECUTE,
@@ -312,13 +328,13 @@ class FlowEngine:
                 params=params,
                 new_state=None,  # caller clears state after executing
             )
-        if normalized in ("ne", "no", "odustani", "prekini", "cancel"):
+        if action == "cancel":
             return FlowOutcome(
                 kind=OUTCOME_CANCELLED,
                 response="U redu, odustao sam.",
                 new_state=None,
             )
-        # Unexpected input at confirm step — re-ask
+        # Ambiguous / hesitant input at confirm step — re-ask.
         return FlowOutcome(
             kind=OUTCOME_INVALID,
             response="Molim te odgovori sa 'Da' ili 'Ne'.",
@@ -516,7 +532,7 @@ def _parse_period(text: str) -> Optional[dict]:
     assumes local Europe/Zagreb). Returns None if parsing fails.
     """
     lower = text.lower().strip()
-    today = datetime.now()
+    today = datetime.now(_ZAGREB)
     date, rest, _src = _resolve_date(lower, today.date())
     if date is None:
         return None
@@ -553,10 +569,19 @@ def _invalid_message(step: Step) -> str:
 
 
 def _render_prompt(template: str, collected: dict) -> str:
-    """Substitute {slot} placeholders with values from collected_params."""
+    """Substitute {slot} placeholders with values from collected_params.
+
+    A dict-valued slot (e.g. booking's `chosen_vehicle`, a picked row) renders
+    its human label, not the raw dict repr — otherwise the booking confirm
+    would show "{'label': ..., 'Id': ...}".
+    """
     out = template
     for k, v in collected.items():
-        out = out.replace("{" + k + "}", str(v))
+        if isinstance(v, dict):
+            disp = v.get("label") or v.get("Name") or v.get("name") or ""
+            out = out.replace("{" + k + "}", str(disp))
+        else:
+            out = out.replace("{" + k + "}", str(v))
     return out
 
 
@@ -636,9 +661,10 @@ BOOKING_FLOW = Flow(
                 "(npr. 'sutra 9-15' ili '16.12.2025 9:00-17:00')"
             ),
         ),
-        # NOTE: in production a proper datetime parser fills from_time/to_time
-        # from period_text. For now the engine relies on caller resolving
-        # period_text → from_time + to_time before this step.
+        # ASK_PERIOD's validator (_parse_period) already fills from_time +
+        # to_time (ISO) into collected_params, so this lookup's template
+        # resolves them directly. The engine runs this read call and feeds
+        # the rows back as the ASK_CHOICE options (see _continue_flow).
         Step(
             kind=STEP_EXEC_LOOKUP,
             slot_name="available_choices",
