@@ -4,7 +4,7 @@
 
 **GATE:** ≥ 7/10 upita vrati semantički točan odgovor → bot može Damiru (mali krug). < 7 → stop, debug, iteriraj. **NE training-ati 100 vozača prije ovog.**
 
-> Napomena: `persona=None` je trenutno aktivan ([engine.py:966](../services/v2/engine.py#L966)) → svi korisnici vide pun tenant subset. **personas.json NIJE potreban** za ovaj test.
+> Napomena (2026-05-28): persona/personas.json je MAKNUT iz koda (backend OAuth scope je prava ACL). Svi korisnici vide pun tenant subset (`_default/tool_subset.json`, 594 toola). **Ne treba kreirati persona file** za ovaj test.
 
 ---
 

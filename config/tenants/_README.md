@@ -4,84 +4,48 @@ Each tenant subdirectory may contain:
 
 | File | Purpose | Required? | Loaded by |
 |---|---|---|---|
-| `tool_subset.json` | Whitelist of `operation_id`s this tenant is allowed to call (additional layer on top of registry `personas_strict`). Falls back to `_default/tool_subset.json` if missing. | Optional | [services/router/catalog_scoper.py](../../services/router/catalog_scoper.py) `_tenant_subset()` |
-| `personas.json` | Phone → role map. Phone numbers in this file get a non-default persona. Phones not listed default to `"driver"` (safest minimum scope). | Optional but **strongly recommended** for production | [services/v2/identity.py](../../services/v2/identity.py) `_resolve_persona()` |
+| `tool_subset.json` | Whitelist of `operation_id`s this tenant is allowed to route to. Falls back to `_default/tool_subset.json` if missing. | Optional | [services/router/catalog_scoper.py](../../services/router/catalog_scoper.py) `_tenant_subset()` |
 
-## How to create `personas.json` for a new tenant (FAZA 14 setup)
+## How it works
 
-### Step 1 — Find tenant UUID
+At request time, [catalog_scoper.scope()](../../services/router/catalog_scoper.py) looks up the user's `tenant_id` and resolves the candidate set:
+
+1. **Per-tenant override** at `config/tenants/{tenant_id}/tool_subset.json` if present (use its `allowed_tool_ids` list verbatim).
+2. **Default subset** at `config/tenants/_default/tool_subset.json` otherwise (594 user-facing tools curated 2026-05-16).
+3. **No file at all** → fallback to ALL tools in the registry (only `drop_internal` regex narrows the set).
+
+The result is then narrowed further by the per-request `methods` filter (chosen by Model A action picker) and the `drop_internal` flag (removes UI helpers, aggregations, schema endpoints).
+
+## Creating a tenant-specific subset
+
+Use this when a tenant should see a different (usually smaller) set of tools than `_default`. Typical case: post-launch telemetry shows the tenant only ever exercises ~30 daily-use tools — narrowing to that subset improves routing accuracy (smaller cosine pool, less LLM disambiguation).
 
 ```bash
-# Option A: from .env
+# 1. Find tenant UUID
 grep MOBILITY_TENANT_ID .env
 
-# Option B: from Python REPL (project root)
-python -c "from config import settings; print(settings.MOBILITY_TENANT_ID)"
-```
-
-Result is a UUID like `12345678-abcd-ef01-2345-67890abcdef0`.
-
-### Step 2 — Create directory
-
-```bash
+# 2. Create directory + file
 mkdir -p config/tenants/{uuid}
-```
-
-(Replace `{uuid}` with the real value.)
-
-### Step 3 — Create `personas.json`
-
-File format: simple JSON object mapping E.164 phone → role.
-
-```json
+cat > config/tenants/{uuid}/tool_subset.json <<'JSON'
 {
-  "+385951234567": "admin",
-  "+385952345678": "manager",
-  "+385953456789": "driver"
+  "tenant_id": "{uuid}",
+  "allowed_tool_ids": [
+    "get_MasterData",
+    "post_AddMileage",
+    "post_VehicleCalendar"
+  ]
 }
+JSON
+
+# 3. Deploy — mtime-cached, picks up on next request, no restart needed
+git add config/tenants/{uuid}/tool_subset.json
+git commit -m "feat: tenant {uuid} tool subset"
 ```
-
-**Valid persona values** (Faza 14 hierarchy):
-- `"driver"` — sees 18 tools (driver scope only)
-- `"manager"` — sees 245 tools (driver + manager scope, FAZA 14 hierarchy)
-- `"admin"` — sees 481 tools (all user-facing — driver + manager + admin)
-
-**Default for unlisted phones**: `"driver"` (most restrictive — safest, see [services/v2/identity.py:55](../../services/v2/identity.py#L55)).
-
-### Step 4 — Validate format
-
-```bash
-python -c "import json; json.load(open('config/tenants/{uuid}/personas.json'))"
-# No output = valid JSON
-```
-
-### Step 5 — Commit + deploy
-
-```bash
-git add config/tenants/{uuid}/personas.json
-git commit -m "feat: add personas.json for tenant {uuid} (Faza 14)"
-git push origin <branch>
-
-# On bot.damir.com:
-ssh azureuser@bot.damir.com "cd /path/to/nova-verzija && git pull && docker compose restart api worker"
-```
-
-The personas.json is mtime-cached, so the first request after restart picks up the new mapping; no rebuild needed.
-
-## Phone number formatting
-
-E.164 format with leading `+`:
-- ✅ `+385951234567` (international, with `+`)
-- ❌ `00385951234567` (with `00` prefix)
-- ❌ `0951234567` (national, no country code)
-- ❌ `385951234567` (no `+`)
-
-[services/v2/identity.py](../../services/v2/identity.py) normalizes incoming phones, but the lookup key in `personas.json` must match the normalized form (with leading `+`).
-
-## Why this file is not auto-generated
-
-MobilityOne `/Persons` endpoint doesn't yet expose role data per phone number, so the bot can't infer persona from upstream. This file is a manual override until backend adds the field.
 
 ## Security note
 
-The bot's MobilityOne ACL is enforced **server-side** (returns 403 for unauthorized calls). This file only affects **routing accuracy** — narrower candidate set means better cosine + LLM disambiguation. Setting someone to `"driver"` does NOT grant elevated privileges if backend rejects them.
+Tool whitelisting here is a **routing-accuracy aid**, not a security boundary. The MobilityOne backend enforces ACL via OAuth scope (HTTP 403 for unauthorized calls). Removing a tool from `tool_subset.json` only hides it from the router's candidate set — it does NOT grant or revoke any permission.
+
+## History
+
+Per-tenant `personas.json` (phone → role mapping) used to live here. It was removed 2026-05-28 (Filip) — backend OAuth scope is the real ACL, we had no reliable role source, and the persona filter had been a no-op since 2026-05-22. The `personas_strict` field stays in the tool registry as harmless metadata for audit/benchmark scripts.

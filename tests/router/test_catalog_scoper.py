@@ -1,7 +1,12 @@
-"""Tests for CatalogScoper — per-(tenant, persona) tool catalog narrowing.
+"""Tests for CatalogScoper — per-tenant tool catalog narrowing.
 
 These tests use synthetic tool_data + tenant configs so they don't depend
 on the real 950-tool catalog or any Damir audit being applied.
+
+Persona filter was removed 2026-05-28 (Filip rip) — backend OAuth scope is
+the real ACL. Scoper now does tenant_subset + methods + drop_internal only.
+The `personas_strict` field stays in fixtures because the real registry has
+it (harmless metadata), but no test asserts on persona behavior.
 """
 from __future__ import annotations
 
@@ -19,33 +24,31 @@ from services.router.catalog_scoper import CatalogScoper
 
 @pytest.fixture
 def tool_data() -> dict:
-    """6 synthetic tools spanning the four persona buckets."""
+    """6 synthetic tools across HTTP methods + an internal helper."""
     return {
         "tools": {
             "get_MasterData": {
-                "operation_id": "get_MasterData",
+                "operation_id": "get_MasterData", "method": "GET",
                 "personas_strict": ["driver"],
             },
             "post_AddMileage": {
-                "operation_id": "post_AddMileage",
+                "operation_id": "post_AddMileage", "method": "POST",
                 "personas_strict": ["driver"],
             },
             "get_Expenses_Agg": {
-                "operation_id": "get_Expenses_Agg",
+                "operation_id": "get_Expenses_Agg", "method": "GET",
                 "personas_strict": ["manager"],
             },
             "post_Companies": {
-                "operation_id": "post_Companies",
+                "operation_id": "post_Companies", "method": "POST",
                 "personas_strict": ["admin"],
             },
             "get_VehicleInputHelper_DistinctMakes": {
-                "operation_id": "get_VehicleInputHelper_DistinctMakes",
+                "operation_id": "get_VehicleInputHelper_DistinctMakes", "method": "GET",
                 "personas_strict": ["internal"],
             },
-            # Tool with no strict tag (legacy / missing audit) → only available
-            # when no persona filter is applied.
             "get_Untagged": {
-                "operation_id": "get_Untagged",
+                "operation_id": "get_Untagged", "method": "GET",
                 "personas_strict": None,
             },
         }
@@ -76,46 +79,22 @@ def _write_tenant(tenants_dir: Path, tenant_id: str, allowed: list[str]) -> None
 # Tests
 # ---------------------------------------------------------------------------
 
-def test_no_tenant_config_no_persona_returns_all_tools(tool_data, tenants_dir):
+def test_no_tenant_config_returns_all_tools(tool_data, tenants_dir):
     """Worst case: nothing configured at all → all tools allowed (legacy fallback)."""
     scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
-    scope = scoper.scope(tenant_id=None, persona=None)
+    scope = scoper.scope(tenant_id=None)
     assert scope == frozenset(tool_data["tools"].keys())
 
 
-def test_persona_filter_only_keeps_matching_tools(tool_data, tenants_dir):
-    """No tenant config but persona=driver → only the 2 driver-tagged tools."""
-    scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
-    scope = scoper.scope(tenant_id="any", persona="driver")
-    assert scope == frozenset({"get_MasterData", "post_AddMileage"})
-
-
 def test_default_tenant_subset_narrows_base(tool_data, tenants_dir):
-    """_default config narrows the candidate set before persona filtering.
-
-    Faza 14 (Filip 2026-05-19): persona is hierarchical — manager sees
-    driver+manager tools, admin sees all three. Tests reflect that.
-    """
+    """_default config narrows the candidate set to its allowed list."""
     _write_tenant(tenants_dir, "_default", [
         "get_MasterData", "post_AddMileage", "get_Expenses_Agg",
     ])
     scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
 
-    # Persona=driver intersected with _default → 2 driver tools
-    driver_scope = scoper.scope(tenant_id="anyone", persona="driver")
-    assert driver_scope == frozenset({"get_MasterData", "post_AddMileage"})
-
-    # Persona=manager → hierarchy {driver, manager} intersected with _default
-    # → driver tools (2) + manager tool (1) = 3 total
-    mgr_scope = scoper.scope(tenant_id="anyone", persona="manager")
-    assert mgr_scope == frozenset({
-        "get_MasterData", "post_AddMileage", "get_Expenses_Agg",
-    })
-
-    # Admin → hierarchy {driver, manager, admin} intersected with _default
-    # → all 3 in the list (post_Companies excluded from _default)
-    admin_scope = scoper.scope(tenant_id="anyone", persona="admin")
-    assert admin_scope == frozenset({
+    scope = scoper.scope(tenant_id="anyone")
+    assert scope == frozenset({
         "get_MasterData", "post_AddMileage", "get_Expenses_Agg",
     })
 
@@ -128,72 +107,88 @@ def test_per_tenant_override_takes_precedence(tool_data, tenants_dir):
     ])
     scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
 
-    # tenant_a → falls back to _default (only 1 driver tool)
-    a_scope = scoper.scope(tenant_id="tenant_a", persona="driver")
+    # tenant_a → falls back to _default
+    a_scope = scoper.scope(tenant_id="tenant_a")
     assert a_scope == frozenset({"get_MasterData"})
 
-    # tenant_b → uses its own subset (1 driver tool from its list)
-    b_scope = scoper.scope(tenant_id="tenant_b", persona="driver")
-    assert b_scope == frozenset({"post_AddMileage"})
-
-    # tenant_b manager (Faza 14 hierarchy: {driver, manager}) →
-    # both tools in tenant_b's subset (post_AddMileage = driver, get_Expenses_Agg = manager)
-    b_mgr = scoper.scope(tenant_id="tenant_b", persona="manager")
-    assert b_mgr == frozenset({"post_AddMileage", "get_Expenses_Agg"})
+    # tenant_b → uses its own subset
+    b_scope = scoper.scope(tenant_id="tenant_b")
+    assert b_scope == frozenset({"post_AddMileage", "get_Expenses_Agg"})
 
 
-def test_empty_tenant_subset_falls_through_to_default(tool_data, tenants_dir):
-    """Tenant file present but empty allowed_tool_ids → fall through to _default."""
+def test_empty_tenant_subset_results_in_unrestricted_scope(tool_data, tenants_dir):
+    """Tenant file present but empty `allowed_tool_ids` → _tenant_subset ignores
+    the file (warning logged) and returns None → scope() falls back to "all
+    tools allowed" (NOT to _default — the loader picked the tenant path and
+    never re-checks _default). Documents current behavior."""
     _write_tenant(tenants_dir, "_default", ["get_MasterData", "post_AddMileage"])
-    _write_tenant(tenants_dir, "tenant_broken", [])  # empty list
+    _write_tenant(tenants_dir, "tenant_broken", [])
     scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
 
-    scope = scoper.scope(tenant_id="tenant_broken", persona="driver")
-    assert scope == frozenset({"get_MasterData", "post_AddMileage"})
+    scope = scoper.scope(tenant_id="tenant_broken")
+    assert scope == frozenset(tool_data["tools"].keys())
 
 
-def test_internal_tools_filtered_out_for_driver_persona(tool_data, tenants_dir):
-    """The whole point — internal-only tools never reach a driver's router."""
+def test_methods_filter_keeps_only_matching_method(tool_data, tenants_dir):
+    """methods={'GET'} narrows to GET-only tools."""
     scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
-    scope = scoper.scope(tenant_id=None, persona="driver")
+    scope = scoper.scope(tenant_id=None, methods=frozenset({"GET"}))
+    assert scope == frozenset({
+        "get_MasterData", "get_Expenses_Agg",
+        "get_VehicleInputHelper_DistinctMakes", "get_Untagged",
+    })
+
+
+def test_methods_filter_post(tool_data, tenants_dir):
+    """methods={'POST'} narrows to POST-only tools."""
+    scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
+    scope = scoper.scope(tenant_id=None, methods=frozenset({"POST"}))
+    assert scope == frozenset({"post_AddMileage", "post_Companies"})
+
+
+def test_drop_internal_filters_internal_helpers(tool_data, tenants_dir):
+    """drop_internal=True removes tools matching the internal-helper regex
+    (e.g. _DistinctMakes/_GroupBy/_ProjectTo/...). Used by Model A action
+    picker to keep candidate cards clean of UI-helper endpoints."""
+    scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
+    scope = scoper.scope(tenant_id=None, drop_internal=True)
     assert "get_VehicleInputHelper_DistinctMakes" not in scope
+    # User-facing tools (incl. _Agg which is NOT in the regex) still present
+    assert "get_MasterData" in scope
+    assert "get_Expenses_Agg" in scope
 
 
 def test_cache_returns_identical_frozenset(tool_data, tenants_dir):
     """Repeat calls with same args must be cached (no I/O on second call)."""
     scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
-    a = scoper.scope(tenant_id="x", persona="driver")
-    b = scoper.scope(tenant_id="x", persona="driver")
+    a = scoper.scope(tenant_id="x")
+    b = scoper.scope(tenant_id="x")
     assert a is b  # same frozenset object — cache hit
 
 
-def test_tool_with_no_personas_strict_filtered_out_by_persona(tool_data, tenants_dir):
-    """get_Untagged has personas_strict=None — excluded when any persona is set."""
+def test_cache_separates_by_methods_and_drop_internal(tool_data, tenants_dir):
+    """Different (methods, drop_internal) combos cached independently."""
     scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
-    scope = scoper.scope(tenant_id=None, persona="driver")
-    assert "get_Untagged" not in scope
-
-    # But when no persona filter is applied AND no tenant subset, it's present
-    scope_no_filter = scoper.scope(tenant_id=None, persona=None)
-    assert "get_Untagged" in scope_no_filter
+    get_scope = scoper.scope(tenant_id="x", methods=frozenset({"GET"}))
+    post_scope = scoper.scope(tenant_id="x", methods=frozenset({"POST"}))
+    no_internal = scoper.scope(tenant_id="x", drop_internal=True)
+    assert get_scope != post_scope
+    assert get_scope != no_internal
 
 
 def test_mtime_invalidation_picks_up_updated_tool_subset(tool_data, tenants_dir):
     """When tool_subset.json is updated mid-process, next scope() call sees
     the new content — old workers don't need restart to pick up deploy pushes."""
     import os
-    import time
 
-    # Initial config: only get_MasterData allowed
     _write_tenant(tenants_dir, "_default", ["get_MasterData"])
     scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
 
-    scope_v1 = scoper.scope(tenant_id="anyone", persona="driver")
+    scope_v1 = scoper.scope(tenant_id="anyone")
     assert scope_v1 == frozenset({"get_MasterData"})
 
     # Simulate a deploy push: rewrite tool_subset.json with a different list.
-    # Bump mtime explicitly so filesystem-second-resolution doesn't mask
-    # the change (some FS only have 1s mtime granularity).
+    # Bump mtime explicitly so FS second-resolution doesn't mask the change.
     subset_path = tenants_dir / "_default" / "tool_subset.json"
     new_path_mtime = subset_path.stat().st_mtime + 2.0
     _write_tenant(tenants_dir, "_default", [
@@ -201,57 +196,18 @@ def test_mtime_invalidation_picks_up_updated_tool_subset(tool_data, tenants_dir)
     ])
     os.utime(subset_path, (new_path_mtime, new_path_mtime))
 
-    scope_v2 = scoper.scope(tenant_id="anyone", persona="driver")
+    scope_v2 = scoper.scope(tenant_id="anyone")
     assert scope_v2 == frozenset({"get_MasterData", "post_AddMileage"}), (
         f"expected cache invalidation after file update, got {scope_v2}"
     )
-    # Sanity: not the same object as before (truly recomputed)
     assert scope_v1 is not scope_v2
 
 
-# ---------------------------------------------------------------------------
-# Faza 14 (Filip 2026-05-19) — hierarchical persona scope
-# ---------------------------------------------------------------------------
-
-
-def test_driver_persona_sees_only_driver_tools(tool_data, tenants_dir):
-    """Driver-tier user gets the smallest scope — just driver-tagged tools."""
-    scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
-    scope = scoper.scope(tenant_id=None, persona="driver")
-    # Two driver tools in fixture; admin/manager/internal/untagged all out.
-    assert scope == frozenset({"get_MasterData", "post_AddMileage"})
-
-
-def test_manager_persona_sees_driver_and_manager_tools(tool_data, tenants_dir):
-    """Manager-tier user inherits driver scope — natural fleet supervision flow."""
-    scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
-    scope = scoper.scope(tenant_id=None, persona="manager")
-    assert scope == frozenset({
-        "get_MasterData", "post_AddMileage",  # driver
-        "get_Expenses_Agg",                    # manager
-    })
-
-
-def test_admin_persona_sees_all_user_facing_tools(tool_data, tenants_dir):
-    """Admin-tier user inherits driver+manager. Internal and untagged tools
-    remain excluded (untagged has personas_strict=None, internal is its
-    own bucket outside the hierarchy)."""
-    scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
-    scope = scoper.scope(tenant_id=None, persona="admin")
-    assert scope == frozenset({
-        "get_MasterData", "post_AddMileage",  # driver
-        "get_Expenses_Agg",                    # manager
-        "post_Companies",                       # admin
-    })
-
-
 def test_agg_tools_are_NOT_filtered_as_internal_2026_05_19(tool_data, tenants_dir):
-    """Faza 2026-05-19 (Filip bench finding): _Agg suffix was REMOVED
-    from drop_internal regex. Manager-facing aggregation tools
-    (e.g. get_CostCenters_Agg) must reach user candidate set; persona
-    filter handles the few _Agg tools marked personas_strict=['internal']."""
+    """2026-05-19 (Filip bench finding): `_Agg` suffix was REMOVED from the
+    drop_internal regex. Manager-facing aggregation tools (e.g.
+    get_CostCenters_Agg) must reach the candidate set. Other suffixes stay."""
     from services.router.catalog_scoper import is_internal_helper
-    # These _Agg tools are tagged personas_strict=['manager'] in real registry
     assert is_internal_helper("get_CostCenters_Agg") is False
     assert is_internal_helper("get_Companies_Agg") is False
     assert is_internal_helper("get_LatestPersonPeriodicActivities_Agg") is False
@@ -264,16 +220,6 @@ def test_agg_tools_are_NOT_filtered_as_internal_2026_05_19(tool_data, tenants_di
     assert is_internal_helper("post_Foo_multipatch") is True
 
 
-def test_unknown_persona_falls_back_to_exact_match(tool_data, tenants_dir):
-    """Faza 14 contract: PERSONA_HIERARCHY dict only knows driver/manager/admin.
-    A custom persona name (e.g., 'internal' for system jobs) falls back to
-    exact-match — preserving legacy behavior for non-standard roles."""
-    scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
-    scope = scoper.scope(tenant_id=None, persona="internal")
-    # Only the internal-tagged tool matches (no hierarchy, just exact match)
-    assert scope == frozenset({"get_VehicleInputHelper_DistinctMakes"})
-
-
 def test_mtime_invalidation_picks_up_added_tenant_override(tool_data, tenants_dir):
     """When a tenant-specific override file is ADDED post-startup, the next
     scope() call uses it instead of _default."""
@@ -281,13 +227,13 @@ def test_mtime_invalidation_picks_up_added_tenant_override(tool_data, tenants_di
     scoper = CatalogScoper(tool_data=tool_data, tenants_dir=tenants_dir)
 
     # First call sees _default (no tenant_b override yet)
-    scope_default = scoper.scope(tenant_id="tenant_b", persona="driver")
+    scope_default = scoper.scope(tenant_id="tenant_b")
     assert scope_default == frozenset({"get_MasterData", "post_AddMileage"})
 
     # Now create tenant_b-specific override
     _write_tenant(tenants_dir, "tenant_b", ["post_AddMileage"])
 
-    scope_override = scoper.scope(tenant_id="tenant_b", persona="driver")
+    scope_override = scoper.scope(tenant_id="tenant_b")
     assert scope_override == frozenset({"post_AddMileage"}), (
         "tenant override should be picked up on next call, not cached as _default"
     )

@@ -1,4 +1,4 @@
-"""Scope the 950-tool catalog down to a per-(tenant, persona) subset.
+"""Scope the 950-tool catalog down to a per-tenant subset.
 
 Phase E of the 2026-05-16 persona-restricted routing plan. Routing
 accuracy is bottlenecked by sibling rivalry — for short Croatian
@@ -13,8 +13,12 @@ Scoping rule (precedence, first match wins):
      — explicit `allowed_tool_ids` list. Used as-is.
   2. Default subset at config/tenants/_default/tool_subset.json
      — used when tenant has no override.
-  3. Persona filter on top of (1) or (2): keep only tools whose
-     `personas_strict` field contains the requested persona.
+
+Persona filtering was removed 2026-05-28 (Filip): we have no reliable
+source of user role (MobilityOne `TenantRoles` unverified), backend OAuth
+scope (HTTP 403) is the real ACL, and the filter had been a no-op since
+2026-05-22 (`persona=None`). The `personas_strict` field stays in the
+registry as harmless metadata — it's still read by audit/bench scripts.
 
 The function is PURE (no I/O at call-time): loading tenant configs
 happens once at engine factory. Repeated calls with the same args
@@ -22,7 +26,7 @@ return the same set instantly.
 
 API:
     scoper = CatalogScoper(tool_data, tenants_dir)
-    allowed: set[str] = scoper.scope(tenant_id="damir", persona="driver")
+    allowed: set[str] = scoper.scope(tenant_id="damir", methods={"GET"})
     # → ~50-100 operation_ids (instead of 950)
 """
 from __future__ import annotations
@@ -31,7 +35,6 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -44,27 +47,15 @@ _DEFAULT_TENANT = "_default"
 # Filtered out of any user-facing candidate set (Model A 2026-05-17).
 #
 # 2026-05-19 fix (Filip benchmark finding): `_Agg` was REMOVED from this
-# regex. Most _Agg tools (e.g. get_CostCenters_Agg) are tagged
-# personas_strict=['manager'] and are legitimate manager-facing
-# aggregation queries (e.g. "agregat troškova po centrima troškova").
-# Persona filter (FAZA 14) handles the few internal _Agg tools
-# (personas_strict=['internal']) correctly — no need for a blanket regex.
+# regex. Most _Agg tools are legitimate manager-facing aggregation queries
+# (e.g. "agregat troškova po centrima troškova"). The few internal _Agg
+# tools are tagged `personas_strict=['internal']` but that filter went
+# away with the 2026-05-28 persona rip — they're now filtered only by
+# this regex via _DistinctX/etc. (acceptable: noise risk is low).
 _INTERNAL_HELPER_SUFFIX = re.compile(
     r"_(Distinct[A-Z][A-Za-z0-9]*|GroupBy|ProjectTo|metadata|"
     r"DeleteByCriteria|multipatch)$"
 )
-
-# Faza 14 (Filip 2026-05-19): hierarchical persona scope.
-# A user with `manager` persona sees driver+manager tools (does driver work
-# as part of supervising the fleet). Admin sees everything user-facing.
-# MobilityOne backend ACL is the security boundary (returns 403 for
-# unauthorized calls) — this filter is purely a routing-accuracy aid:
-# narrower candidate set means cosine + LLM disambiguate better.
-PERSONA_HIERARCHY: dict[str, frozenset[str]] = {
-    "driver":  frozenset({"driver"}),
-    "manager": frozenset({"driver", "manager"}),
-    "admin":   frozenset({"driver", "manager", "admin"}),
-}
 
 
 def is_internal_helper(operation_id: str) -> bool:
@@ -80,27 +71,30 @@ def is_internal_helper(operation_id: str) -> bool:
 class CatalogScoper:
     tool_data: dict
     tenants_dir: Path
-    # Cache: (tenant_id, persona) → frozenset[op_id]
-    _scope_cache: dict[tuple[str, str], frozenset[str]] = field(default_factory=dict)
+    # Cache: (tenant_id, methods_tuple, drop_internal) → frozenset[op_id]
+    _scope_cache: dict[tuple, frozenset[str]] = field(default_factory=dict)
     # Cache: tenant_id → (Optional[set[str]], source_path_or_None, mtime)
     # source_path is the resolved tenants/<id>/tool_subset.json OR the _default
     # path OR None when no config exists. mtime invalidation re-reads on push.
     _tenant_allowed: dict[
         str, tuple[Optional[set[str]], Optional[Path], float]
     ] = field(default_factory=dict)
+    # Parallel to _scope_cache: stores the (source_path, mtime) the cached
+    # frozenset was computed against, so we can invalidate on file change.
+    _scope_cache_source: dict[
+        tuple, tuple[Optional[Path], float]
+    ] = field(default_factory=dict)
 
     def scope(
         self,
         tenant_id: Optional[str],
-        persona: Optional[str],
         *,
         methods: Optional[frozenset[str]] = None,
         drop_internal: bool = False,
     ) -> frozenset[str]:
-        """Return allowed operation_ids for this (tenant, persona) pair.
+        """Return allowed operation_ids for this tenant.
 
-        Empty inputs collapse to defaults: missing tenant → "_default";
-        missing persona → no persona filter (return tenant subset as-is).
+        Empty tenant collapses to "_default".
 
         ``methods`` (optional): set of HTTP methods to allow (e.g. {"GET"}
         or {"PUT", "PATCH"}). When provided, filter further by tool's
@@ -111,14 +105,13 @@ class CatalogScoper:
         aggregations, schema endpoints). Used to clean candidate pools
         before user-facing tool picker.
 
-        Per-call cost: typically O(1) cache hit + cheap stat() when methods
-        and drop_internal are False. With those flags set, cache key
-        includes them so each combination is cached separately.
+        Per-call cost: typically O(1) cache hit + cheap stat(). Cache key
+        includes methods/drop_internal so each combination is cached
+        separately.
         """
         t = (tenant_id or _DEFAULT_TENANT).strip() or _DEFAULT_TENANT
-        p = (persona or "").strip().lower()
         m_key = tuple(sorted(methods)) if methods else ()
-        key = (t, p, m_key, drop_internal)
+        key = (t, m_key, drop_internal)
 
         tenant_allowed, current_source, current_mtime = self._tenant_subset(t)
 
@@ -140,23 +133,8 @@ class CatalogScoper:
 
         tools = self.tool_data.get("tools", {})
 
-        # Resolve the persona-set the caller represents. For known personas
-        # (driver/manager/admin), use the hierarchy (manager-tier user also
-        # sees driver tools, etc.). For unknown persona strings, fall back
-        # to exact match — preserves legacy behavior for non-standard roles.
-        if p:
-            allowed_personas: frozenset[str] = PERSONA_HIERARCHY.get(
-                p, frozenset({p}),
-            )
-        else:
-            allowed_personas = frozenset()
-
         def _keep(op_id: str) -> bool:
             entry = tools.get(op_id, {})
-            if allowed_personas:
-                tool_personas = set(entry.get("personas_strict") or [])
-                if not (allowed_personas & tool_personas):
-                    return False
             if methods:
                 tool_method = (entry.get("method") or "").upper()
                 if tool_method not in methods:
@@ -171,17 +149,11 @@ class CatalogScoper:
         self._scope_cache[key] = scope
         self._scope_cache_source[key] = (current_source, current_mtime)
         logger.debug(
-            "catalog_scoper: tenant=%s persona=%s methods=%s drop_internal=%s "
+            "catalog_scoper: tenant=%s methods=%s drop_internal=%s "
             "→ %d tools (base=%d, src=%s)",
-            t, p, m_key, drop_internal, len(scope), len(base), current_source,
+            t, m_key, drop_internal, len(scope), len(base), current_source,
         )
         return scope
-
-    # Parallel to _scope_cache: stores the (source_path, mtime) the cached
-    # frozenset was computed against, so we can invalidate on file change.
-    _scope_cache_source: dict[
-        tuple[str, str], tuple[Optional[Path], float]
-    ] = field(default_factory=dict)
 
     def _tenant_subset(
         self, tenant_id: str,

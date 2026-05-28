@@ -33,8 +33,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -54,15 +53,6 @@ _VEHICLE_FIELD_BLOCKLIST = frozenset({
 
 # Redis key prefix.
 _REDIS_PREFIX = "v2:identity:"
-
-# Persona resolution: MobilityOne API doesn't (yet) expose role on the
-# /Persons response, so we read per-tenant phone→persona overrides from
-# config/tenants/{tenant_id}/personas.json. Anyone not in the override
-# file is treated as "driver" — the most-restricted (safest) default.
-Persona = Literal["driver", "manager", "admin"]
-_DEFAULT_PERSONA: Persona = "driver"
-# Repo-relative path; resolved against project root at lookup time.
-_TENANTS_DIR_REL = Path("config") / "tenants"
 
 
 @dataclass
@@ -87,9 +77,6 @@ class IdentitySnapshot:
     org_unit_name: Optional[str] = None
     company_id: Optional[str] = None
     org_unit_id: Optional[str] = None
-    # Drives persona-restricted routing (Phase D 2026-05-16). Defaults to
-    # "driver" if not overridden in config/tenants/{tenant_id}/personas.json.
-    persona: Persona = _DEFAULT_PERSONA
 
     vehicle_id: Optional[str] = None
     vehicle_name: Optional[str] = None
@@ -118,7 +105,6 @@ class IdentitySnapshot:
             "org_unit_name": self.org_unit_name,
             "company_id": self.company_id,
             "org_unit_id": self.org_unit_id,
-            "persona": self.persona,
             "vehicle_id": self.vehicle_id,
             "vehicle_name": self.vehicle_name,
             "licence_plate": self.licence_plate,
@@ -143,7 +129,6 @@ class IdentitySnapshot:
             org_unit_name=data.get("org_unit_name"),
             company_id=data.get("company_id"),
             org_unit_id=data.get("org_unit_id"),
-            persona=data.get("persona") or _DEFAULT_PERSONA,
             vehicle_id=data.get("vehicle_id"),
             vehicle_name=data.get("vehicle_name"),
             licence_plate=data.get("licence_plate"),
@@ -271,10 +256,6 @@ class IdentityContext:
         await self._populate_from_persons(snap)
         if snap.is_known and snap.person_id:
             await self._populate_from_masterdata(snap)
-        # Resolve persona AFTER tenant_id is set, so we can read the
-        # tenant's phone→persona override file.
-        if snap.tenant_id:
-            snap.persona = self._resolve_persona(snap.tenant_id, normalized)
 
         # Lazy onboarding: first time we successfully identify a phone,
         # write it to user_mappings so tenant_resolver can skip the
@@ -365,59 +346,6 @@ class IdentityContext:
             await self._redis.delete(_REDIS_PREFIX + normalized)
         except Exception as e:  # noqa: BLE001 — never crash the bot
             logger.warning("identity cache invalidate failed: %s", e)
-
-    # ---- persona resolution (Phase D 2026-05-16) ----
-
-    # Process-level cache: tenant_id → {normalized_phone: persona}
-    # Loaded lazily once per tenant; reloaded on file mtime change.
-    _persona_overrides_cache: dict[str, dict[str, "Persona"]] = {}
-    _persona_overrides_mtime: dict[str, float] = {}
-
-    @classmethod
-    def _resolve_persona(cls, tenant_id: str, normalized_phone: str) -> "Persona":
-        """Look up tenant's phone→persona map; fall back to driver.
-
-        File: config/tenants/{tenant_id}/personas.json
-            {
-              "385951234567": "admin",
-              "385991234567": "manager"
-            }
-
-        Anyone not listed is implicitly "driver". Missing file = all driver.
-        """
-        overrides = cls._load_persona_overrides(tenant_id)
-        return overrides.get(normalized_phone, _DEFAULT_PERSONA)
-
-    @classmethod
-    def _load_persona_overrides(cls, tenant_id: str) -> dict[str, "Persona"]:
-        # Repo root = three levels up from this file (services/v2/identity.py)
-        repo_root = Path(__file__).resolve().parents[2]
-        path = repo_root / _TENANTS_DIR_REL / tenant_id / "personas.json"
-        try:
-            mtime = path.stat().st_mtime if path.exists() else 0.0
-        except OSError:
-            return cls._persona_overrides_cache.get(tenant_id, {})
-
-        cached_mtime = cls._persona_overrides_mtime.get(tenant_id, -1.0)
-        if mtime == cached_mtime and tenant_id in cls._persona_overrides_cache:
-            return cls._persona_overrides_cache[tenant_id]
-
-        overrides: dict[str, Persona] = {}
-        if path.exists():
-            try:
-                raw = json.loads(path.read_text(encoding="utf-8"))
-                if isinstance(raw, dict):
-                    for phone, persona in raw.items():
-                        if persona in ("driver", "manager", "admin") and isinstance(phone, str):
-                            overrides[phone.strip()] = persona  # type: ignore[assignment]
-            except (OSError, ValueError) as e:
-                logger.warning(
-                    "personas.json unreadable for tenant=%s: %s — defaulting all to driver",
-                    tenant_id, e,
-                )
-        cls._persona_overrides_cache[tenant_id] = overrides
-        cls._persona_overrides_mtime[tenant_id] = mtime
-        return overrides
 
     # ------------------------------------------------------------------
     # Internals — kept small enough to hold in your head.

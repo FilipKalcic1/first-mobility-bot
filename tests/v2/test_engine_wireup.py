@@ -1612,18 +1612,16 @@ async def test_tool_with_only_array_optional_offers_nothing():
 
 
 @pytest.mark.asyncio
-async def test_model_a_scope_role_filter_disabled_for_launch():
-    """LAUNCH-OFF (Filip 2026-05-22): role filtering disabled — engine calls
-    catalog_scoper with persona=None (NOT identity.persona). Reason: we can't
-    verify MobilityOne returns usable role data yet, and defaulting everyone to
-    'driver' would break managers/admins. persona=None → tenant+method+
-    drop_internal filtering only. (Reverts to identity.persona once role_map
-    is wired — see engine.py comment + plan 🚦 LAUNCH-DAY ODLUKA.)"""
+async def test_model_a_scope_called_without_persona():
+    """Post-rip (Filip 2026-05-28): scoper.scope() takes tenant_id + methods
+    + drop_internal only — NO persona arg. Backend OAuth (HTTP 403) is the
+    real ACL; persona filter was a no-op since 2026-05-22 anyway."""
     captured: dict = {}
 
     class _StubScoper:
-        def scope(self, *, tenant_id, persona, methods=None, drop_internal=False):
-            captured["persona"] = persona
+        def scope(self, *, tenant_id, methods=None, drop_internal=False):
+            captured["tenant_id"] = tenant_id
+            captured["methods"] = methods
             captured["drop_internal"] = drop_internal
             return frozenset(["get_X"])
 
@@ -1633,7 +1631,6 @@ async def test_model_a_scope_role_filter_disabled_for_launch():
     engine.catalog_scoper = _StubScoper()
     await _bootstrap_known_user(engine, gateway)
 
-    # Seed a STAGE_ACTION_GLOBAL pending so the resolve branch fires
     await engine.pending_clarify_store.save(
         phone="+385955087196",
         candidates=[],
@@ -1642,10 +1639,9 @@ async def test_model_a_scope_role_filter_disabled_for_launch():
     )
     await engine.process_message("+385955087196", "1")
 
-    # Role filtering OFF for launch → persona must be None (not "driver").
-    assert captured.get("persona") is None
-    # drop_internal stays True — internal helpers always filtered
-    assert captured.get("drop_internal") is True
+    assert "persona" not in captured                # persona arg removed
+    assert captured.get("drop_internal") is True    # internal helpers filtered
+    assert captured.get("tenant_id") is not None    # tenant still passed
 
 
 # --------------------------------------------------------------------------

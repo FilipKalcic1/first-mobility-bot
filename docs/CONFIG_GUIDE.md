@@ -2,6 +2,8 @@
 
 Verziju: 2026-05-16. Post-Phase-E + production safety fixes.
 
+> ⚠️ **DJELOMIČNO ZASTARJELO (2026-05-28):** dijelovi ovog dokumenta o `personas.json` / `persona` resolution / FAZA 14 hijerarhiji više nisu točni — persona infrastruktura je uklonjena 2026-05-28 (backend OAuth scope je prava ACL). Za current tenant config semantics vidi [config/tenants/_README.md](../config/tenants/_README.md). `tool_subset.json` mehanizam ostaje aktivan.
+
 ---
 
 ## Vizualna mapa

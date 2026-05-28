@@ -1126,32 +1126,15 @@ class V2Engine:
             chosen_label = action_options.cards[idx].short_label
             allowed_methods = clarify_ui.methods_for_action_label(chosen_label)
 
-            # Silent filters: chosen action's methods + internal blacklist + persona.
-            # Faza 14 (Filip 2026-05-19): persona filter RESTORED with HIERARCHY.
-            # Driver-tier sees driver scope (~18); manager-tier driver+manager;
-            # admin all user-facing. (Exact counts drift with registry changes —
-            # e.g. the 2026-05-19 _Agg unhide added ~47 manager tools — so we
-            # don't pin them here; the set-intersection logic is the contract.)
-            # Backend ACL (MobilityOne 403) remains the security boundary —
-            # this filter is purely a routing-accuracy aid (narrower candidate
-            # set = better cosine + LLM disambiguation).
-            # LAUNCH-OFF (Filip 2026-05-22): role filtering disabled with
-            # persona=None. We can't reliably derive a user's role yet —
-            # MobilityOne /Persons declares a TenantRoles field but we haven't
-            # verified the live API populates it or what values it carries, and
-            # identity.persona otherwise defaults everyone to "driver" (18 tools)
-            # which would BREAK managers/admins (incl. Damir). With persona=None
-            # the scoper applies tenant-subset + method + drop_internal only, so
-            # every user reaches their tools (MobilityOne 403 is the real ACL).
-            # UPGRADE PATH: once a real /Persons response confirms TenantRoles,
-            # add config/role_map.json + read it in identity._populate_from_persons,
-            # then restore persona=identity.persona here. FAZA 14 scoper logic is
-            # intentionally left intact (no-op while persona=None).
+            # Silent filters: tenant subset + chosen action's methods + internal
+            # blacklist. Persona filter was removed 2026-05-28 (Filip rip):
+            # backend OAuth scope (HTTP 403) is the real ACL; we have no
+            # reliable role source to make per-user filtering meaningful.
+            # Narrowing here is purely a routing-accuracy aid.
             tool_filter: Optional[frozenset[str]] = None
             if self.catalog_scoper is not None:
                 tool_filter = self.catalog_scoper.scope(
                     tenant_id=identity.tenant_id,
-                    persona=None,
                     methods=frozenset(allowed_methods) if allowed_methods else None,
                     drop_internal=True,
                 )
