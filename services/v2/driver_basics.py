@@ -84,6 +84,15 @@ _KEYWORD_PATTERNS: tuple[re.Pattern, ...] = (
     re.compile(r"^\s*casco(?:\s+(?:ist[ji]?e[čc]e|polica))?\s*[\.!?]?\s*$", re.IGNORECASE),
     # "lizing kuća" / "leasing kuca" — leasing company short form
     re.compile(r"^\s*(?:lizing|leasing)\s+ku[ćcč]a?\s*[\.!?]?\s*$", re.IGNORECASE),
+    # DIO 1 fix (Filip 2026-05-29): "tko sam ja" / "moje ime" / "moji podaci"
+    # — personal-info queries. L2a sometimes routes these as KIND_OTHER (low
+    # confidence "tko sam ja" is borderline meta-intent vs question-about-
+    # self), so L2b shortcut never fires. Keyword fallback ensures direct
+    # path to identity reply.
+    re.compile(r"\btko\s+sam\s+ja\b", re.IGNORECASE),
+    re.compile(r"\b(?:kako\s+se\s+zovem|moje\s+ime|moji\s+podaci|moj\s+profil)\b", re.IGNORECASE),
+    re.compile(r"\b(?:gdje|u\s+kojoj)\s+(?:radim|tvrtki|firmi)\b", re.IGNORECASE),
+    re.compile(r"\bmoj\s+(?:broj|telefon|mobitel)\b", re.IGNORECASE),
 )
 
 

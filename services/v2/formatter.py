@@ -213,7 +213,17 @@ def _render_field(data: Any, field_hint: Optional[str], extra: dict) -> str:
     label = FIELD_LABELS_HR.get(target_key, target_key)
     if value is None or value == "":
         return f"Nemam podataka o {label}."
-    return f"Tvoj/tvoja {label}: {value}"
+    # DIO 1 fix (Filip 2026-05-29): "Tvoj/tvoja" zvuči robotski. Pravilan rod
+    # ovisi o labelu — najlakše: kratki feminine/neuter map, fallback "tvoj".
+    # (Bolje gramatic + sigurno za sve sad poznate label-e.)
+    _FEM = {"kilometraža", "registracija", "potrošnja", "boja"}
+    _NEUT = {"vozilo", "auto", "godišnji limit", "ime"}
+    if label in _FEM:
+        return f"Tvoja {label}: {value}"
+    if label in _NEUT:
+        return f"Tvoje {label}: {value}"
+    # default masculine (VIN, manager, PIN, telefon, broj sasije...)
+    return f"Tvoj {label}: {value}"
 
 
 def _render_list_with_count(data: Any, entity_label: str) -> str:

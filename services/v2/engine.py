@@ -485,7 +485,14 @@ class V2Engine:
             )
 
         # ---- L2b Driver Basics ----
-        if itype.kind == KIND_QUESTION_ABOUT_SELF and identity.is_known:
+        # DIO 1 fix (Filip 2026-05-29): allow driver-basics match REGARDLESS of
+        # L2a kind for KNOWN users. L2a sometimes mis-classifies short personal-
+        # info queries ("tko sam ja", "moje ime") as OTHER/meta-intent (low
+        # confidence), bypassing driver_basics → action picker → bad UX. Since
+        # match() is fast + has a STRONG threshold + negative anchors, false
+        # positives are unlikely. The kind hint just adds priority for the
+        # primary path (question_about_self).
+        if identity.is_known:
             basics_match = await self.basics.match(safe_query)
             if basics_match.matched:
                 await self._log_telemetry(
