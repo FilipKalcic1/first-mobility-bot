@@ -3,6 +3,17 @@ Token Manager
 
 OAuth2 token management.
 DEPENDS ON: config.py, services/errors.py
+
+PRODUCTION HARDENING NOTE (Filip 2026-05-29, HIGH-2 audit):
+The OAuth client_credentials token is cached in Redis as PLAINTEXT JSON
+(_cache_key = "mobility:access_token"). For single-pod dev this is fine
+because Redis is on a private docker network. For multi-pod / cloud
+deploy you MUST enable BOTH:
+  1) Redis AUTH (--requirepass + REDIS_URL with password)
+  2) Redis TLS (rediss:// scheme, cert pinned)
+without which anyone with Redis access reads the live MobilityOne token.
+This is an INFRA concern, not solvable in code without re-architecting
+to a sealed secret store (Vault, AWS KMS). Document in deploy playbook.
 """
 
 import asyncio

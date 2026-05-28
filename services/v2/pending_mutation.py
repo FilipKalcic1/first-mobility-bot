@@ -187,6 +187,11 @@ def parse_reply(text: str, stage: str) -> str:
     not execute. CANCEL allows word-split fallback so phrases like "ne hvala"
     still cancel safely.
 
+    MED-2 design note (Filip 2026-05-29 audit): the EXECUTE/CANCEL asymmetry
+    is INTENTIONAL — the cost matrix is asymmetric. False-CANCEL = user
+    re-asks (annoying, recoverable). False-EXECUTE = unintended write
+    (visible to user, possibly hard to undo). Safer to over-cancel.
+
     Unknown stage strings (typo / corrupt cache) are treated as ambiguous
     so the engine re-prompts instead of executing.
     """

@@ -242,6 +242,14 @@ class IdentityContext:
             else:
                 return cached
 
+        # MED-6 (Filip 2026-05-29 audit): two concurrent cache-miss requests
+        # for the SAME phone could both hit /Persons. The race is BENIGN
+        # because upsert is idempotent (ON CONFLICT DO UPDATE) and the same
+        # /Persons response yields the same tenant_id. Cost = 1 extra API
+        # call (rare). NOT worth a per-phone asyncio lock since the worker
+        # already has per-sender serialization at worker.py:902 (only one
+        # message processed per phone at a time). Documented, no fix.
+
         # Cache miss BUT this may still NOT be the user's first contact —
         # the Redis snapshot expires after 30s (admin-deactivation safety),
         # but "have we ever welcomed this phone" is a lifetime fact that

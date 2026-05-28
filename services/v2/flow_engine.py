@@ -266,7 +266,42 @@ class FlowEngine:
 
     def _advance_or_prompt(self, flow: Flow, state: FlowState) -> FlowOutcome:
         """If current step is EXEC_LOOKUP, return tool_id so caller fetches.
-        Else build the user-facing prompt for the current step."""
+        Else build the user-facing prompt for the current step.
+
+        HIGH-1 fix (Filip 2026-05-28): skip ASK_* steps whose slot is already
+        populated (pre-filled from initial query by _start_flow). For booking
+        ASK_PERIOD, "from_time" + "to_time" together are the effective slot
+        (period_text is the optional textual mirror). Bounded by len(steps).
+        """
+        # Auto-skip already-populated ASK_* steps (pre-fill from initial query)
+        for _skip_guard in range(len(flow.steps) + 1):
+            if state.step_index >= len(flow.steps):
+                return FlowOutcome(kind=OUTCOME_DONE, new_state=None)
+            _step = flow.steps[state.step_index]
+            if _step.kind == STEP_ASK_PERIOD:
+                # Period is fully resolved iff BOTH datetimes are present
+                if (state.collected_params.get("from_time")
+                        and state.collected_params.get("to_time")):
+                    state = FlowState(
+                        flow_name=state.flow_name,
+                        step_index=state.step_index + 1,
+                        collected_params=state.collected_params,
+                        started_at=state.started_at,
+                    )
+                    continue
+            elif _step.kind in (STEP_ASK_NUMBER, STEP_ASK_TEXT):
+                slot = _step.slot_name
+                v = state.collected_params.get(slot) if slot else None
+                if v not in (None, ""):
+                    state = FlowState(
+                        flow_name=state.flow_name,
+                        step_index=state.step_index + 1,
+                        collected_params=state.collected_params,
+                        started_at=state.started_at,
+                    )
+                    continue
+            break
+
         if state.step_index >= len(flow.steps):
             # No more steps — done
             return FlowOutcome(kind=OUTCOME_DONE, new_state=None)

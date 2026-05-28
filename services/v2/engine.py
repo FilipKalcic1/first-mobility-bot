@@ -472,6 +472,18 @@ class V2Engine:
         # ---- L2a Intent Type ----
         itype = await self.intent_type.classify(safe_query)
 
+        # MED-7 (Filip 2026-05-29): orphan-confirm guard. If user sends just
+        # "Da"/"Ne"/"Može"/... and there's NO pending mutation (TTL expired,
+        # cache lost, or pure mistake), tell them clearly instead of letting
+        # the LLM router try to route a 2-char message into some random tool.
+        _bare = safe_query.strip().lower().rstrip(".!?,;")
+        if _bare in {"da", "yes", "ok", "može", "moze", "potvrđujem", "potvrdjujem",
+                     "ne", "no", "odustani", "otkaži", "otkazi"}:
+            return (
+                "Nemam aktivnu potvrdu za tebe (ili je istekla nakon 5 minuta). "
+                "Pošalji upit ponovo, pa potvrdi nakon eha."
+            )
+
         # ---- L2b Driver Basics ----
         if itype.kind == KIND_QUESTION_ABOUT_SELF and identity.is_known:
             basics_match = await self.basics.match(safe_query)
@@ -487,7 +499,7 @@ class V2Engine:
         if itype.kind == KIND_FLOW_REQUEST:
             flow_name = self._guess_flow_name(safe_query)
             if flow_name and flow_name in FLOWS:
-                return await self._start_flow(phone, flow_name, identity)
+                return await self._start_flow(phone, flow_name, identity, safe_query)
 
         # ---- Model A: Universal action picker (Filip direktiva 2026-05-17) ----
         # Direct LLM auto-execute is gone — router accuracy isn't trustworthy
@@ -750,12 +762,46 @@ class V2Engine:
 
     async def _start_flow(
         self, phone: str, flow_name: str, identity: IdentitySnapshot,
+        query: str = "",
     ) -> str:
         ctx = {
             "person_id":     identity.person_id,
             "vehicle_id":    identity.vehicle_id,
             "vehicle_name":  identity.vehicle_name,
         }
+        # HIGH-1 fix (Filip 2026-05-28): pre-populate flow slots from initial
+        # query so user doesn't have to repeat info already given. Flow engine
+        # auto-skips ASK_* steps whose slot is populated (see _advance_or_prompt).
+        # Examples:
+        #   "rezerviraj sutra 9-15"          → ctx.from_time + to_time
+        #   "upiši 145000 km"                → ctx.mileage_value
+        #   "prijavi kvar na bočnoj kameri"  → ctx.description
+        if flow_name == "booking" and query:
+            try:
+                from services.v2.flow_engine import _parse_period
+                parsed = _parse_period(query)
+                if parsed and parsed.get("from_time") and parsed.get("to_time"):
+                    ctx["period_text"] = parsed.get("period_text") or query
+                    ctx["from_time"]   = parsed["from_time"]
+                    ctx["to_time"]     = parsed["to_time"]
+            except Exception as e:  # noqa: BLE001 — best effort
+                logger.warning("booking period pre-fill failed: %s", e)
+        elif flow_name == "mileage" and query:
+            # Extract first plausible km number ("upiši 145000 km" → 145000)
+            import re as _re
+            m = _re.search(r"\b(\d{1,7})\s*(?:km|kilom)?\b", query.lower())
+            if m:
+                try:
+                    ctx["mileage_value"] = int(m.group(1))
+                except ValueError:
+                    pass
+        elif flow_name == "case" and query:
+            # Treat remainder of query as case description (strip flow keyword)
+            stripped = query
+            for kw in ("prijavi kvar", "prijava kvara", "prijavi", "kvar", "šteta", "ošteti"):
+                stripped = stripped.replace(kw, "").strip()
+            if stripped and len(stripped) >= 3:
+                ctx["description"] = stripped
         outcome = self.flow_engine.start(flow_name, ctx)
         if outcome.new_state is not None:
             await self.flow_store.save(phone, outcome.new_state)
@@ -2077,6 +2123,27 @@ async def make_v2_engine_for_production(
     embedder = get_embedding_client()
     deployment = settings.AZURE_OPENAI_DEPLOYMENT_NAME
 
+    # Adapter: DriverBasicsAnchor expects `.embed(text) -> list[float]`, but
+    # get_embedding_client() returns AsyncAzureOpenAI directly (which only
+    # exposes `.embeddings.create(...)`). Wrap it so the interface matches —
+    # without this adapter, every anchor embed in driver_basics raises
+    # "AsyncAzureOpenAI object has no attribute 'embed'" and the L2b
+    # shortcut silently degrades to 0 positive / 0 negative vectors.
+    class _EmbedAdapter:
+        def __init__(self, client, model: str):
+            self._client = client
+            self._model = model
+
+        async def embed(self, text: str):
+            r = await self._client.embeddings.create(
+                input=text, model=self._model,
+            )
+            return r.data[0].embedding
+
+    basics_embedder = _EmbedAdapter(
+        embedder, settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
+    )
+
     # --- Telemetry (best-effort, never blocks) ---
     # Dual-sink in production: BufferedAsyncFileSink → logs/v2_telemetry-*.jsonl
     # for offline analysis + RedisSink → routing:accuracy_log for the live
@@ -2094,7 +2161,7 @@ async def make_v2_engine_for_production(
     _tenant_resolver = await get_tenant_resolver()
     identity = IdentityContext(redis_client, gateway, settings, tenant_resolver=_tenant_resolver)
     intent_type = IntentTypeClassifier(llm_client, deployment)
-    basics = DriverBasicsAnchor(embedder)
+    basics = DriverBasicsAnchor(basics_embedder)
     flow_engine = FlowEngine(flows=FLOWS)
     flow_store = FlowStateStore(redis_client)
     executor = ToolExecutor(gateway, tool_registry)
@@ -2120,12 +2187,16 @@ async def make_v2_engine_for_production(
     # Pre-generated Croatian param labels (built by
     # scripts/generate_param_labels.py). File is optional; if missing, the
     # labeler skips the preload tier and uses Redis cache → LLM fallback.
+    # Bug fix (2026-05-28): `import json as _json` MUST be outside the
+    # `if labels_path.exists()` branch — risky_tools loader below also uses
+    # `_json`, and if labels file is missing the import never happens →
+    # UnboundLocalError on every startup.
+    from pathlib import Path as _Path
+    import json as _json
     preloaded_labels: dict = {}
     try:
-        from pathlib import Path as _Path
         labels_path = _Path(__file__).resolve().parents[2] / "config" / "param_labels_hr.json"
         if labels_path.exists():
-            import json as _json
             preloaded_labels = _json.loads(labels_path.read_text(encoding="utf-8"))
     except Exception as e:  # noqa: BLE001 — preload is optional
         logger.warning("failed to load param_labels_hr.json: %s", e)
@@ -2204,9 +2275,19 @@ async def make_v2_engine_for_production(
 
     # Derive REGISTRY-shape ({"tools": [list-of-tool-dicts]}). The router +
     # schema_builder iterate over this list.
+    # CRIT-2 fix (2026-05-28): dependency_graph is empty in tool_data.json
+    # (build_tool_data.py never copied it); read from processed_tool_registry
+    # which has the real 144 deps. Single source of truth — same registry that
+    # ToolRegistry facade already loads.
+    _dep_graph: list = []
+    try:
+        _pr = _json.loads(registry_json_path.read_text(encoding="utf-8"))
+        _dep_graph = _pr.get("dependency_graph") or []
+    except Exception as e:  # noqa: BLE001 — non-fatal, deps are optional
+        logger.warning("dependency_graph load failed: %s", e)
     registry_dict = {
         "tools": list(tool_entries.values()),
-        "dependency_graph": tool_data.get("dependency_graph") or [],
+        "dependency_graph": _dep_graph,
     }
 
     # Derive TKB-shape ({op_id: {intent_summary, use_when, do_not_use_when, method}}).
@@ -2245,9 +2326,19 @@ async def make_v2_engine_for_production(
     _log_config_freshness(registry_json_path, tool_data_path)
 
     async def _embed_fn(texts: list[str]) -> list[list[float]]:
-        r = await embedder.embeddings.create(
-            input=texts,
-            model=settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
+        # MED-3 (Filip 2026-05-29): per-batch timeout to prevent worker hang on
+        # Azure throttling during init. AnchorIndex.build() embeds in chunks of
+        # 256 — even at slow Azure latency, a single batch should not exceed
+        # 60s. asyncio.wait_for raises TimeoutError → AnchorIndex retries with
+        # cached partial data (graceful degradation). Without this, init could
+        # hang forever (we saw 90s+ pre-fix during dev).
+        import asyncio as _asyncio
+        r = await _asyncio.wait_for(
+            embedder.embeddings.create(
+                input=texts,
+                model=settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
+            ),
+            timeout=60.0,
         )
         return [d.embedding for d in r.data]
 

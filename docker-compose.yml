@@ -179,6 +179,11 @@ services:
       - BOT_DATABASE_URL=postgresql+asyncpg://bot_user:${BOT_DB_PASSWORD:-bot_password_123}@postgres:5432/mobility_db
       - REDIS_URL=redis://redis:6379/0
       - SERVICE_ROLE=bot
+      # HIGH-3 (Filip 2026-05-29): tracemalloc enabled briefly during audit
+      # showed actual RAM growth far exceeds the "~3MB cost" claim — peaked
+      # 100% of 2GB during anchor embed init. Disable for live test; re-enable
+      # only when investigating a specific leak (or after raising mem to 4G).
+      # - TRACEMALLOC=true
     volumes:
       - cache_data:/app/.cache:rw
       - models_data:/app/models:rw
@@ -201,9 +206,12 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
-    # Log rotation (FAZA P1.3 Filip 2026-05-19): same as api service.
+          cpus: '1.0'
+          memory: 2G
+    # Memory: 512M (orig) → 1G (2026-05-28) → 2G (2026-05-29 audit retest):
+    # with TRACEMALLOC=true + anchor cache miss + 11k phrase embed peak hits
+    # 99% of 1GB. 2G gives safe headroom + tracemalloc top5 still affordable.
+    # After steady-state, worker uses ~400-600MB; peak is during cold-init.
     logging:
       driver: "json-file"
       options:

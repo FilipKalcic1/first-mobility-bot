@@ -1154,6 +1154,20 @@ class Worker:
                     dlq_inbound = await self.redis.llen("dlq:inbound")
                     dlq_outbound = await self.redis.llen("dlq:outbound")
 
+                # MED-4 (Filip 2026-05-29): Postgres pool utilization. If we
+                # exhaust pool (size=10 + overflow=20 = 30 max), new connections
+                # block until release → user requests timeout. Surface so we
+                # know BEFORE it tips over.
+                pg_pool = {"used": -1, "size": -1}
+                with suppress(Exception):
+                    from database import bot_engine  # type: ignore
+                    if bot_engine is not None and hasattr(bot_engine, "pool"):
+                        _pool = bot_engine.pool
+                        pg_pool = {
+                            "used": _pool.checkedout(),
+                            "size": _pool.size() + _pool.overflow(),
+                        }
+
                 health_data = {
                     "processed": self._messages_processed,
                     "failed": self._messages_failed,
@@ -1168,6 +1182,8 @@ class Worker:
                     "local_locks": len(self._lock_access_times),
                     "dlq_inbound": dlq_inbound,
                     "dlq_outbound": dlq_outbound,
+                    "pg_pool_used": pg_pool["used"],
+                    "pg_pool_max": pg_pool["size"],
                 }
 
                 # Alert if DLQ is accumulating — signals systemic failure

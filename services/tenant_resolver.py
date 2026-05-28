@@ -40,6 +40,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import uuid
 from typing import Any, Awaitable, Callable, Optional
 
 from sqlalchemy import text
@@ -229,11 +230,17 @@ class TenantResolver:
             async with factory() as session:
                 # Postgres ON CONFLICT — keeps existing row's id/created_at,
                 # refreshes tenant binding (in case user moved tenants).
+                # CRIT-1 fix (Filip 2026-05-28): explicit UUID for `id`. Raw SQL
+                # bypasses ORM's `default=uuid.uuid4` (Python-side), and alembic
+                # 001_initial_schema.py:35 has NO server_default for `id` →
+                # PostgreSQL NOT NULL constraint fires. Live impact: every first
+                # contact's upsert failed → `_was_phone_welcomed_before` always
+                # returned False → welcome loop on every Redis cache miss (30s).
                 await session.execute(
                     text(
                         "INSERT INTO user_mappings "
-                        "(phone_number, api_identity, display_name, tenant_id, is_active, created_at, updated_at) "
-                        "VALUES (:phone, :pid, :name, :tid, TRUE, NOW(), NOW()) "
+                        "(id, phone_number, api_identity, display_name, tenant_id, is_active, created_at, updated_at) "
+                        "VALUES (:uid, :phone, :pid, :name, :tid, TRUE, NOW(), NOW()) "
                         "ON CONFLICT (phone_number) DO UPDATE SET "
                         "  api_identity = EXCLUDED.api_identity, "
                         "  display_name = EXCLUDED.display_name, "
@@ -242,6 +249,7 @@ class TenantResolver:
                         "  updated_at   = NOW()"
                     ),
                     {
+                        "uid": uuid.uuid4(),
                         "phone": normalized,
                         "pid": person_id,
                         "name": display_name,

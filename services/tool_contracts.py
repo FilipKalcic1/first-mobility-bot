@@ -37,14 +37,28 @@ class ParameterDefinition(BaseModel):
     context_key: Optional[str] = None  # Key in user_context dict
 
     # SURVIVAL KIT: Operator support for filter building
-    preferred_operator: str = Field(
+    # CRIT-4 fix (2026-05-28): allow None — registry sometimes serializes
+    # explicit nulls for these fields (25 tools had preferred_operator=None
+    # and were rejected as "string_type" → silently dropped from routing pool).
+    # We coerce None → default in the validator below.
+    preferred_operator: Optional[str] = Field(
         default="(=)",
         description="Preferred operator for filter: (=), (contains), (startsWith), (endsWith), (>), (<), (>=), (<=)"
     )
-    is_filterable: bool = Field(
+    is_filterable: Optional[bool] = Field(
         default=False,
         description="Indicates if this parameter can be used for filtering"
     )
+
+    @field_validator('preferred_operator', mode='before')
+    @classmethod
+    def _coerce_operator(cls, v):
+        return v if v is not None else "(=)"
+
+    @field_validator('is_filterable', mode='before')
+    @classmethod
+    def _coerce_filterable(cls, v):
+        return v if v is not None else False
     filter_format: Optional[str] = Field(
         default=None,
         description="Filter format pattern, e.g., '{name}({operator}){value}' or 'OData'"
