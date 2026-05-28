@@ -82,12 +82,31 @@ class FakeFlowStore:
         pass
 
 
-def _make_engine(executor, flow_store) -> V2Engine:
+class FakeExecLockStore:
+    """Models the anti-replay execution lock (Fix A 2026-05-28). acquire
+    succeeds by default so the flow execute proceeds; release is a no-op."""
+    def __init__(self, acquire_ok: bool = True):
+        self.acquire_ok = acquire_ok
+        self.acquired = 0
+        self.released = 0
+
+    async def try_acquire_execution(self, phone, *a, **k):
+        self.acquired += 1
+        return self.acquire_ok
+
+    async def release_execution(self, phone):
+        self.released += 1
+
+
+def _make_engine(executor, flow_store, lock_store=None) -> V2Engine:
     """Construct V2Engine without the production factory."""
     eng = object.__new__(V2Engine)
     eng.flow_engine = FakeFlowEngine()
     eng.flow_store = flow_store
     eng.executor = executor
+    # Fix A (2026-05-28): _continue_flow OUTCOME_EXECUTE now takes the
+    # anti-replay execution lock via pending_mut_store, mirroring [C] path.
+    eng.pending_mut_store = lock_store or FakeExecLockStore()
     # _render_execution_failure path needs api_error_translator + tkb_intents;
     # set to None so it falls back to the generic message (no LLM in tests).
     eng.api_error_translator = None

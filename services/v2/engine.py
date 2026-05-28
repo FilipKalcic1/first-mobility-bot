@@ -824,23 +824,35 @@ class V2Engine:
             # Same coercion as the [C] path so flow params ship normalized too
             # (HR "12,5"→12.5, "17.05.2026"→ISO, whole-float→int).
             params = self._coerce_llm_params(outcome.tool_id, outcome.params)
-            exec_result = await self.executor.execute(
-                tool_id=outcome.tool_id,
-                params=params,
-                identity_summary=identity_summary,
-            )
-            if not exec_result.success:
-                # ORCH-4 fix: do NOT clear flow state on failure — keep it so
-                # the user can retry the confirm instead of losing all progress.
-                return await self._render_execution_failure(
-                    exec_result, outcome.tool_id,
-                    generic=f"Akcija nije uspjela: {exec_result.error}",
+            # Fix A (Filip 2026-05-28): anti-replay execution lock, mirroring the
+            # general path (_continue_pending_mutation). Without it, a concurrent
+            # double "Da" (Infobip retry / double-tap) on the flow confirm step
+            # would run the write twice → two bookings / two mileage entries.
+            if not await self.pending_mut_store.try_acquire_execution(phone):
+                return (
+                    "Operacija je već u tijeku — pričekaj sekundu i provjeri "
+                    "potvrdu sljedeće poruke."
                 )
-            # Success → now safe to clear flow state.
-            await self.flow_store.clear(phone)
-            # Driver data may have changed (e.g. mileage write) → drop identity
-            # cache so the next read refetches fresh (Filip 2026-05-25).
-            await self._invalidate_identity(phone)
+            try:
+                exec_result = await self.executor.execute(
+                    tool_id=outcome.tool_id,
+                    params=params,
+                    identity_summary=identity_summary,
+                )
+                if not exec_result.success:
+                    # ORCH-4 fix: do NOT clear flow state on failure — keep it so
+                    # the user can retry the confirm instead of losing progress.
+                    return await self._render_execution_failure(
+                        exec_result, outcome.tool_id,
+                        generic=f"Akcija nije uspjela: {exec_result.error}",
+                    )
+                # Success → now safe to clear flow state.
+                await self.flow_store.clear(phone)
+                # Driver data may have changed (e.g. mileage write) → drop
+                # identity cache so the next read refetches fresh (2026-05-25).
+                await self._invalidate_identity(phone)
+            finally:
+                await self.pending_mut_store.release_execution(phone)
             r = formatter.format_response(
                 template_id="mutation_success",
                 api_response_data=exec_result.data,
@@ -938,10 +950,13 @@ class V2Engine:
     # shown resolved to a human NAME (Vozilo: DA053F), never the raw UUID. Only
     # these are meaningful to surface; person_id (= you) and tenant_id are
     # implicit plumbing and stay hidden.
+    # NOTE: keys MUST match the registry `context_key` exactly — org-unit is
+    # "orgunit_id" (no underscore), same as _minimal_identity. A mismatched
+    # "org_unit_id" silently dropped org-unit from the echo (Fix B 2026-05-28).
     _CONTEXT_ECHO_LABELS = {
         "vehicle_id": "Vozilo",
         "company_id": "Tvrtka",
-        "org_unit_id": "Org. jedinica",
+        "orgunit_id": "Org. jedinica",
     }
 
     def _build_context_display(self, tool_id: str, identity) -> dict:
@@ -953,7 +968,7 @@ class V2Engine:
         name_by_key = {
             "vehicle_id": getattr(identity, "vehicle_name", None),
             "company_id": getattr(identity, "company_name", None),
-            "org_unit_id": getattr(identity, "org_unit_name", None),
+            "orgunit_id": getattr(identity, "org_unit_name", None),
         }
         out: dict = {}
         for pdef in spec.values():
@@ -1914,10 +1929,11 @@ class V2Engine:
             # a different vehicle mid-confirm, blindly executing would write the
             # mutation against the wrong vehicle. Same safety rationale as tenant.
             tenant_changed = fresh_identity.tenant_id != identity.tenant_id
+            # Fix C (Filip 2026-05-28): symmetric compare so None↔id transitions
+            # are caught too (the old both-non-None form only caught id1→id2 and
+            # silently missed None→id / id→None). None↔None stays no-op.
             vehicle_changed = (
-                identity.vehicle_id is not None
-                and fresh_identity.vehicle_id is not None
-                and fresh_identity.vehicle_id != identity.vehicle_id
+                (identity.vehicle_id or "") != (fresh_identity.vehicle_id or "")
             )
             if tenant_changed or vehicle_changed:
                 await self.pending_mut_store.clear(phone)

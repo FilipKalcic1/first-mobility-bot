@@ -181,6 +181,24 @@ def test_build_context_display_resolves_vehicle_name():
     assert eng._build_context_display("post_AddMileage", identity) == {"Vozilo": "DA053F"}
 
 
+def test_build_context_display_resolves_orgunit_name():
+    """Fix B (Filip 2026-05-28): registry context_key for org-unit is
+    'orgunit_id' (no underscore). The echo dicts previously used 'org_unit_id'
+    so org-unit was silently dropped. Confirm it now surfaces."""
+    eng = _eng_with({
+        "put_OrgUnits_id": {
+            "OrgUnitId": {"dependency_source": "context", "context_key": "orgunit_id"},
+            "Name": {"dependency_source": "user_input"},
+        }
+    })
+    identity = SimpleNamespace(
+        vehicle_name=None, company_name=None, org_unit_name="Prodaja EU",
+    )
+    assert eng._build_context_display("put_OrgUnits_id", identity) == {
+        "Org. jedinica": "Prodaja EU",
+    }
+
+
 def test_build_context_display_skips_person_and_tenant_plumbing():
     """Only vehicle/company/org-unit are meaningful — person (= you) and tenant
     are implicit plumbing and stay hidden."""

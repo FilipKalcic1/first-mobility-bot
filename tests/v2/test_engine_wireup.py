@@ -57,6 +57,17 @@ class FakeRedis:
     async def setex(self, key, ttl, value):
         self.store[key] = value
 
+    async def set(self, key, value, nx: bool = False, ex: int | None = None):
+        """SET with optional NX (create-if-absent) + EX (TTL) — covers the
+        SET-NX EX form used by pending_mut_store.try_acquire_execution.
+        TTL is recorded but not enforced (tests don't depend on wall-clock
+        lock expiry). Returns truthy on write, None on NX miss — same shape
+        as real redis-py."""
+        if nx and key in self.store:
+            return None
+        self.store[key] = value
+        return True
+
     async def delete(self, key):
         self.store.pop(key, None)
         self.counters.pop(key, None)
@@ -2124,6 +2135,57 @@ async def test_stale_confirm_same_vehicle_none_does_not_false_abort():
 
 
 @pytest.mark.asyncio
+async def test_stale_confirm_vehicle_none_to_id_aborts():
+    """Fix C (Filip 2026-05-28): symmetric vehicle guard. Original vehicle_id
+    was None at confirm time but a vehicle got assigned mid-confirm (None→id).
+    The old both-non-None guard silently missed this; the symmetric compare
+    must now abort so the write doesn't land on a freshly-assigned vehicle the
+    user never saw in the confirm."""
+    engine, gateway, _, _, _router, _fmt = await _build_engine(registry_tools={
+        "post_AddMileage": {
+            "method": "POST", "service": "auto", "path": "/AddMileage",
+            "purpose": "Upis km.",
+            "parameters": {"Value": {
+                "required": True, "dependency_source": "user_input",
+                "param_type": "integer", "location": "body",
+            }},
+        },
+    })
+    await _bootstrap_known_user(engine, gateway)
+
+    import time
+    from services.v2.pending_mutation import PendingMutation, STAGE_SINGLE
+    stale_pending = PendingMutation(
+        tool_id="post_AddMileage", params={"Value": 145000},
+        stage=STAGE_SINGLE, created_at=time.time() - 60,
+    )
+    await engine.pending_mut_store._redis.setex(
+        engine.pending_mut_store._key("+385955087196"),
+        300, stale_pending.to_json(),
+    )
+
+    original_resolve = engine.identity.resolve
+    call_count = {"n": 0}
+
+    async def _resolve_none_to_id(phone):
+        from dataclasses import replace
+        snap = await original_resolve(phone)
+        call_count["n"] += 1
+        # First (dispatch) resolve: no vehicle. Revalidation: vehicle assigned.
+        if call_count["n"] >= 2:
+            return replace(snap, vehicle_id="NEWLY_ASSIGNED")
+        return replace(snap, vehicle_id=None)
+
+    engine.identity.resolve = _resolve_none_to_id
+
+    reply = await engine.process_message("+385955087196", "Da")
+
+    # Symmetric guard catches None→id → abort + clear (old code missed this).
+    assert "Konfiguracija" in reply or "promijenila" in reply.lower()
+    assert await engine.pending_mut_store.load("+385955087196") is None
+
+
+@pytest.mark.asyncio
 async def test_translator_disabled_uses_generic_message():
     """Engine without api_error_translator wired → always returns generic
     'Tehnički problem'. Backward compat for tests / dev setups."""
@@ -2676,3 +2738,39 @@ async def test_booking_flow_lookup_empty_aborts_cleanly():
     r = await engine._continue_flow(_FLOW_PHONE, start.new_state, "16.12.2025 9-17", identity)
     assert "nema" in r.lower()
     assert await engine.flow_store.load(_FLOW_PHONE) is None   # state cleared
+
+
+@pytest.mark.asyncio
+async def test_flow_execute_blocked_when_execution_lock_held():
+    """Fix A (Filip 2026-05-28): the flow execute path now takes the same
+    anti-replay execution lock as the general path. If a concurrent execute is
+    already in flight (lock held), the second 'Da' on the flow confirm gets a
+    'u tijeku' message and does NOT issue the write — no double mileage entry."""
+    engine, gateway, _llm, _emb, _router, _fmt = await _build_engine(registry_tools={
+        "post_AddMileage": {"method": "POST", "service": "automation",
+                            "path": "/AddMileage", "purpose": "unos km"},
+    })
+    identity = IdentitySnapshot(
+        phone=_FLOW_PHONE, person_id="p1", tenant_id="t1",
+        vehicle_id="v1", vehicle_name="VW Golf", last_mileage=100000, is_known=True,
+    )
+    start = engine.flow_engine.start("mileage", identity_context={
+        "person_id": "p1", "vehicle_id": "v1", "vehicle_name": "VW Golf"})
+    # Drive to the confirm step (state saved with the pending mileage value).
+    confirm = await engine._continue_flow(_FLOW_PHONE, start.new_state, "120000", identity)
+    assert "Upisat ću" in confirm
+
+    # Simulate a concurrent execute already holding the real lock for this
+    # phone (FakeRedis now models SET-NX EX — see its .set above).
+    assert await engine.pending_mut_store.try_acquire_execution(_FLOW_PHONE) is True
+
+    calls_before = len(gateway.calls)
+    state2 = await engine.flow_store.load(_FLOW_PHONE)
+    reply = await engine._continue_flow(_FLOW_PHONE, state2, "Da", identity)
+
+    assert "u tijeku" in reply.lower()
+    # No write was issued while the lock was held.
+    posts = [c for c in gateway.calls[calls_before:] if c.get("method") == "POST"]
+    assert not posts, f"unexpected write while locked: {posts}"
+    # Flow state preserved so the real (lock-holding) execute can finish.
+    assert await engine.flow_store.load(_FLOW_PHONE) is not None
