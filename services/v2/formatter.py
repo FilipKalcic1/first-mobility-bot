@@ -276,6 +276,16 @@ def _format_smart_default(
         return FormatResult(
             text="Nemam podataka.", template_used="empty_result"
         )
+    # DIO 6 fix (Filip 2026-05-29): unwrap common MobilityOne envelope keys
+    # before deciding list-vs-dict. /VehicleCalendar etc. wrap the array
+    # inside Result/Items/Data → top-level looks like a dict → old code took
+    # the "field" branch → "Nemam podataka o tvom vozilu" for list queries.
+    if isinstance(data, dict):
+        for k in ("Result", "Results", "Items", "items", "data", "Data", "value"):
+            inner = data.get(k)
+            if isinstance(inner, list):
+                data = inner
+                break
     if isinstance(data, list):
         return FormatResult(
             text=_render_list_with_count(
