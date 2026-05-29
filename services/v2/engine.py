@@ -362,6 +362,16 @@ class V2Engine:
                 # "prijavi kvar"), drop the stale flow and start fresh rather
                 # than mis-routing the new query through old flow's parser.
                 _new_flow = self._guess_flow_name(safe_query)
+                # DIO 3 fix (Filip 2026-05-29): also abort the flow if the
+                # message starts with an obvious non-flow action verb (obriši/
+                # pokaži/promijeni/...). Otherwise the user stays trapped
+                # in an ASK_PERIOD loop typing "obriši rezervaciju" forever.
+                _q_lo = safe_query.lower().lstrip().replace("š","s").replace("ž","z").replace("č","c").replace("ć","c").replace("đ","d")
+                _is_fresh_action = any(
+                    _q_lo.startswith(v) for v in
+                    ("obrisi", "brisi", "pokazi", "prikazi", "daj", "promijeni",
+                     "izmijeni", "azuriraj", "izlistaj", "lista", "moje ", "moja ", "moj ")
+                )
                 if _new_flow and _new_flow != existing_flow.flow_name:
                     logger.info(
                         "user switched flows mid-stream: %s → %s (phone ****%s)",
@@ -369,6 +379,13 @@ class V2Engine:
                     )
                     await self.flow_store.clear(phone)
                     # Fall through to fresh routing below (will hit _start_flow)
+                elif _is_fresh_action:
+                    logger.info(
+                        "user abandoned flow with fresh action verb (phone ****%s, flow=%s)",
+                        phone[-4:], existing_flow.flow_name,
+                    )
+                    await self.flow_store.clear(phone)
+                    # Fall through to fresh routing
                 else:
                     await self._log_telemetry(
                         kind="layer_exit:flow_continuation",
@@ -519,7 +536,18 @@ class V2Engine:
         # DIO 2 fix (Filip 2026-05-29): but skip L2b entirely if the message
         # already triggered a flow keyword above — prevents "upiši 50000 km"
         # from being caught by the km anchor.
-        if identity.is_known and not flow_name:
+        # DIO 3 fix (Filip 2026-05-29): also skip L2b if the message starts
+        # with a clear mutating action verb (dodaj/obriši/promijeni/upiši).
+        # Otherwise "dodaj trošak goriva 50 eura" gets stolen by the vehicle
+        # anchor → returns car info instead of routing to expense POST.
+        _q_lo_b = safe_query.lower().lstrip().replace("š","s").replace("ž","z").replace("č","c").replace("ć","c").replace("đ","d")
+        _starts_with_mut_verb = any(
+            _q_lo_b.startswith(v) for v in
+            ("dodaj", "obrisi", "brisi", "promijeni", "izmijeni",
+             "azuriraj", "upisi", "unesi", "prijavi", "kreiraj",
+             "rezervir", "otkazi")
+        )
+        if identity.is_known and not flow_name and not _starts_with_mut_verb:
             basics_match = await self.basics.match(safe_query)
             if basics_match.matched:
                 await self._log_telemetry(
@@ -787,7 +815,11 @@ class V2Engine:
                  .replace("š", "s").replace("ž", "z").replace("č", "c")
                  .replace("ć", "c").replace("đ", "d")
         )
-        if any(w in q for w in ("rezerv", "booking", "auto sutra", "vozilo za")):
+        # DIO 3 fix (Filip 2026-05-29): "rezerv" was too broad — matched
+        # "rezerviraj" (verb=book) AND "obriši rezervaciju" (noun=delete it).
+        # Use the verb prefix "rezervir" so we only catch booking-creation
+        # intents; "rezervaciju/rezervacije" (noun) falls through to L3.
+        if any(w in q for w in ("rezervir", "booking", "auto sutra", "vozilo za")):
             return "booking"
         if any(w in q for w in ("upis", "unesi", "stanje km", "evo km")):
             return "mileage"
@@ -1234,15 +1266,20 @@ class V2Engine:
         # ("something else / cancel"). Treating it as a cancel-only token
         # avoids the ambiguity where user typing "drugo" thinking "the
         # second option" gets silently cancelled. User picking #2 types "2".
+        # DIO 3 fix (Filip 2026-05-29): include 4 (IZBRISATI) — the action
+        # picker has 4 cards (POGLEDATI/UNIJETI/IZMIJENITI/IZBRISATI) plus
+        # the "Nešto drugo" cancel option. Previously 4 fell through to None
+        # → re-rendered the picker indefinitely.
         digit_map = {
-            "1": 0, "2": 1, "3": 2,
-            "1️⃣": 0, "2️⃣": 1, "3️⃣": 2,
-            "prvo": 0, "treće": 2, "trece": 2,
+            "1": 0, "2": 1, "3": 2, "4": 3,
+            "1️⃣": 0, "2️⃣": 1, "3️⃣": 2, "4️⃣": 3,
+            "prvo": 0, "treće": 2, "trece": 2, "četvrto": 3, "cetvrto": 3,
         }
+        # NOTE: "drugo" stays in cancel set (Croatian "something else" wins
+        # over the "second" ordinal — avoids ambiguity in disambig context).
         idx = digit_map.get(text)
         if idx is None:
-            # Word-boundary check for short emoji-only or first-char digit
-            if text and text[0] in "123":
+            if text and text[0] in "1234":
                 idx = int(text[0]) - 1
 
         stage = getattr(pending, "stage", PENDING_STAGE_TOOL)
