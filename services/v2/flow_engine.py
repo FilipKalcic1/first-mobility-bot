@@ -432,6 +432,13 @@ def _validate(step: Step, user_input: str, collected: dict) -> Optional[Any]:
 _PERIOD_HOUR_RE = re.compile(
     r"(\d{1,2})(?::(\d{2}))?\s*[-–]\s*(\d{1,2})(?::(\d{2}))?"
 )
+# DIO 2 fix (Filip 2026-05-29): natural HR "od X do Y" variant — users
+# don't always type dash. "od 9 do 15" / "od 9:30 do 17" / "9 do 15h".
+# Matched ONLY if _PERIOD_HOUR_RE misses (dash form has priority).
+_PERIOD_HOUR_OD_DO_RE = re.compile(
+    r"(?:od\s+)?(\d{1,2})(?::(\d{2}))?\s*(?:do|-|–|to)\s*(\d{1,2})(?::(\d{2}))?\s*h?",
+    re.IGNORECASE,
+)
 _PERIOD_DATE_RE = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?\s*(.*)$")
 
 # Croatian weekday names → ISO weekday (0=Monday).
@@ -518,9 +525,17 @@ def _resolve_date(lower: str, today_date) -> tuple:
 
 def _resolve_hours(rest: str) -> Optional[tuple]:
     """Find HH-HH range in rest text. Returns (fh, fm, th, tm) or None.
-    Falls back to part-of-day keywords (ujutro/popodne/navečer)."""
-    # Explicit numeric range wins
+    Falls back to part-of-day keywords (ujutro/popodne/navečer).
+
+    DIO 2 fix (Filip 2026-05-29): support natural HR "od X do Y" alongside
+    the dash form. Users naturally type "rezerviraj od 9 do 15", not
+    "rezerviraj 9-15". Dash form has priority (cleaner regex).
+    """
+    # Explicit numeric range wins — try dash form first
     hm = _PERIOD_HOUR_RE.search(rest)
+    # If no dash, try "od X do Y" form
+    if not hm:
+        hm = _PERIOD_HOUR_OD_DO_RE.search(rest)
     if hm:
         fh, fm, th, tm = hm.groups()
         try:
@@ -540,6 +555,9 @@ def _resolve_hours(rest: str) -> Optional[tuple]:
     for kw, (start, end) in _PART_OF_DAY.items():
         if kw in rest:
             return start, 0, end, 0
+    # DIO 2 fix: add "večer" (without "na-" prefix) — common form
+    if "večer" in rest or "vecer" in rest:
+        return 18, 0, 22, 0
     return None
 
 

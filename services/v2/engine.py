@@ -34,7 +34,8 @@ from services.v2.flow_engine import (
 )
 from services.v2.identity import IdentityContext, IdentitySnapshot
 from services.v2.intent_type import (
-    IntentTypeClassifier, KIND_FLOW_REQUEST, KIND_QUESTION_ABOUT_SELF,
+    IntentTypeClassifier, KIND_ACTION_OR_COMPLAINT,
+    KIND_FLOW_REQUEST, KIND_QUESTION_ABOUT_SELF,
 )
 from services.v2.driver_basics import DriverBasicsAnchor
 from services.router.catalog_scoper import CatalogScoper
@@ -356,14 +357,27 @@ class V2Engine:
                     phone[-4:], existing_flow.flow_name,
                 )
             else:
-                await self._log_telemetry(
-                    kind="layer_exit:flow_continuation",
-                    tenant_id=identity.tenant_id or "",
-                    extra={"flow_name": existing_flow.flow_name},
-                )
-                return await self._continue_flow(
-                    phone, existing_flow, safe_query, identity=identity,
-                )
+                # DIO 2 fix (Filip 2026-05-29): if user types a query that
+                # CLEARLY starts a DIFFERENT flow (e.g. pending booking + new
+                # "prijavi kvar"), drop the stale flow and start fresh rather
+                # than mis-routing the new query through old flow's parser.
+                _new_flow = self._guess_flow_name(safe_query)
+                if _new_flow and _new_flow != existing_flow.flow_name:
+                    logger.info(
+                        "user switched flows mid-stream: %s → %s (phone ****%s)",
+                        existing_flow.flow_name, _new_flow, phone[-4:],
+                    )
+                    await self.flow_store.clear(phone)
+                    # Fall through to fresh routing below (will hit _start_flow)
+                else:
+                    await self._log_telemetry(
+                        kind="layer_exit:flow_continuation",
+                        tenant_id=identity.tenant_id or "",
+                        extra={"flow_name": existing_flow.flow_name},
+                    )
+                    return await self._continue_flow(
+                        phone, existing_flow, safe_query, identity=identity,
+                    )
 
         # ---- L0.7 Crisis detection (ETHICAL OBLIGATION) ----
         # MUST be the FIRST inline-detection layer — before negation/multi/meta —
@@ -484,15 +498,28 @@ class V2Engine:
                 "Pošalji upit ponovo, pa potvrdi nakon eha."
             )
 
+        # ---- Flow request? Start flow directly ----
+        # DIO 2 fix (Filip 2026-05-29): check flow keywords BEFORE driver_basics.
+        # "upiši 50000 km" / "prijavi kvar" / "rezerviraj sutra" must start a
+        # flow even if L2a mis-classified them (or if driver_basics anchor
+        # picks up the "km"/"vozilo" word and would otherwise hijack them).
+        # _guess_flow_name is keyword-deterministic so it's safe to gate here.
+        flow_name = self._guess_flow_name(safe_query)
+        if flow_name and flow_name in FLOWS and (
+            itype.kind == KIND_FLOW_REQUEST
+            or itype.kind == KIND_ACTION_OR_COMPLAINT  # mis-classified mutation
+        ):
+            return await self._start_flow(phone, flow_name, identity, safe_query)
+
         # ---- L2b Driver Basics ----
         # DIO 1 fix (Filip 2026-05-29): allow driver-basics match REGARDLESS of
-        # L2a kind for KNOWN users. L2a sometimes mis-classifies short personal-
-        # info queries ("tko sam ja", "moje ime") as OTHER/meta-intent (low
-        # confidence), bypassing driver_basics → action picker → bad UX. Since
-        # match() is fast + has a STRONG threshold + negative anchors, false
-        # positives are unlikely. The kind hint just adds priority for the
-        # primary path (question_about_self).
-        if identity.is_known:
+        # L2a kind for KNOWN users — L2a sometimes mis-classifies short personal-
+        # info queries ("tko sam ja", "moje ime") as OTHER. match() has a STRONG
+        # cosine threshold + negative anchors, so false positives are unlikely.
+        # DIO 2 fix (Filip 2026-05-29): but skip L2b entirely if the message
+        # already triggered a flow keyword above — prevents "upiši 50000 km"
+        # from being caught by the km anchor.
+        if identity.is_known and not flow_name:
             basics_match = await self.basics.match(safe_query)
             if basics_match.matched:
                 await self._log_telemetry(
@@ -501,12 +528,6 @@ class V2Engine:
                     query=safe_query,
                 )
                 return await self._format_basics(identity, safe_query)
-
-        # ---- Flow request? Start flow directly ----
-        if itype.kind == KIND_FLOW_REQUEST:
-            flow_name = self._guess_flow_name(safe_query)
-            if flow_name and flow_name in FLOWS:
-                return await self._start_flow(phone, flow_name, identity, safe_query)
 
         # ---- Model A: Universal action picker (Filip direktiva 2026-05-17) ----
         # Direct LLM auto-execute is gone — router accuracy isn't trustworthy
@@ -758,12 +779,19 @@ class V2Engine:
         # Keyword short-circuit only for high-confidence flow requests —
         # avoids an L3 LLM call when the trigger is unambiguous. L3 is
         # still the real path for everything else.
-        q = query.lower()
+        # DIO 2 fix (Filip 2026-05-29): normalize HR diacritics so "upiši"
+        # matches "upis", "šteta" matches "steta", etc. Without this,
+        # "upiši 50000 km" was missed and L2b stole it.
+        q = (
+            query.lower()
+                 .replace("š", "s").replace("ž", "z").replace("č", "c")
+                 .replace("ć", "c").replace("đ", "d")
+        )
         if any(w in q for w in ("rezerv", "booking", "auto sutra", "vozilo za")):
             return "booking"
-        if any(w in q for w in ("upis", "unesi", "stanje", "evo km")):
+        if any(w in q for w in ("upis", "unesi", "stanje km", "evo km")):
             return "mileage"
-        if any(w in q for w in ("prijav", "kvar", "stet", "ošteti")):
+        if any(w in q for w in ("prijav", "kvar", "stet", "osteti", "havar")):
             return "case"
         return None
 
@@ -810,9 +838,61 @@ class V2Engine:
             if stripped and len(stripped) >= 3:
                 ctx["description"] = stripped
         outcome = self.flow_engine.start(flow_name, ctx)
+        # DIO 2 fix (Filip 2026-05-29): when start() auto-skips pre-filled
+        # ASK_* slots and lands on EXEC_LOOKUP, the outcome has response=None
+        # → would render "Pokrećem postupak." placeholder. Drive the lookup
+        # loop here so the user gets the real next prompt (e.g. ASK_CHOICE
+        # for vehicle selection in booking).
+        outcome = await self._drive_flow_lookups(phone, outcome, identity)
+        if outcome is None:
+            # _drive_flow_lookups already cleared store + returned an error
+            # message; here we re-build it because callers expect a str.
+            return (
+                "Trenutno ne mogu dohvatiti podatke za ovaj korak. "
+                "Pokušaj ponovo malo kasnije."
+            )
         if outcome.new_state is not None:
             await self.flow_store.save(phone, outcome.new_state)
         return outcome.response or "Pokrećem postupak."
+
+    async def _drive_flow_lookups(
+        self, phone: str, outcome, identity: Optional[IdentitySnapshot],
+    ):
+        """Loop through EXEC_LOOKUP steps (response=None) until the flow
+        reaches a user-facing prompt or terminates. Returns the final outcome,
+        OR None if a lookup failed/empty and store was already cleared.
+        Bounded against malformed flow data (max 4 iterations).
+        """
+        for _ in range(4):
+            if not (
+                outcome.kind == OUTCOME_PROMPT
+                and outcome.tool_id
+                and outcome.response is None
+            ):
+                return outcome
+            lookup_state = outcome.new_state
+            if lookup_state is None:
+                return outcome
+            choices = await self._run_flow_lookup(
+                outcome.tool_id, outcome.params, identity,
+            )
+            if choices is None:
+                await self.flow_store.clear(phone)
+                return None
+            if not choices:
+                await self.flow_store.clear(phone)
+                # Sentinel: tell caller "no options"
+                from types import SimpleNamespace
+                return SimpleNamespace(
+                    kind=OUTCOME_PROMPT, response=(
+                        "Nema dostupnih opcija za traženo. "
+                        "Pokušaj s drugim parametrima."
+                    ), new_state=None, tool_id=None, params=None,
+                )
+            outcome = self.flow_engine.handle(
+                lookup_state, "", lookup_result=choices,
+            )
+        return outcome
 
     async def _continue_flow(
         self, phone: str, state, user_input: str,
