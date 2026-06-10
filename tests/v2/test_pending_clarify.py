@@ -241,6 +241,74 @@ def test_action_picker_global_returns_four_canonical_actions():
     ]
 
 
+# ---------- REOFFER (Filip 2026-06-05) ----------
+
+def test_pending_clarify_reoffer_fields_default_to_empty():
+    """Backward compat: legacy entries (pre-2026-06-05) must still load
+    even though they lack the new reoffer fields."""
+    legacy_json = (
+        '{"phone": "385912345678", "candidates": [], '
+        '"original_query": "x", "stage": "tool"}'
+    )
+    pc = PendingClarify.from_json(legacy_json)
+    assert pc.all_candidate_ids == []
+    assert pc.shown_tool_ids == []
+    assert pc.last_executed_tool is None
+    assert pc.can_reoffer is False
+
+
+def test_pending_clarify_with_reoffer_roundtrip():
+    pc = PendingClarify(
+        phone="385912345678",
+        candidates=[{"tool_id": "x"}],
+        original_query="moje rezervacije",
+        stage=STAGE_TOOL,
+        all_candidate_ids=["t1", "t2", "t3", "t4", "t5"],
+        shown_tool_ids=["t1", "t2", "t3"],
+        last_executed_tool="t1",
+        can_reoffer=True,
+    )
+    pc2 = PendingClarify.from_json(pc.to_json())
+    assert pc2.all_candidate_ids == ["t1", "t2", "t3", "t4", "t5"]
+    assert pc2.shown_tool_ids == ["t1", "t2", "t3"]
+    assert pc2.last_executed_tool == "t1"
+    assert pc2.can_reoffer is True
+
+
+@pytest.mark.asyncio
+async def test_store_save_persists_reoffer_fields():
+    redis = _FakeRedis()
+    store = PendingClarifyStore(redis)
+    await store.save(
+        "p", candidates=[], original_query="q", stage=STAGE_TOOL,
+        all_candidate_ids=["a", "b", "c"],
+        shown_tool_ids=["a"],
+        last_executed_tool="a",
+        can_reoffer=True,
+    )
+    loaded = await store.load("p")
+    assert loaded is not None
+    assert loaded.all_candidate_ids == ["a", "b", "c"]
+    assert loaded.shown_tool_ids == ["a"]
+    assert loaded.last_executed_tool == "a"
+    assert loaded.can_reoffer is True
+
+
+@pytest.mark.asyncio
+async def test_store_save_defaults_reoffer_to_disabled():
+    """Existing callers that don't pass reoffer args still work — fields
+    default to empty/False so 'nije točno' handler stays silent."""
+    redis = _FakeRedis()
+    store = PendingClarifyStore(redis)
+    await store.save("p", candidates=[{"tool_id": "x"}], original_query="q")
+    loaded = await store.load("p")
+    assert loaded is not None
+    assert loaded.all_candidate_ids == []
+    assert loaded.shown_tool_ids == []
+    assert loaded.last_executed_tool is None
+    assert loaded.can_reoffer is False
+
+
 @pytest.mark.asyncio
 async def test_byte_response_decoded():
     """Some redis clients return bytes; store handles both."""

@@ -179,6 +179,14 @@ class TelemetryEvent:
     # to_record(), so events without redactions stay compact.
     redactions: list[str] = field(default_factory=list)
 
+    # Measurement / golden-set label (Filip 2026-06-10, measure-first).
+    # Set ONLY on a "nije točno" reoffer correction: the user rejected one
+    # tool and then picked another → a free (wrong_tool, correct_tool) label
+    # for the routing golden set. Shape: {"wrong_tool", "correct_tool",
+    # "position"}. None (default) is dropped from the record, so normal
+    # events stay compact. Harvested by scripts/build_golden_set.py.
+    correction: Optional[dict] = None
+
     def __post_init__(self) -> None:
         # Auto-fill from context vars if caller didn't supply explicitly.
         # This is the central propagation point for correlation_id +

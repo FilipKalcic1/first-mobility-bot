@@ -51,12 +51,31 @@ class PendingClarify:
 
     Backward compat: stage defaults to "tool" (postojeći direktni clarify
     flow ne mijenja se).
+
+    REOFFER (Filip 2026-06-05): polja ispod podržavaju "nije točno" handler
+    koji ponudi next 3 kandidata iz cosine top-50 umjesto fresh routing.
+      all_candidate_ids: full cosine top-50 op_ids (kontekst za reoffer)
+      shown_tool_ids:    tools već prikazani/izvršeni u ovoj sesiji clarify
+      last_executed_tool: tool koji je SADA izvršen ("__L2B_DRIVER_BASICS__"
+                          za driver-basics shortcut)
+      can_reoffer:       True ako user može poslati "nije točno" → reoffer
+      reoffer_origin_tool: (Filip 2026-06-10, measure-first) tool koji je
+                          korisnik proglasio KRIVIM kad je rekao "nije točno".
+                          Nosi se kroz re-offered pending da, kad korisnik
+                          odabere ispravan tool, možemo logirati correction
+                          par (wrong_tool, correct_tool) = besplatna labela
+                          za golden set. None izvan reoffer lanca.
     """
     phone: str
     candidates: list[dict] = field(default_factory=list)
     # candidates: list of {"tool_id": "...", "label": "...", "description": "...", "method": "GET|POST|..."}
     original_query: str = ""
     stage: str = STAGE_TOOL
+    all_candidate_ids: list = field(default_factory=list)
+    shown_tool_ids: list = field(default_factory=list)
+    last_executed_tool: Optional[str] = None
+    can_reoffer: bool = False
+    reoffer_origin_tool: Optional[str] = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False)
@@ -64,8 +83,13 @@ class PendingClarify:
     @classmethod
     def from_json(cls, s: str) -> "PendingClarify":
         d = json.loads(s)
-        # Backward compat: legacy entries (pre 2026-05-17) lack `stage` field
+        # Backward compat: legacy entries lack newer fields
         d.setdefault("stage", STAGE_TOOL)
+        d.setdefault("all_candidate_ids", [])
+        d.setdefault("shown_tool_ids", [])
+        d.setdefault("last_executed_tool", None)
+        d.setdefault("can_reoffer", False)
+        d.setdefault("reoffer_origin_tool", None)
         return cls(**d)
 
 
@@ -86,6 +110,11 @@ class PendingClarifyStore:
         candidates: list[dict],
         original_query: str = "",
         stage: str = STAGE_TOOL,
+        all_candidate_ids: Optional[list] = None,
+        shown_tool_ids: Optional[list] = None,
+        last_executed_tool: Optional[str] = None,
+        can_reoffer: bool = False,
+        reoffer_origin_tool: Optional[str] = None,
     ) -> None:
         """Persist pending clarify. Caller assembled candidates in
         clarify_ui-compatible format ({tool_id, label, description}).
@@ -94,12 +123,20 @@ class PendingClarifyStore:
           - STAGE_ACTION: user just received action picker (Step 1)
           - STAGE_TOOL (default): user received tool picker (Step 2 or
             single-step direct clarify when all candidates share method)
+
+        REOFFER fields (Filip 2026-06-05): used by "nije točno" handler.
+        Caller passes full cosine top-50 + shown list to enable next-3 offer.
         """
         if self._redis is None:
             return
         pc = PendingClarify(
             phone=phone, candidates=candidates,
             original_query=original_query, stage=stage,
+            all_candidate_ids=all_candidate_ids or [],
+            shown_tool_ids=shown_tool_ids or [],
+            last_executed_tool=last_executed_tool,
+            can_reoffer=can_reoffer,
+            reoffer_origin_tool=reoffer_origin_tool,
         )
         try:
             await self._redis.setex(self._key(phone), self._ttl, pc.to_json())

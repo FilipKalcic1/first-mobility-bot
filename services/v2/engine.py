@@ -325,6 +325,24 @@ class V2Engine:
                 phone, pending, safe_query, identity,
             )
 
+        # ---- "Nije točno" reoffer handler (Filip 2026-06-05) ----
+        # Fires when user signals dissatisfaction with the LAST executed
+        # tool. We saved cosine top-50 + shown ids when the tool ran, so
+        # we offer next 3 candidates instead of falling through to a fresh
+        # action picker (which would just present "POGLEDATI/UNIJETI/..."
+        # again — frustrating). Catches BOTH L3 and L2b paths via shared
+        # pending_clarify.can_reoffer flag.
+        _q_reoffer = safe_query.strip().lower().rstrip(".!?,;")
+        if (_q_reoffer in self._REOFFER_PHRASES
+                and self.pending_clarify_store is not None):
+            _pc_reoffer = await self.pending_clarify_store.load(phone)
+            if _pc_reoffer is not None and _pc_reoffer.can_reoffer:
+                await self._log_telemetry(
+                    kind="layer_exit:nije_tocno_reoffer",
+                    tenant_id=identity.tenant_id or "",
+                )
+                return await self._handle_reoffer(phone, _pc_reoffer, identity)
+
         # ---- Pending clarify continuation? (Top-3 cards reply) ----
         # If we rendered Top-3 cards last turn and saved candidates,
         # interpret "1"/"2"/"3"/"ne" as a pick. Falls through to fresh
@@ -555,7 +573,24 @@ class V2Engine:
                     tenant_id=identity.tenant_id or "",
                     query=safe_query,
                 )
-                return await self._format_basics(identity, safe_query)
+                _basics_reply = await self._format_basics(identity, safe_query)
+                # Filip 2026-06-05: save reoffer state — user who got L2b
+                # match but wanted something else can send "nije točno" and
+                # we'll re-route the original query through L3 router with
+                # L2b excluded.
+                if self.pending_clarify_store is not None:
+                    try:
+                        await self.pending_clarify_store.save(
+                            phone, candidates=[], original_query=safe_query,
+                            stage=PENDING_STAGE_TOOL,
+                            all_candidate_ids=[],
+                            shown_tool_ids=["__L2B_DRIVER_BASICS__"],
+                            last_executed_tool="__L2B_DRIVER_BASICS__",
+                            can_reoffer=True,
+                        )
+                    except Exception:  # noqa: BLE001 — never break the reply
+                        pass
+                return _basics_reply
 
         # ---- Model A: Universal action picker (Filip direktiva 2026-05-17) ----
         # Direct LLM auto-execute is gone — router accuracy isn't trustworthy
@@ -1095,6 +1130,100 @@ class V2Engine:
         "raditi iz prve. Ako javi grešku, kontaktiraj managera.\n\n"
     )
 
+    # Filip 2026-06-05: phrases that trigger the "nije točno" reoffer flow.
+    # Exact-match (after lower + strip punctuation) to avoid false positives
+    # like "nije ovo dosta novca" capturing.
+    _REOFFER_PHRASES = frozenset({
+        "nije točno", "nije tocno", "nije to", "nije ovo", "krivo",
+        "ne to", "ne ovo", "nije pravi", "pogrešno", "pogresno",
+    })
+    _L2B_SENTINEL = "__L2B_DRIVER_BASICS__"
+
+    async def _handle_reoffer(
+        self, phone: str, pc, identity: IdentitySnapshot,
+    ) -> str:
+        """Handle 'nije točno' after an executed tool.
+
+        Strategy:
+          - If last_executed_tool was the L2B sentinel → re-route the original
+            query through L3 router with L2B excluded. The router cascade
+            will fire and present a top-3 picker.
+          - Else (L3 path) → exclude shown_tool_ids from all_candidate_ids,
+            take next 3 cosine candidates, render new picker. If 0 remain,
+            send a graceful "out of options" message and clear state.
+        """
+        shown = set(pc.shown_tool_ids or [])
+        if pc.last_executed_tool:
+            shown.add(pc.last_executed_tool)
+        # ---- L2B re-route: original query → fresh L3 cascade ----
+        if pc.last_executed_tool == self._L2B_SENTINEL:
+            # Mirror the action_global flow (engine.py:615-622): empty
+            # candidates list, ACTION_GLOBAL stage, query stored so the
+            # next picker resolves with full L3 routing.
+            original = pc.original_query or ""
+            options = clarify_ui.build_action_picker_global()
+            await self.pending_clarify_store.save(
+                phone, candidates=[],
+                original_query=original,
+                stage=PENDING_STAGE_ACTION_GLOBAL,
+                # Carry the rejected L2B shortcut forward so the eventual
+                # tool pick (after action_global → router) logs a correction.
+                reoffer_origin_tool=pc.reoffer_origin_tool or pc.last_executed_tool,
+            )
+            return clarify_ui.render_text(
+                options,
+                header="U redu — evo opcija da preciziraš što tražiš:",
+            )
+        # ---- L3 path: exclude shown, take next 3 from cosine top-50 ----
+        remaining_ids = [
+            tid for tid in (pc.all_candidate_ids or [])
+            if tid not in shown
+        ]
+        if not remaining_ids:
+            await self.pending_clarify_store.clear(phone)
+            return (
+                "Nemam više relevantnih opcija za tvoj upit. "
+                "Opiši ponovo što tražiš ili pošalji 'pomoć' za primjere."
+            )
+        next_three = remaining_ids[:3]
+        # Build picker via existing helper (same look as primary clarify)
+        score_pairs = [(tid, 0.0) for tid in next_three]
+        tool_options = clarify_ui.build_from_router_candidates(
+            score_pairs,
+            tkb_lookup=lambda tid: self.tkb_intents.get(tid, ""),
+        )
+        enriched = [
+            {
+                "tool_id": c.tool_id,
+                "method": (self.executor.method_of(c.tool_id) or "GET").upper(),
+                "short_label": c.short_label,
+                "description": c.description,
+                "params": {},
+                "field_hint": pc.original_query or None,
+            }
+            for c in tool_options.cards
+        ]
+        new_shown = list(shown) + next_three
+        await self.pending_clarify_store.save(
+            phone,
+            candidates=enriched,
+            original_query=pc.original_query,
+            stage=PENDING_STAGE_TOOL,
+            all_candidate_ids=pc.all_candidate_ids,
+            shown_tool_ids=new_shown,
+            last_executed_tool=None,   # nothing executed yet on this offer
+            can_reoffer=False,          # will turn True after user picks + executes
+            # Measure-first (Filip 2026-06-10): carry the rejected tool forward
+            # so the eventual pick logs a (wrong, correct) golden-set label.
+            # At reoffer time last_executed_tool IS the rejected tool (can_reoffer
+            # only flips True after an execute).
+            reoffer_origin_tool=pc.reoffer_origin_tool or pc.last_executed_tool,
+        )
+        return clarify_ui.render_text(
+            tool_options,
+            header="U redu, evo drugih opcija:",
+        )
+
     @staticmethod
     def _fmt_echo_value(value) -> str:
         """Human-readable value for the pre-execute echo: ISO date →
@@ -1283,6 +1412,10 @@ class V2Engine:
                 idx = int(text[0]) - 1
 
         stage = getattr(pending, "stage", PENDING_STAGE_TOOL)
+        # Measure-first (Filip 2026-06-10): if this pending carries a reoffer
+        # origin (the tool the user rejected via "nije točno"), the eventual
+        # tool pick below logs a (wrong, correct) golden-set label.
+        _reoffer_origin = getattr(pending, "reoffer_origin_tool", None)
 
         # ---- Stage: universal action picker (Model A Turn 2) ----
         # User picked POGLEDATI/UNIJETI/IZMIJENITI/IZBRISATI on Turn 1.
@@ -1384,11 +1517,21 @@ class V2Engine:
                 for c in tool_options.cards
             ]
 
+            # Filip 2026-06-05: cache full cosine top-50 + shown top-3 so
+            # "nije točno" can offer next 3 candidates without re-routing.
+            shown_tool_ids = [c.tool_id for c in tool_options.cards]
             await self.pending_clarify_store.save(
                 phone,
                 candidates=enriched,
                 original_query=pending.original_query,
                 stage=PENDING_STAGE_TOOL,
+                all_candidate_ids=_anchor_ids[:50],
+                shown_tool_ids=shown_tool_ids,
+                last_executed_tool=None,
+                can_reoffer=False,  # only true after execute
+                # Forward a reoffer origin (e.g. L2B sentinel) through the
+                # action_global → tool transition so the pick logs a correction.
+                reoffer_origin_tool=pending.reoffer_origin_tool,
             )
             return clarify_ui.render_text(
                 tool_options,
@@ -1449,12 +1592,32 @@ class V2Engine:
             if idx is None or idx >= len(pending.candidates):
                 return None  # not a valid pick — re-route as new query
             chosen = pending.candidates[idx]
+            # Filip 2026-06-05: preserve reoffer context BEFORE clear so it
+            # can be re-saved after execute (clear is required because the
+            # picker is resolved; reoffer state is a fresh post-execute save).
+            _reoffer_top50 = list(pending.all_candidate_ids or [])
+            _reoffer_shown = list(pending.shown_tool_ids or [])
             await self.pending_clarify_store.clear(phone)
 
         # If chosen is a tool — run mutation gate then execute.
         tool_id = chosen.get("tool_id")
         if not tool_id:
             return "Nešto je krenulo krivo s odabirom. Pokušaj opet."
+
+        # Measure-first (Filip 2026-06-10): a "nije točno" reoffer that the user
+        # resolved by picking a DIFFERENT tool = a free golden-set label
+        # (wrong_tool → correct_tool). Persisted via the TelemetryEvent
+        # `correction` field; harvested by scripts/build_golden_set.py.
+        if _reoffer_origin and tool_id != _reoffer_origin:
+            await self._log_telemetry(
+                tenant_id=identity.tenant_id or "",
+                query=pending.original_query or "",
+                tool_picked=tool_id,
+                correction={
+                    "wrong_tool": _reoffer_origin,
+                    "correct_tool": tool_id,
+                },
+            )
 
         params = chosen.get("params") or {}
 
@@ -1476,6 +1639,8 @@ class V2Engine:
             field_hint=chosen.get("field_hint"),
             query=pending.original_query,
             type_display=type_display,
+            reoffer_top50=_reoffer_top50 if _reoffer_top50 else None,
+            reoffer_shown=_reoffer_shown if _reoffer_shown else None,
         )
 
     # ------------------------------------------------------------------
@@ -1966,8 +2131,18 @@ class V2Engine:
         self, phone: str, tool_id: str, params: dict,
         identity: IdentitySnapshot, field_hint: Optional[str] = None,
         query: str = "", type_display: Optional[dict] = None,
+        reoffer_top50: Optional[list] = None,
+        reoffer_shown: Optional[list] = None,
     ) -> str:
-        """Mutation gate → confirm-or-execute → format. Shared execute tail."""
+        """Mutation gate → confirm-or-execute → format. Shared execute tail.
+
+        REOFFER (Filip 2026-06-05): for GET tools (auto-execute path), save
+        pending_clarify state with full cosine top-50 + shown ids so that a
+        subsequent "nije točno" can offer next 3 candidates without re-routing.
+        For mutations (confirm gate), reoffer is intentionally NOT saved —
+        user said "Da" so they consciously approved; "nije točno" makes no
+        sense after a write.
+        """
         params = self._coerce_llm_params(tool_id, params)
         method = self.executor.method_of(tool_id) or "GET"
         mut = mutation_gate.decide_mutation(
@@ -1988,6 +2163,24 @@ class V2Engine:
         )
         if not exec_result.success:
             return await self._render_execution_failure(exec_result, tool_id)
+        # Save reoffer state for "nije točno" handler (Filip 2026-06-05).
+        # Only fires when called from clarify flow with the top-50 context.
+        if (reoffer_top50 is not None
+                and self.pending_clarify_store is not None):
+            shown = list(reoffer_shown or [])
+            if tool_id not in shown:
+                shown.append(tool_id)
+            try:
+                await self.pending_clarify_store.save(
+                    phone, candidates=[], original_query=query,
+                    stage=PENDING_STAGE_TOOL,
+                    all_candidate_ids=list(reoffer_top50),
+                    shown_tool_ids=shown,
+                    last_executed_tool=tool_id,
+                    can_reoffer=True,
+                )
+            except Exception as e:  # noqa: BLE001 — never break the reply
+                logger.warning("save reoffer state failed: %s", e)
         return await self._format_reply(
             query=query, tool_id=tool_id, api_data=exec_result.data,
             identity=identity, field_hint=field_hint,

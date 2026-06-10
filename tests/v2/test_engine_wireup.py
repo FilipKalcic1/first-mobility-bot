@@ -855,7 +855,15 @@ async def test_clarify_fresh_query_during_pending_falls_through_to_fresh_routing
     # Reply was produced (some path took it); the unresolved clarify state
     # is cleared by _resolve_pending_clarify returning None → fall-through.
     assert reply
-    assert await engine.pending_clarify_store.load("+385955087196") is None
+    # Filip 2026-06-05: after L2b match we now save a NEW reoffer state so
+    # the user can reply "nije točno" and get the L3 cascade. The OLD stale
+    # candidates ("get_X"/"get_Y") must be gone — only the L2B sentinel can
+    # remain. Either None (no L2b match) or L2B reoffer state.
+    state = await engine.pending_clarify_store.load("+385955087196")
+    if state is not None:
+        assert state.last_executed_tool == "__L2B_DRIVER_BASICS__"
+        assert all(c.get("tool_id") not in ("get_X", "get_Y")
+                   for c in state.candidates)
 
 
 # --------------------------------------------------------------------------
@@ -2770,3 +2778,177 @@ async def test_flow_execute_blocked_when_execution_lock_held():
     assert not posts, f"unexpected write while locked: {posts}"
     # Flow state preserved so the real (lock-holding) execute can finish.
     assert await engine.flow_store.load(_FLOW_PHONE) is not None
+
+
+# --------------------------------------------------------------------------
+# REOFFER end-to-end (Filip 2026-06-05) — "nije točno" flow
+# --------------------------------------------------------------------------
+
+
+_REOFFER_PHONE = "+385955099999"
+
+
+async def _onboard_reoffer_user(engine, gateway):
+    """Welcome flow + identity priming so the test broj is known."""
+    gateway.queue(FakeApiResponse(success=True, data=[{
+        "Id": "p1", "FirstName": "Test", "LastName": "User", "TenantId": "t1",
+    }]))
+    gateway.queue(FakeApiResponse(success=True, data={
+        "VehicleName": "TEST_VEHICLE", "LicencePlate": "AB123CD",
+        "LastMileage": 50000, "FullVehicleName": "TEST_VEHICLE Demo",
+    }))
+    await engine.process_message(_REOFFER_PHONE, "bok")
+
+
+@pytest.mark.asyncio
+async def test_reoffer_after_l2b_match_redirects_to_action_picker():
+    """Driver-basics path: user asked km → bot replied with km → user says
+    'nije točno' → bot must show the universal action picker so user can
+    pick a different action context (e.g. 'tko vozi DA053F' was actually
+    meant), not just repeat the basics anchor."""
+    engine, gateway, _llm, _emb, _router, _fmt = await _build_engine(
+        registry_tools={
+            "get_MasterData": {"method": "GET", "service": "automation",
+                                "path": "/MasterData", "purpose": "Moji podaci."},
+        }
+    )
+    await _onboard_reoffer_user(engine, gateway)
+
+    # User asks km — L2b should match driver-basics anchor and reply with
+    # the cached vehicle data (no executor call needed).
+    reply1 = await engine.process_message(_REOFFER_PHONE, "kolika mi je km")
+    assert reply1
+    # The "nije točno" hint must be present (drives the loop awareness).
+    assert "nije točno" in reply1
+
+    # Reoffer state must be saved with L2B sentinel.
+    pc = await engine.pending_clarify_store.load(_REOFFER_PHONE)
+    assert pc is not None
+    assert pc.last_executed_tool == "__L2B_DRIVER_BASICS__"
+    assert pc.can_reoffer is True
+
+    # User says "nije točno" → bot must hand control back to action picker.
+    reply2 = await engine.process_message(_REOFFER_PHONE, "nije točno")
+    assert "POGLEDATI" in reply2
+    assert "UNIJETI" in reply2 or "KREIRATI" in reply2
+
+    # State now in ACTION_GLOBAL stage (user about to pick an action).
+    pc2 = await engine.pending_clarify_store.load(_REOFFER_PHONE)
+    assert pc2 is not None
+    assert pc2.stage == "action_global"
+    assert pc2.original_query == "kolika mi je km"
+
+
+@pytest.mark.asyncio
+async def test_reoffer_after_l3_execute_offers_next_three_candidates():
+    """Router path: user asked 'random query' → cascade picked tool A → bot
+    executed → user says 'nije točno' → bot must show NEW 3 candidates from
+    positions 4-6 of the cached cosine top-50, NOT repeat top-3."""
+    engine, gateway, _llm, _emb, router, _fmt = await _build_engine(
+        registry_tools={
+            "get_VehicleCalendar":      {"method": "GET", "service": "vm",
+                                          "path": "/VC", "purpose": "Pokaži kalendar."},
+            "get_LatestVehicleCalendar": {"method": "GET", "service": "vm",
+                                          "path": "/LVC", "purpose": "Pokaži aktualni kalendar."},
+            "delete_VehicleCalendar_id": {"method": "DELETE", "service": "vm",
+                                          "path": "/VC/{id}", "purpose": "Obriši kalendar."},
+            "get_Persons":               {"method": "GET", "service": "tm",
+                                          "path": "/P", "purpose": "Pokaži osobe."},
+            "get_Expenses":              {"method": "GET", "service": "fm",
+                                          "path": "/E", "purpose": "Pokaži troškove."},
+            "get_Vehicles":              {"method": "GET", "service": "vm",
+                                          "path": "/V", "purpose": "Pokaži vozila."},
+        }
+    )
+    await _onboard_reoffer_user(engine, gateway)
+
+    # Force router to return our fixed top-6 candidates so we know what
+    # gets shown in round 1 vs round 2.
+    top50 = [
+        ("get_VehicleCalendar", 0.90),
+        ("get_LatestVehicleCalendar", 0.85),
+        ("delete_VehicleCalendar_id", 0.80),
+        ("get_Persons", 0.70),
+        ("get_Expenses", 0.65),
+        ("get_Vehicles", 0.60),
+    ]
+    router.queue_result(RouterResult(
+        tool_id="get_VehicleCalendar", params={},
+        confidence=0.9, rationale="t1", anchor_score=0.9,
+        top_candidates=top50,
+    ))
+
+    # Turn 1: user query → action picker shown
+    r1 = await engine.process_message(_REOFFER_PHONE, "pokaži mi nešto")
+    assert "POGLEDATI" in r1
+
+    # Turn 2: pick "1" (POGLEDATI) → router runs → top-3 tool picker shown
+    r2 = await engine.process_message(_REOFFER_PHONE, "1")
+    assert "Razumio sam jedno od ovog" in r2 or "1️⃣" in r2
+
+    # Confirm the saved reoffer state cached the FULL top-50 ids
+    pc_after_pick = await engine.pending_clarify_store.load(_REOFFER_PHONE)
+    assert pc_after_pick is not None
+    assert pc_after_pick.all_candidate_ids[:6] == [
+        "get_VehicleCalendar", "get_LatestVehicleCalendar",
+        "delete_VehicleCalendar_id", "get_Persons", "get_Expenses",
+        "get_Vehicles",
+    ]
+    assert set(pc_after_pick.shown_tool_ids) == {
+        "get_VehicleCalendar", "get_LatestVehicleCalendar", "delete_VehicleCalendar_id",
+    }
+
+    # Turn 3: pick "1" (get_VehicleCalendar) → executed → result rendered
+    gateway.queue(FakeApiResponse(success=True, data=[{"Id": "r1"}]))
+    r3 = await engine.process_message(_REOFFER_PHONE, "1")
+    assert r3  # got a real reply
+
+    # State must now have can_reoffer=True with executed tool tracked
+    pc_after_exec = await engine.pending_clarify_store.load(_REOFFER_PHONE)
+    assert pc_after_exec is not None
+    assert pc_after_exec.last_executed_tool == "get_VehicleCalendar"
+    assert pc_after_exec.can_reoffer is True
+
+    # Turn 4: "nije točno" → reoffer kicks in, shows positions 4-6
+    r4 = await engine.process_message(_REOFFER_PHONE, "nije točno")
+    assert "U redu, evo drugih opcija" in r4
+    assert "1️⃣" in r4 and "2️⃣" in r4 and "3️⃣" in r4
+
+    pc_after_reoffer = await engine.pending_clarify_store.load(_REOFFER_PHONE)
+    assert pc_after_reoffer is not None
+    # The 3 new tools (positions 4-6) are in shown + candidates
+    new_ids = {c["tool_id"] for c in pc_after_reoffer.candidates}
+    assert new_ids == {"get_Persons", "get_Expenses", "get_Vehicles"}
+    # Cumulative shown: original 3 + 3 new = 6
+    assert len(pc_after_reoffer.shown_tool_ids) == 6
+
+
+@pytest.mark.asyncio
+async def test_reoffer_exhausted_all_candidates_says_no_more():
+    """After enough 'nije točno' rounds all 50 are exhausted — bot must
+    say 'Nemam više opcija' and clear state. No infinite re-offering."""
+    engine, gateway, _llm, _emb, router, _fmt = await _build_engine(
+        registry_tools={
+            "get_X1": {"method": "GET", "service": "s", "path": "/x1", "purpose": "X1"},
+            "get_X2": {"method": "GET", "service": "s", "path": "/x2", "purpose": "X2"},
+            "get_X3": {"method": "GET", "service": "s", "path": "/x3", "purpose": "X3"},
+        }
+    )
+    await _onboard_reoffer_user(engine, gateway)
+
+    # Only 3 candidates total — round 1 shows all 3, round 2 has nothing.
+    router.queue_result(RouterResult(
+        tool_id="get_X1", params={},
+        confidence=0.9, rationale="t", anchor_score=0.9,
+        top_candidates=[("get_X1", 0.9), ("get_X2", 0.8), ("get_X3", 0.7)],
+    ))
+
+    await engine.process_message(_REOFFER_PHONE, "fresh query")  # action picker
+    await engine.process_message(_REOFFER_PHONE, "1")              # tool picker
+    gateway.queue(FakeApiResponse(success=True, data={"ok": 1}))
+    await engine.process_message(_REOFFER_PHONE, "1")              # execute get_X1
+
+    reply = await engine.process_message(_REOFFER_PHONE, "nije točno")
+    assert "Nemam više" in reply or "Opiši ponovo" in reply
+    # State cleared
+    assert await engine.pending_clarify_store.load(_REOFFER_PHONE) is None
