@@ -156,6 +156,8 @@ class FakeGateway:
                 "Id": "veh-5", "VehicleName": "VW Golf",
                 "LicencePlate": "ZG-1234-AB", "LastMileage": 50000,
             })
+        if path == "/AddMileage":
+            return FakeGatewayResponse(data={"Id": "mil-1", "Value": (body or {}).get("Value")})
         if path == "/Trips":
             return FakeGatewayResponse(data={"Data": [
                 {"Id": 1, "TripNo": "T-001", "Route": "Zagreb–Split",
@@ -237,9 +239,17 @@ class FakeChatCompletions:
             return _resp(_Msg(tool_calls=[_ToolCall("get_Trips")]))
         system = (kwargs.get("messages") or [{}])[0].get("content") or ""
         if "klasifikator" in system:
-            return _resp(_Msg(content=json.dumps(
-                {"kind": "other", "confidence": 0.95}
-            )))
+            # Mirror real gpt-4o-mini: imperative flow verbs → flow_request
+            # (the engine's flow gate is keyword AND classifier, 2-of-2).
+            user = (kwargs.get("messages") or [{}, {}])[-1].get("content") or ""
+            is_flow = any(
+                w in user.lower()
+                for w in ("upiši", "upisi", "rezerviraj", "prijavi")
+            )
+            return _resp(_Msg(content=json.dumps({
+                "kind": "flow_request" if is_flow else "other",
+                "confidence": 0.95,
+            })))
         self.formatter_calls.append(kwargs)
         return _resp(_Msg(
             content="Imaš 2 putovanja: Zagreb–Split i Zagreb–Rijeka."
@@ -372,3 +382,47 @@ async def test_wrong_route_recovers_via_nije_tocno_reoffer(system):
     # Bot offers alternatives (next candidates picker) — not silence, not
     # the same executed tool presented as done.
     assert "opcij" in r4.lower() or "1" in r4
+
+
+@pytest.mark.asyncio
+async def test_mutation_path_mileage_flow_confirm_and_exact_post(system):
+    """The WRITE half of the core task: 'upiši 145000 km' →
+    mileage flow pre-fills the value from the message → Da/Ne confirm →
+    POST /automation/AddMileage with the context-injected VehicleId
+    (driver never typed it — identity provides it) + the typed Value."""
+    engine, gateway, chat = system
+
+    await engine.process_message(PHONE, "bok")
+
+    r1 = await engine.process_message(PHONE, "upiši 145000 km")
+    # Value pre-filled from the message → flow skips straight to confirm.
+    assert "145000" in r1
+    assert "Da" in r1 and "Ne" in r1
+    # Nothing written yet — confirm gate holds the mutation.
+    assert not [c for c in gateway.calls if c["path"] == "/AddMileage"]
+
+    r2 = await engine.process_message(PHONE, "Da")
+    assert "uspješno" in r2.lower()
+
+    posts = [c for c in gateway.calls if c["path"] == "/AddMileage"]
+    assert len(posts) == 1, f"exactly one write expected, got {posts}"
+    call = posts[0]
+    assert call["method"] == "POST"
+    assert call["service"] == "automation"
+    assert call["tenant_id"] == TENANT
+    body = call["body"] or {}
+    assert body.get("Value") == 145000            # typed by the user
+    assert body.get("VehicleId") == "veh-5"       # injected from identity
+    assert call["query_params"] == {}             # body params stay in body
+
+
+@pytest.mark.asyncio
+async def test_mutation_declined_with_ne_never_calls_api(system):
+    engine, gateway, chat = system
+
+    await engine.process_message(PHONE, "bok")
+    await engine.process_message(PHONE, "upiši 145000 km")
+    r = await engine.process_message(PHONE, "Ne")
+
+    assert "odusta" in r.lower()
+    assert not [c for c in gateway.calls if c["path"] == "/AddMileage"]
