@@ -30,8 +30,14 @@ class FakeRedisStream:
         self.groups: dict[str, dict] = {}  # stream_name -> {group_name: last_delivered_id}
         self._counter = 0
 
-    async def xadd(self, stream_name: str, data: dict) -> str:
-        """Add entry to stream (called by webhook)."""
+    async def xadd(
+        self,
+        stream_name: str,
+        data: dict,
+        maxlen: int | None = None,
+        approximate: bool = False,
+    ) -> str:
+        """Add entry to stream (called by webhook; maxlen mirrors real Redis)."""
         self._counter += 1
         msg_id = f"1700000000000-{self._counter}"
 

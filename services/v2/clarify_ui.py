@@ -143,7 +143,7 @@ def build_action_picker(candidates: list[dict]) -> ClarifyOptions:
 def methods_for_action_label(label: str) -> set[str]:
     """Reverse lookup: given a Step 1 selection (e.g. "IZMIJENITI"), return
     the HTTP methods to filter candidates by (e.g. {"PUT", "PATCH"})."""
-    return {m for m, l in ACTION_LABELS.items() if l == label}
+    return {m for m, lbl in ACTION_LABELS.items() if lbl == label}
 
 
 def build_clarify_options(

@@ -162,8 +162,24 @@ class LLMFormatter:
 
     # ---- internals ----
 
+    # MobilityOne list envelopes, in the same precedence order the rest of
+    # the codebase uses (engine._extract_rows / v2.formatter smart default).
+    _ENVELOPE_KEYS = ("Data", "data", "Result", "Results", "Items", "items", "value")
+
+    @staticmethod
+    def _truncate_list(items: list, keep: int = 15) -> dict:
+        """Head of a long list + EXPLICIT true count. Without the count the
+        LLM sees 15 rows and confidently reports 'imaš 15 stavki' when the
+        backend returned 200 — a wrong-but-confident answer."""
+        return {
+            "ukupno_stavki": len(items),
+            "prikazano_prvih": min(keep, len(items)),
+            "stavke": items[:keep],
+        }
+
     def _prune(self, data: Any, tool_id: str) -> tuple[Any, bool]:
-        """If api_data is huge, project to output_keys-listed fields only.
+        """If api_data is huge, shrink it WITHOUT losing the answer:
+        long lists → head + true count; fat dicts → output_keys projection.
 
         Returns (pruned_data, was_truncated).
         """
@@ -177,14 +193,24 @@ class LLMFormatter:
         if est <= MAX_JSON_PROMPT_CHARS:
             return data, False
 
-        # If it's a list, keep first 15 items (LLM doesn't need 200 rows
-        # to write "imaš 200 stavki, evo prvih...")
         if isinstance(data, list):
-            head = data[:15]
-            return head, True
+            return self._truncate_list(data), True
 
-        # If it's a dict and we have output_keys, project to those keys.
         if isinstance(data, dict):
+            # Enveloped list ({"Data": [...200 rows], "Total": 200}) — prune
+            # the INNER list, keep the other (small) envelope fields. The old
+            # code fell through to the small-field filter which dropped the
+            # whole array → the LLM answered from an empty envelope.
+            for k in self._ENVELOPE_KEYS:
+                inner = data.get(k)
+                if isinstance(inner, list) and inner:
+                    pruned = {
+                        ok: ov for ok, ov in data.items() if ok != k
+                    }
+                    pruned[k] = self._truncate_list(inner)
+                    return pruned, True
+
+            # No envelope — project to output_keys if we have them.
             keys = self._output_keys_by_tool.get(tool_id) or []
             if keys:
                 projected = {k: data[k] for k in keys if k in data}

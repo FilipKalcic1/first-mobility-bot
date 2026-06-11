@@ -878,7 +878,19 @@ class Worker:
                 "Trenutno mogu obraditi samo tekstualne poruke. "
                 "Molimo pošaljite svoju poruku kao tekst."
             )
-            await self._enqueue_outbound(sender, response)
+            try:
+                await self._enqueue_outbound(sender, response)
+            except Exception as enq_err:  # noqa: BLE001
+                # Mirror the text path's ack protocol: enqueue failed →
+                # release the lock and do NOT ack. Without this, the
+                # redelivered message hits the (still-held) msg_lock, gets
+                # counted as a duplicate and ACKed — reply lost for good.
+                log("warn", "non_text_enqueue_failed", {
+                    "sender": sender[-4:] if sender else "",
+                    "error": str(enq_err),
+                })
+                await self._release_message_lock(sender, message_id)
+                return
             self._messages_processed += 1
             await self._release_message_lock(sender, message_id)
             await self._ack_message(msg_id)
@@ -1051,6 +1063,9 @@ class Worker:
         await self._requeue_abandoned_outbound()
 
         while not self.shutdown.is_shutting_down():
+            data = None  # defined before blmove so except-handlers can't
+            # hit UnboundLocalError when blmove itself raises (that error
+            # would propagate and kill the whole outbound pump until restart)
             try:
                 # Atomically move from outbound to processing list
                 # If we crash after this but before send, the message
@@ -1077,9 +1092,25 @@ class Worker:
                         await self.redis.lrem("whatsapp_outbound_processing", 1, data)
                         continue
 
+                # A payload without a recipient can never be delivered — park
+                # it in the DLQ instead of letting send() fail forever.
+                to = (payload.get("to") or "").strip()
+                if not to:
+                    log("error", "outbound_missing_recipient", {
+                        "text_len": len(payload.get("text") or ""),
+                    })
+                    await self._store_outbound_dlq(
+                        to="", text=payload.get("text") or "",
+                        error_code="MISSING_RECIPIENT",
+                        attempt=payload.get("attempt", 0),
+                    )
+                    await self.redis.lrem("whatsapp_outbound_processing", 1, data)
+                    continue
+
                 await self._send_whatsapp(
-                    to=payload.get("to"), text=payload.get("text"),
+                    to=to, text=payload.get("text"),
                     attempt=payload.get("attempt", 0),
+                    idempotency_key=idem_key,
                 )
 
                 # Mark as sent for idempotency (TTL 10 min)
@@ -1103,7 +1134,24 @@ class Worker:
                         await self.redis.lrem("whatsapp_outbound_processing", 1, data)
                 await asyncio.sleep(1)
             except Exception as e:
+                # Unexpected failure mid-send (service raised instead of
+                # returning a SendResult, Redis hiccup on the idempotency
+                # mark, ...). Without cleanup the entry stays in
+                # whatsapp_outbound_processing until the NEXT pod restart —
+                # invisible, unretried. Park it in the DLQ (full text, 7d)
+                # and drop it from processing so operators see it.
                 log_exception("outbound_error", e)
+                if data:
+                    with suppress(Exception):
+                        _p = json.loads(data) if not isinstance(data, dict) else data
+                        await self._store_outbound_dlq(
+                            to=_p.get("to") or "",
+                            text=_p.get("text") or "",
+                            error_code=f"EXCEPTION:{type(e).__name__}",
+                            attempt=_p.get("attempt", 0),
+                        )
+                    with suppress(Exception):
+                        await self.redis.lrem("whatsapp_outbound_processing", 1, data)
                 await asyncio.sleep(1)
 
     async def _health_reporter(self):
@@ -1222,12 +1270,20 @@ class Worker:
         "AUTH", "UNAUTHORIZED", "FORBIDDEN", "BLOCKED",
     })
 
-    async def _send_whatsapp(self, to: str, text: str, attempt: int = 0):
+    async def _send_whatsapp(
+        self, to: str, text: str, attempt: int = 0,
+        idempotency_key: str = "",
+    ):
         """Send WhatsApp message via WhatsAppService.
 
         attempt: 0-based retry counter (carried through the delayed-outbound
         queue). On transient failure we re-enqueue with attempt+1 until
         MAX_SEND_ATTEMPTS, then park in the outbound DLQ.
+
+        idempotency_key: the ORIGINAL key from _enqueue_outbound, threaded
+        through delayed retries so the sent:{key} dedup marker stays stable
+        across the whole retry chain (a regenerated key would let a
+        crash-recovered retry re-send an already-delivered message).
         """
         if not self._whatsapp_service:
             log("warn", "whatsapp_not_initialized")
@@ -1272,6 +1328,7 @@ class Worker:
             delay = 5 * (2 ** attempt)  # 5s, 10s, 20s
         await self._enqueue_outbound_delayed(
             to, text, delay=delay, attempt=attempt + 1,
+            idempotency_key=idempotency_key,
         )
 
     async def _store_outbound_dlq(
@@ -1299,17 +1356,31 @@ class Worker:
 
     async def _enqueue_outbound_delayed(
         self, to: str, text: str, delay: int = 30, attempt: int = 0,
+        idempotency_key: str = "",
     ):
         """Enqueue outbound message with delay for rate limiting / retry.
 
         attempt: carried through so _send_whatsapp can enforce the retry cap
-        when this message is eventually re-sent (EDGE-2)."""
+        when this message is eventually re-sent (EDGE-2).
+
+        idempotency_key: preserved from the original enqueue when available.
+        Regenerating it here had two failure modes: (a) the sent:{key}
+        marker from a crash-recovered successful send no longer matched →
+        duplicate delivery; (b) second-granularity timestamps let two
+        same-text retries collapse into ONE zset member (zadd dedups
+        identical members) → a reply silently vanished."""
         try:
+            if not idempotency_key:
+                idempotency_key = (
+                    f"{to}:"
+                    f"{hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()[:12]}"
+                    f":{time.time_ns()}"
+                )
             delayed_payload = json.dumps({
                 "to": to,
                 "text": text,
                 "attempt": attempt,
-                "idempotency_key": f"{to}:{hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()[:12]}:{int(time.time() + delay)}",
+                "idempotency_key": idempotency_key,
                 "scheduled_at": time.time() + delay
             })
 

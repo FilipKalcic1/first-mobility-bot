@@ -43,7 +43,10 @@ MAX_TOOL_NAME_LEN = 64
 # schema, but these params stayed exposed — the LLM would free-fill them and
 # ship a malformed/hallucinated filter (e.g. wrong field name → M1 500). Hiding
 # them keeps filtering truly OFF until the data-driven redesign lands.
-_SUPPRESSED_PARAMS = frozenset({"Filter", "UseANDFor"})
+# Matched case-insensitively: the registry carries BOTH casings
+# (`Filter` ×113 / `filter` ×110, `UseANDFor` ×113 / `useANDFor` ×110) and
+# the lowercase half was slipping through the old exact-match set.
+_SUPPRESSED_PARAMS = frozenset({"filter", "useandfor"})
 
 
 @dataclass
@@ -160,9 +163,10 @@ class ToolSchemaBuilder:
         for pname, pdef in params_raw.items():
             if not isinstance(pdef, dict):
                 continue
-            if pname in _SUPPRESSED_PARAMS:
-                # Filter/UseANDFor — kept out of the schema so the LLM can't
-                # ship a free-form filter while the feature is reset to zero.
+            if pname.lower() in _SUPPRESSED_PARAMS:
+                # Filter/UseANDFor (any casing) — kept out of the schema so the
+                # LLM can't ship a free-form filter while the feature is reset
+                # to zero.
                 continue
             ds = pdef.get("dependency_source")
             if ds and ds != "user_input":

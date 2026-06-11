@@ -32,12 +32,13 @@ worker.py (consumer loop)
 | L0.85 Meta-intents | `services/v2/meta_intents.py` | Self-reference, bug report, undo |
 | L1 Special intents | `services/v2/special_intents.py` | GDPR / welcome / handover (with side-effect queue) |
 | L1.5 Unknown-phone gate | `services/v2/engine.py` inline | Reject unregistered phones |
-| L2 Driver quick-path | `services/v2/driver_quick_path.py` | 21 deterministic regex patterns, 0 LLM |
 | L2a Intent type | `services/v2/intent_type.py` | 4-way classifier (1 LLM call) |
 | L2b Driver basics | `services/v2/driver_basics.py` | Embedding anchor match → serve from cached MasterData |
-| L3 LLM Router | `services/router/llm_router.py` | anchor top-50 → gpt-4o-mini tool-call |
-| L5 Confidence gate | `services/v2/confidence_gate.py` | execute / clarify / fallback decision |
-| L6 Mutation gate | `services/v2/mutation_gate.py` | Confirm dialog for POST/PUT/PATCH/DELETE |
+| L4 Flows | `services/v2/flow_engine.py` | booking / mileage / case state machines (keyword-gated) |
+| Model A cascade | `services/v2/engine.py` + `services/v2/pending_clarify.py` | Turn 1 action picker → Turn 2 scoped L3 router → Turn 3 tool pick (no auto-execute) |
+| L3 LLM Router | `services/router/llm_router.py` | anchor top-50 → gpt-4o-mini tool-call (runs inside Turn 2) |
+| Param collection | `services/v2/pending_params.py` + `services/v2/param_ui.py` | Ask missing required params, offer optionals, HR date/number parsing |
+| L6 Mutation gate | `services/v2/mutation_gate.py` | Confirm dialog for POST/PUT/PATCH/DELETE + anti-replay exec lock |
 | L7 Executor | `services/v2/executor.py` + `services/api_gateway.py` | HTTP call to MobilityOne with circuit breaker, OAuth, tenant header |
 | L8 LLM Formatter | `services/formatter/llm_formatter.py` | Backend JSON → Croatian reply |
 
@@ -52,7 +53,7 @@ LLMRouter.route(query, identity_summary, conversation_history)
             → OpenAI tools=[] schema with parameter descriptions
             → 3 oversized tool names aliased via SHA1
   Stage C — LLM tool-call
-            → gpt-4o-mini, tool_choice="auto", temp 0
+            → gpt-4o-mini, tool_choice="required", temp 0
             → retries with backoff on 429/5xx (5s/15s/25s + jitter)
   Stage D — Validate
             → operation_id ∈ top-50 (hallucination guard)
@@ -69,7 +70,9 @@ LLMFormatter.format(query, tool_id, api_data, identity_summary)
      → defang [SYSTEM:...] / "ignore previous" in attacker-controlled fields
      → truncate strings > 1000 chars, max recursion 6 levels
   2. Prune for token budget (≤6000 chars)
-     → list → keep first 15
+     → list → first 15 rows + explicit `ukupno_stavki` count (LLM never
+       reports a truncated count as the total)
+     → enveloped list ({"Data": [...]}) → inner list pruned in place
      → dict + registry.output_keys → project to subset
   3. gpt-4o-mini call (temp 0, max 500 tokens, strict grounding prompt)
   4. PIIScrubber on output (defense in depth — catches LLM-echoed OIBs)
@@ -86,14 +89,14 @@ LLMFormatter.format(query, tool_id, api_data, identity_summary)
 
 | File | Purpose |
 |---|---|
-| `config/processed_tool_registry.json` | 950 tools — operation_id, method, path, parameters, output_keys |
-| `config/tool_knowledge_base.json` | TKB per tool — intent_summary, use_when, do_not_use_when, examples |
-| `config/tool_anchor_enrichments.json` | 950 × 12 Croatian anchor phrases (regenerated 2026-05-12) |
-| `config/driver_quick_path.json` | 21 regex patterns for driver fast-path |
+| `config/tool_data.json` | **Single source of truth** (Git LFS, 3.8 MB) — 950 tools × {method, path, parameters, intent_summary, use_when, do_not_use_when, anchors} |
+| `config/processed_tool_registry.json` | Swagger-derived registry — parameters, locations, dependency_source, output_keys, dependency_graph |
 | `config/context_param_schemas.json` | Param classification rules (person_id / tenant_id auto-injected) |
-| `config/.cache/param_descriptions.json` | LLM-enriched empty parameter descriptions (overlay) |
-| `config/linguistic/typo_synonyms.json` | Croatian typo / slang mapping for text_normalizer |
-| `config/domain/path_entity_map.json` | English path → Croatian entity name (used by sync_tools script) |
+| `config/risky_tools.json` | Tools with incomplete body schemas → confirm-time warning |
+| `config/entity_translations_hr.json` | English entity → Croatian name |
+| `config/linguistic/` | Croatian typo / slang mapping for text_normalizer |
+| `config/domain/` | English path → Croatian entity name (used by sync_tools script) |
+| `config/tenants/` | Per-tenant catalog scoping (CatalogScoper) |
 
 ## Observability
 

@@ -36,7 +36,6 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
-          pip install faiss-cpu
 
       - name: Validate all JSON configs
         # Production-safety gate (2026-05-16). A malformed JSON would crash
@@ -68,9 +67,6 @@ jobs:
       - name: Run tests with coverage
         run: |
           pytest tests/ -v --tb=short \
-            --ignore=tests/test_booking_flow.py \
-            --ignore=tests/test_case_flow.py \
-            --ignore=tests/test_mileage_flow.py \
             -m "not integration" \
             --cov=services --cov=config \
             --cov-report=term-missing \
@@ -114,7 +110,7 @@ jobs:
         continue-on-error: true
 
       - name: Compile entry points
-        run: python -m py_compile config.py && python -m py_compile main.py && python -m py_compile worker.py && python -m py_compile admin_api.py
+        run: python -m py_compile config.py && python -m py_compile main.py && python -m py_compile worker.py && python -m py_compile webhook_simple.py
 
   security:
     runs-on: ubuntu-latest
@@ -131,11 +127,11 @@ jobs:
         run: pip install -r requirements.txt bandit pip-audit
 
       - name: Bandit security scan
-        run: bandit -r services/ config.py main.py worker.py admin_api.py database.py -f json -o bandit-report.json --severity-level medium || true
+        run: bandit -r services/ config.py main.py worker.py webhook_simple.py database.py -f json -o bandit-report.json --severity-level medium || true
 
       - name: Bandit summary
         if: always()
-        run: bandit -r services/ config.py main.py worker.py admin_api.py database.py --severity-level high
+        run: bandit -r services/ config.py main.py worker.py webhook_simple.py database.py --severity-level high
 
       - name: Dependency audit
         if: always()

@@ -238,3 +238,143 @@ async def test_edge2_no_whatsapp_service_is_noop():
     """Missing whatsapp_service → graceful no-op (no crash)."""
     w = _make_worker(whatsapp_service=None, redis=FakeRedisOutbound())
     await w._send_whatsapp("385999", "test")  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# AUD-3 (2026-06-11 audit): outbound loop hardening
+#   - idempotency_key threaded through delayed retries (stable dedup marker,
+#     no zadd-member collisions from second-granularity regenerated keys)
+#   - missing recipient → DLQ (not an eternal send-fail loop)
+#   - unexpected exception → DLQ + removal from processing (was: stuck until
+#     next pod restart, invisible)
+# ---------------------------------------------------------------------------
+
+
+class _OneShotShutdown:
+    """is_shutting_down() → False for the first N calls, then True.
+    Lets a test run exactly one iteration of the outbound loop."""
+    def __init__(self, iterations: int = 1):
+        self._left = iterations
+
+    def is_shutting_down(self) -> bool:
+        if self._left > 0:
+            self._left -= 1
+            return False
+        return True
+
+
+class FakeRedisLoop(FakeRedisOutbound):
+    """Extends the outbound fake with the loop's blmove/get/setex/lrem."""
+    def __init__(self, queued: list):
+        super().__init__()
+        self.queued = list(queued)
+        self.lrem_calls: list = []
+
+    async def blmove(self, src_list, dst_list, timeout=1, src="LEFT", dest="RIGHT"):
+        # NOTE: real redis-py signature — src/dest are the LEFT/RIGHT
+        # directions, the first two positionals are the list keys.
+        if self.queued:
+            item = self.queued.pop(0)
+            self.lists.setdefault(dst_list, []).append(item)
+            return item
+        return None
+
+    async def get(self, key):
+        return self.kv.get(key)
+
+    async def setex(self, key, ttl, value):
+        self.kv[key] = value
+        return True
+
+    async def lrem(self, key, count, value):
+        self.lrem_calls.append((key, value))
+        lst = self.lists.get(key, [])
+        if value in lst:
+            lst.remove(value)
+            return 1
+        return 0
+
+
+def _loop_worker(svc, redis) -> Worker:
+    w = _make_worker(svc, redis)
+    w.shutdown = _OneShotShutdown(iterations=1)
+    return w
+
+
+@pytest.mark.asyncio
+async def test_aud3_idempotency_key_preserved_through_delayed_retry():
+    """Transient failure → the delayed payload must carry the ORIGINAL
+    idempotency_key, not a regenerated one."""
+    svc = FakeWhatsAppService([
+        FakeSendResult(success=False, error_code="API_TIMEOUT",
+                       error_message="t/o"),
+    ])
+    redis = FakeRedisOutbound()
+    w = _make_worker(svc, redis)
+
+    await w._send_whatsapp(
+        "385999", "odgovor", attempt=0,
+        idempotency_key="385999:abc123def456:1717777777000",
+    )
+
+    import json
+    delayed = redis.zsets.get("whatsapp_outbound_delayed", {})
+    assert len(delayed) == 1
+    payload = json.loads(next(iter(delayed.keys())))
+    assert payload["idempotency_key"] == "385999:abc123def456:1717777777000"
+
+
+@pytest.mark.asyncio
+async def test_aud3_delayed_enqueue_without_key_generates_unique_ones():
+    """Fallback path: two same-text enqueues in the same second must NOT
+    collapse into one zset member (the old int(time.time()) key did)."""
+    redis = FakeRedisOutbound()
+    w = _make_worker(None, redis)
+
+    await w._enqueue_outbound_delayed("385999", "ista poruka", delay=5, attempt=1)
+    await w._enqueue_outbound_delayed("385999", "ista poruka", delay=5, attempt=1)
+
+    delayed = redis.zsets.get("whatsapp_outbound_delayed", {})
+    assert len(delayed) == 2, "same-second same-text retries must stay distinct"
+
+
+@pytest.mark.asyncio
+async def test_aud3_missing_recipient_goes_to_dlq_not_send():
+    """Payload without 'to' → DLQ + removed from processing; send never runs."""
+    import json
+    svc = FakeWhatsAppService([])  # would return success — must not be called
+    payload = json.dumps({"to": "", "text": "hej", "idempotency_key": "k1"})
+    redis = FakeRedisLoop([payload])
+    w = _loop_worker(svc, redis)
+
+    await w._process_outbound_loop()
+
+    assert svc.calls == []
+    assert len(redis.lists.get("dlq:outbound", [])) == 1
+    assert ("whatsapp_outbound_processing", payload) in redis.lrem_calls
+
+
+@pytest.mark.asyncio
+async def test_aud3_unexpected_send_exception_parks_in_dlq_and_unsticks():
+    """If the WhatsApp service RAISES (instead of returning a SendResult),
+    the entry must land in the DLQ and leave the processing list — the old
+    handler logged and left it stuck until the next pod restart."""
+    import json
+
+    class _RaisingService:
+        async def send(self, to, text):
+            raise ValueError("boom from service internals")
+
+    payload = json.dumps({"to": "385999", "text": "hej", "idempotency_key": "k2"})
+    redis = FakeRedisLoop([payload])
+    w = _loop_worker(_RaisingService(), redis)
+
+    await w._process_outbound_loop()
+
+    dlq = redis.lists.get("dlq:outbound", [])
+    assert len(dlq) == 1
+    entry = json.loads(dlq[0])
+    assert entry["error_code"] == "EXCEPTION:ValueError"
+    assert entry["to"] == "385999"
+    assert ("whatsapp_outbound_processing", payload) in redis.lrem_calls
+    assert redis.lists.get("whatsapp_outbound_processing", []) == []

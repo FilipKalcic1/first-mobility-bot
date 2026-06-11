@@ -963,8 +963,10 @@ async def gdpr_process(request: Request):
     resolver = await get_tenant_resolver()
 
     # Tenant ↔ phone binding sanity check (prevents operator from one tenant
-    # accidentally deleting another tenant's user). Look up CURRENT binding.
-    current_tenant = await resolver.resolve_tenant_for_phone(phone)
+    # accidentally deleting another tenant's user). Look up CURRENT binding
+    # from Postgres directly — a stale cache entry must never decide an
+    # erasure authorization.
+    current_tenant = await resolver.resolve_tenant_for_phone(phone, bypass_cache=True)
     if current_tenant is None:
         # Mapping already gone (or user was never mapped). Still proceed
         # with Redis cleanup — there may be stale cache entries to remove.

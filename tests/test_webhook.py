@@ -278,12 +278,11 @@ class TestWebhookVerification:
         response = client.get("/webhook/whatsapp")
 
         assert response.status_code == 200
-        assert response.json()["webhook"] == "active"
+        assert response.text == "ok"
 
     def test_verification_without_mode_returns_active(self, client):
-        """Without hub.mode, returns active status (Infobip reachability check)."""
+        """Query params are ignored — endpoint is a plain reachability check."""
         response = client.get("/webhook/whatsapp?hub.challenge=123456")
 
-        # No hub.mode param = simple health check
         assert response.status_code == 200
-        assert response.json()["webhook"] == "active"
+        assert response.text == "ok"
