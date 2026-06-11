@@ -41,6 +41,8 @@ env.bak/
 venv.bak/
 
 # --- 4. PROJECT SPECIFIC ---
+# Idempotency-probe operator config — holds real DEV person/vehicle ids, never commit.
+probe_cfg.json
 tool_registry_full_state.json
 generated_defaults.json
 generated_defaults_v2.json
