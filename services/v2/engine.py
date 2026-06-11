@@ -2581,7 +2581,17 @@ async def make_v2_engine_for_production(
     repo_root = _Path(__file__).resolve().parents[2]
     tool_data_path = repo_root / "config" / "tool_data.json"
     registry_json_path = repo_root / "config" / "processed_tool_registry.json"
-    anchor_cache_path = repo_root / "tests" / "benchmarks" / "router_anchor_cache.json"
+    # Embedded-anchor cache (~11k phrases). Overridable so orchestrated
+    # deployments can mount it on a persistent volume — without that, every
+    # worker restart re-embeds the whole catalog (minutes of startup, real
+    # Azure cost, 429 exposure). Default stays the in-repo path used by
+    # dev/tests.
+    import os as _os
+    _cache_override = (_os.environ.get("ANCHOR_CACHE_PATH") or "").strip()
+    anchor_cache_path = (
+        _Path(_cache_override) if _cache_override
+        else repo_root / "tests" / "benchmarks" / "router_anchor_cache.json"
+    )
 
     # SINGLE SOURCE OF TRUTH (Phase 2 of data consolidation, 2026-05-15).
     # tool_data.json union-merges what used to be three fragmented files:

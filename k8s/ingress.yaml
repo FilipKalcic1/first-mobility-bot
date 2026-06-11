@@ -1,0 +1,38 @@
+# Public HTTPS entry for the Infobip webhook — this replaces `ngrok http 8000`.
+#
+# Prereqs on the cluster (standard stack):
+#   - ingress-nginx controller
+#   - cert-manager with a ClusterIssuer named "letsencrypt-prod"
+# Then point DNS A-record bot.<your-domain> at the ingress LB IP and set the
+# SAME https URL in the Infobip webhook config.
+#
+# Only /webhook is exposed. Admin diagnostic routes live under /webhook/...
+# and are token-protected in-app (404 without token); health endpoints stay
+# cluster-internal.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bot-ingress
+  namespace: mobility-bot
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"      # webhooks are tiny
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/limit-rps: "30"            # per-IP edge cap
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - bot.example.com          # ← CHANGE: your real host
+      secretName: bot-tls
+  rules:
+    - host: bot.example.com        # ← CHANGE: your real host
+      http:
+        paths:
+          - path: /webhook
+            pathType: Prefix
+            backend:
+              service:
+                name: bot-api
+                port:
+                  number: 8000

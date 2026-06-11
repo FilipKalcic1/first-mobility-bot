@@ -1,0 +1,122 @@
+# API process (main.py): receives Infobip webhooks, HMAC-verifies, XADDs to
+# the Redis stream, returns 200. STATELESS and light — the heavy brain lives
+# in the worker. That makes the api safe to run with 2 replicas and rolling
+# updates with zero webhook downtime (this is what replaces ngrok+laptop).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot-api
+  namespace: mobility-bot
+  labels:
+    app: bot-api
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0   # never drop below capacity — Infobip won't wait
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: bot-api
+  template:
+    metadata:
+      labels:
+        app: bot-api
+    spec:
+      securityContext:
+        runAsUser: 1000        # matches Dockerfile appuser
+        runAsGroup: 1000
+        runAsNonRoot: true
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: api
+          image: ghcr.io/filipkalcic1/nova-verzija:latest  # pin a sha tag in real deploys
+          imagePullPolicy: IfNotPresent
+          # Dockerfile CMD already runs uvicorn main:app on :8000.
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: bot-config
+            - secretRef:
+                name: bot-secrets
+          resources:
+            # Webhook path is verify+XADD — featherweight. Two small pods
+            # beat one big one (HA + rolling updates).
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            # /ready does a real Redis write-cycle + DB SELECT 1 and flips
+            # to 503 during graceful shutdown (APP_STOPPING) so k8s stops
+            # routing webhooks to a draining pod.
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 4
+          lifecycle:
+            preStop:
+              # Let the LB de-register before uvicorn gets SIGTERM —
+              # avoids a window where Infobip hits a dying pod.
+              exec:
+                command: ["sleep", "5"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bot-api
+  namespace: mobility-bot
+spec:
+  selector:
+    app: bot-api
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: bot-api-pdb
+  namespace: mobility-bot
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: bot-api
+---
+# Modest HPA: webhook bursts (Infobip retries during incidents) scale the
+# light api pods; the worker intentionally does NOT autoscale (see worker.yaml).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bot-api-hpa
+  namespace: mobility-bot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bot-api
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

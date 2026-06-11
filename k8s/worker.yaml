@@ -1,0 +1,108 @@
+# Worker process (worker.py): the bot brain. Reads the Redis stream via
+# consumer group "workers", runs V2Engine, pushes replies to the outbound
+# queue and sends them to Infobip.
+#
+# WHY replicas=1 + Recreate (deliberate, not a limitation):
+#   - Per-sender ordering: the worker serializes messages per phone with an
+#     IN-PROCESS lock (worker.py `_processing_locks`). Two pods could process
+#     two messages from the same user concurrently and interleave pending
+#     confirm/param state. The Redis consumer group makes scale-out POSSIBLE
+#     later, but it needs a cross-pod per-sender lock first.
+#   - Recreate (not RollingUpdate): two workers during a rollout = the same
+#     concurrency hazard for ~30s. The stream buffers webhooks during the
+#     gap (api stays up), so nothing is lost — replies are just delayed.
+#   - Throughput is NOT the bottleneck at pilot scale (~120 drivers): each
+#     turn is dominated by LLM+M1 latency, and MAX_CONCURRENT messages are
+#     processed concurrently for DIFFERENT senders within the single pod.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot-worker
+  namespace: mobility-bot
+  labels:
+    app: bot-worker
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: bot-worker
+  template:
+    metadata:
+      labels:
+        app: bot-worker
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        fsGroup: 1000
+      # Graceful drain: worker traps SIGTERM, stops reading the stream,
+      # finishes in-flight messages, then exits. 60s covers the worst
+      # single-message budget (90s cap is rare; unACKed messages are
+      # reclaimed on the next start either way).
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: ghcr.io/filipkalcic1/nova-verzija:latest  # pin a sha tag in real deploys
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/bin/tini", "--", "python", "worker.py"]
+          envFrom:
+            - configMapRef:
+                name: bot-config
+            - secretRef:
+                name: bot-secrets
+          resources:
+            # Holds tool_data.json (3.8MB JSON → bigger in RAM) + ~11k anchor
+            # vectors + engine state. Measured warning threshold in code is
+            # 800MB — limit leaves headroom so a burst doesn't OOMKill
+            # mid-mutation.
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+          # No HTTP port — liveness via the heartbeat file the health
+          # reporter touches every 60s. 240s threshold = 4 missed beats.
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - test $(( $(date +%s) - $(cat /tmp/worker-heartbeat 2>/dev/null || echo 0) )) -lt 240
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 2
+          # First boot on an empty anchor-cache PVC embeds ~11k phrases —
+          # give it up to 5 minutes before liveness starts counting.
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - test -f /tmp/worker-heartbeat
+            periodSeconds: 10
+            failureThreshold: 30
+          volumeMounts:
+            - name: anchor-cache
+              mountPath: /var/cache/bot
+      volumes:
+        - name: anchor-cache
+          persistentVolumeClaim:
+            claimName: bot-anchor-cache
+---
+# Anchor-embedding cache survives restarts/deploys: the content fingerprint
+# in the file invalidates it automatically when anchors or the embedding
+# deployment change, so persistence is always safe.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bot-anchor-cache
+  namespace: mobility-bot
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi

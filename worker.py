@@ -1161,7 +1161,13 @@ class Worker:
         Also verifies the Lua lock-release script is still cached in Redis — if Redis
         flushed scripts (SCRIPT FLUSH), the SHA is automatically reloaded here.
         Emits a warning with tracemalloc top-5 allocators when memory exceeds threshold.
+
+        Liveness heartbeat: when WORKER_HEARTBEAT_FILE is set, the loop touches
+        that file each cycle (atomic write). The worker has no HTTP port, so an
+        orchestrator (k8s exec livenessProbe) checks the file's age — a hung
+        event loop stops touching it and the pod gets restarted.
         """
+        self._touch_heartbeat()  # initial beat so probes pass right after boot
         while not self.shutdown.is_shutting_down():
             try:
                 await asyncio.sleep(HEALTH_REPORT_INTERVAL)
@@ -1255,8 +1261,25 @@ class Worker:
                 else:
                     log("info", "health", health_data)
 
+                self._touch_heartbeat()
+
             except asyncio.CancelledError:
                 break
+
+    def _touch_heartbeat(self) -> None:
+        """Atomically write the current unix time to WORKER_HEARTBEAT_FILE.
+        No-op when the env var is unset (dev / docker-compose). Never raises —
+        a full disk must not take down message processing."""
+        path = os.environ.get("WORKER_HEARTBEAT_FILE", "").strip()
+        if not path:
+            return
+        try:
+            tmp = f"{path}.tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(str(int(time.time())))
+            os.replace(tmp, path)
+        except OSError as e:
+            log("warn", "heartbeat_write_failed", {"error": str(e)})
 
     # EDGE-2 (Filip 2026-05-20): outbound send resiliency.
     # Permanent errors never succeed on retry → straight to DLQ.

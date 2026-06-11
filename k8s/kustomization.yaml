@@ -1,0 +1,14 @@
+# kubectl apply -k k8s/   (after creating the bot-secrets Secret — see
+# secret.example.yaml, which is deliberately NOT listed here).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mobility-bot
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - redis.yaml
+  - postgres.yaml      # remove when using a managed database
+  - api.yaml
+  - worker.yaml
+  - ingress.yaml
+  - networkpolicy.yaml

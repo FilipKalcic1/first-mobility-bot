@@ -1,0 +1,30 @@
+# Non-secret runtime configuration shared by api + worker.
+# Secrets (DB URL with password, OAuth creds, Azure keys, Infobip keys,
+# admin tokens) live in the `bot-secrets` Secret — see secret.example.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bot-config
+  namespace: mobility-bot
+data:
+  APP_ENV: "production"
+  DEBUG: "false"
+  VERIFY_WHATSAPP_SIGNATURE: "true"
+
+  # In-cluster services (see redis.yaml / postgres.yaml).
+  REDIS_URL: "redis://redis.mobility-bot.svc.cluster.local:6379/0"
+
+  # Telemetry: stdout (scraped by the cluster log stack) + Redis live tap
+  # for the /webhook/whatsapp/routing-log admin endpoint.
+  V2_TELEMETRY: "1"
+  V2_TELEMETRY_BACKEND: "stdout+redis"
+
+  # Worker performance: persist the embedded-anchor cache across restarts.
+  # Without this every deploy re-embeds ~11k anchor phrases (minutes of
+  # startup + real Azure cost + 429 exposure). Mounted PVC: worker.yaml.
+  ANCHOR_CACHE_PATH: "/var/cache/bot/router_anchor_cache.json"
+
+  # Worker liveness heartbeat (exec probe checks the file's age).
+  WORKER_HEARTBEAT_FILE: "/tmp/worker-heartbeat"
+
+  PYTHONUNBUFFERED: "1"
