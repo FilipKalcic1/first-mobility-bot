@@ -573,3 +573,24 @@ def test_parse_period_returns_none_on_garbage():
     assert _parse_period("kasnim na sastanak") is None
     # Date but no hour and no part-of-day → None
     assert _parse_period("sutra negdje") is None
+
+
+# ---- AUD-4 (2026-06-11 audit): confirm prompts humanize ISO datetimes ----
+
+
+def test_render_prompt_humanizes_iso_datetime():
+    """Booking confirm must read 'od 12.06.2026. 09:00' — not raw ISO."""
+    from services.v2.flow_engine import _render_prompt
+
+    out = _render_prompt(
+        "Rezerviram od {from_time} do {to_time}.",
+        {"from_time": "2026-06-12T09:00:00", "to_time": "2026-06-12T15:00:00"},
+    )
+    assert out == "Rezerviram od 12.06.2026. 09:00 do 12.06.2026. 15:00."
+
+
+def test_render_prompt_leaves_plain_strings_alone():
+    from services.v2.flow_engine import _render_prompt
+
+    out = _render_prompt("Opis: {description}", {"description": "kvar na 4. vratima"})
+    assert out == "Opis: kvar na 4. vratima"

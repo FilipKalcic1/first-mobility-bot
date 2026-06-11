@@ -621,18 +621,36 @@ def _invalid_message(step: Step) -> str:
     return "Nisam razumio. Pokušaj ponovo."
 
 
+def _human_datetime(value: str) -> str:
+    """ISO 'YYYY-MM-DD[THH:MM...]' → 'dd.mm.yyyy. HH:MM' for prompts. The
+    booking confirm used to echo raw ISO ('od 2026-06-12T09:00:00 do ...')
+    which reads robotic; the [C] path already humanizes its echo, so the
+    flow confirm should match. Non-ISO strings pass through unchanged."""
+    if (
+        len(value) >= 10
+        and value[:4].isdigit() and value[4] == "-" and value[7] == "-"
+    ):
+        out = f"{value[8:10]}.{value[5:7]}.{value[:4]}."
+        if len(value) >= 16 and value[10] in ("T", " "):
+            out += f" {value[11:16]}"
+        return out
+    return value
+
+
 def _render_prompt(template: str, collected: dict) -> str:
     """Substitute {slot} placeholders with values from collected_params.
 
     A dict-valued slot (e.g. booking's `chosen_vehicle`, a picked row) renders
     its human label, not the raw dict repr — otherwise the booking confirm
-    would show "{'label': ..., 'Id': ...}".
+    would show "{'label': ..., 'Id': ...}". ISO datetimes render humanized.
     """
     out = template
     for k, v in collected.items():
         if isinstance(v, dict):
             disp = v.get("label") or v.get("Name") or v.get("name") or ""
             out = out.replace("{" + k + "}", str(disp))
+        elif isinstance(v, str):
+            out = out.replace("{" + k + "}", _human_datetime(v))
         else:
             out = out.replace("{" + k + "}", str(v))
     return out

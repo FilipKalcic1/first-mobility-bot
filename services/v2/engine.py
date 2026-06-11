@@ -2177,6 +2177,7 @@ class V2Engine:
             return await self._render_execution_failure(exec_result, tool_id)
         # Save reoffer state for "nije točno" handler (Filip 2026-06-05).
         # Only fires when called from clarify flow with the top-50 context.
+        reoffer_saved = False
         if (reoffer_top50 is not None
                 and self.pending_clarify_store is not None):
             shown = list(reoffer_shown or [])
@@ -2191,13 +2192,20 @@ class V2Engine:
                     last_executed_tool=tool_id,
                     can_reoffer=True,
                 )
+                reoffer_saved = True
             except Exception as e:  # noqa: BLE001 — never break the reply
                 logger.warning("save reoffer state failed: %s", e)
-        return await self._format_reply(
+        reply = await self._format_reply(
             query=query, tool_id=tool_id, api_data=exec_result.data,
             identity=identity, field_hint=field_hint,
             extra_context={"entity_label": identity.vehicle_name or "rezultata"},
         )
+        # Teach the reoffer phrase whenever the state to honor it exists.
+        # The template formatter appends this itself; the LLM path didn't —
+        # so LLM-formatted replies silently lost the feedback loop.
+        if reoffer_saved and "nije točno" not in reply:
+            reply += "\n\nAko nije točno, napiši 'nije točno'."
+        return reply
 
     async def _continue_pending_mutation(
         self, phone: str, pending, user_input: str,
