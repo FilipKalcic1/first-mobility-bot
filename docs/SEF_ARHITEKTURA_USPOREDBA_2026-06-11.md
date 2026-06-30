@@ -82,6 +82,74 @@ s istim pravilima". Ako pravila žive u botu — web UI ih ne može iskoristiti
 
 ---
 
+## ⭐ "Ali to zvuči identično našem sustavu" — da, jer si VEĆ sagradio kutiju 3
+
+Prirodna reakcija na Damirov dijagram je: *"pa to je ono što već imamo."* I to je
+**90% točno** — ne zabuna, nego pravi uvid. Razlog: za naše **3 glavne radnje
+(booking / mileage / case)** orkestraciju koju Damir stavlja u Business API
+**već smo implementirali i radi** — u `services/v2/flow_engine.py`.
+
+Pogledaj `BOOKING_FLOW` — to je **doslovno** Damirov `/actions/book_vehicle`:
+
+```
+ASK_PERIOD → EXEC_LOOKUP get_AvailableVehicles   ← "je li auto slobodan?" (Damirova provjera!)
+           → ASK_CHOICE → ASK_CONFIRM
+           → final_tool = POST /VehicleCalendar
+```
+
+A "glupe parametre" koje je Damir naveo (`EntryType`, `AssigneeType`) bot **već zna
+sam upisati** (`_booking_params`, `flow_engine.py:688`):
+
+```python
+"AssigneeType": 1,
+"EntryType": 0,
+"FromTime": ..., "ToTime": ..., "VehicleId": ...
+```
+
+I imamo ih **točno 3**: `FLOWS = {booking, mileage, case}` (`flow_engine.py:813`).
+
+**Dakle:** logika koju Damir stavlja u Business API — provjeri dostupnost, znaj
+koji granularni endpoint i s kojim poljima — **već postoji u botu, za 3 akcije.**
+Zato dijagram zvuči kao naš sustav: za naše 3 glavne radnje **i jest**.
+
+### Tih 10% razlike = cijeli projekt
+
+Ne mijenja se arhitektura (slažemo se). Mijenja se **gdje logika živi, tko je
+vlasnik, i koliko je akcija:**
+
+| | Mi danas (`flow_engine.py`) | Damirov cilj (`/actions`) |
+|---|---|---|
+| **Gdje živi** | unutar bota | zaseban shared servis |
+| **Tko reuse** | samo bot | bot **+ web QB + Copilot** (isti `/actions`) |
+| **Koliko akcija** | 3 hardkodirane | ~30 |
+| **Ostalih ~947 ops** | bot ruta direktno → **TU je 35% accuracy** | dobiju čist coarse front |
+
+Dva prava dobitka: (1) **reuse** — booking logika je danas zaključana u botu, web
+QB je ne može pozvati (krši "UI i AI dijele isti API"); (2) **pokrivenost** —
+imamo "kuhara" za 3 radnje, za ostalih ~947 bot pogađa direktno; `/actions`
+proširuje kuhara s 3 na ~30.
+
+### Iskrena nijansa (da te ne uhvati nespremnog)
+
+Dio kutije 3 **već radiš** (slijed poziva: dostupnost → odabir → upis). Dio **ne
+radiš**: autorizacijska pravila ("ima li vozač dozvolu?") — danas to ne provjeravaš
+unaprijed; backend odbije s 403/400 i `api_error_translator` prevede grešku na
+hrvatski. Pa Business API zapravo **konsolidira + pred-validira + da ti JEDAN
+čist endpoint** umjesto da ti slažeš N granularnih poziva.
+
+### Talking point za sastanak
+
+> *"Slažem se — i zapravo sam ovaj pattern već dokazao: `flow_engine.py` radi
+> točno tvoj `/actions/book_vehicle` za naše 3 glavne radnje, uključujući provjeru
+> dostupnosti i upis s ispravnim poljima. Projekt je: podignuti tu logiku iz mog
+> bota u shared `/actions` servis i proširiti je s 3 na ~30 akcija. Pitanje je
+> tko ga gradi i vlasništvo."*
+
+Time pokazuješ da nisi samo razumio dijagram — **već si izgradio i validirao
+njegov najteži dio**, i znaš točno što fali da se dovrši.
+
+---
+
 ## 2. Mapiranje: Damirovih 7 slojeva → naša stvarnost danas
 
 | # | Damirov sloj | Što stvarno imamo | Status |
