@@ -38,6 +38,77 @@ samo usporedba — bez plana migracije, samo da jasno vidim razliku između to d
 
 ---
 
+## Kako izgleda flow (put poruke kroz sustav)
+
+Ista poruka — *"rezerviraj auto sutra 9-15"* — kroz obje arhitekture.
+Razlika se najbolje vidi **gdje se događa orkestracija** (žuti dio).
+
+### STARA (danas) — moj bot puca direktno u 950 funkcija
+
+```
+[ KORISNIK ]  "rezerviraj auto sutra 9-15"
+     │
+[ WhatsApp ] ─▶ webhook_simple.py ─▶ Redis stream ─▶ worker.py
+     │
+     ▼
+╔═══════════════════════════════════════════════════════╗
+║  MOJ BOT (V2Engine)                                   ║
+║  • safety (rate-limit, PII, sanitizer)                ║
+║  • identitet (telefon → osoba / tenant)               ║
+║  • razumije namjeru                                   ║
+║  • SAM bira 1 od 950 funkcija        ◀── ovdje griješi (sibling kolizije)
+║  • SAM slaže parametre (EntryType, AssigneeType…)     ║
+║  • SAM orkestrira: lookup → izbor → upis  ◀── poslovna logika u botu
+║  • Da/Ne potvrda                                      ║
+╚═══════════════════════════════════════════════════════╝
+     │   (bot puca ravno u sirove rute)
+     ▼
+[ 950 granularnih Domain API funkcija ]
+   GET /AvailableVehicles · POST /VehicleCalendar · …
+     │
+     ▼
+[ formatter → hrvatski ] ─▶ natrag korisniku
+```
+
+### NOVA (cilj) — moj bot stisne 1 akciju, Business API odradi ostalo
+
+```
+[ KORISNIK ]  "rezerviraj auto sutra 9-15"
+     │
+[ WhatsApp / Viber ] ─▶ webhook ─▶ Redis stream ─▶ worker.py
+     │
+     ▼
+╔═══════════════════════════════════════════════════════╗
+║  MOJ BOT (V2Engine) — tanji                           ║
+║  • safety (rate-limit, PII, sanitizer)                ║
+║  • identitet (telefon → osoba / tenant)               ║
+║  • razumije namjeru                                   ║
+║  • bira 1 od ~30 AKCIJA              ◀── čisto, bez kolizija
+║  • izvuče samo ono što korisnik kaže (from, to)       ║
+║  • Da/Ne potvrda                                      ║
+╚═══════════════════════════════════════════════════════╝
+     │   POST /actions/book_vehicle {from, to}   ← jedan čisti poziv
+     ▼
+┌───────────────────────────────────────────────────────┐
+│  BUSINESS API  /actions/*   (MobilityOne)             │
+│  • provjeri dostupnost + ovlasti                      │
+│  • orkestrira granularne pozive: lookup → upis        │  ◀── poslovna logika OVDJE
+│  • zna EntryType / AssigneeType / CaseType…           │
+└───────────────────────────────────────────────────────┘
+     │   (Business API interno zove sirove rute)
+     ▼
+[ 950 granularnih Domain API funkcija ]
+     │
+     ▼
+[ formatter → hrvatski ] ─▶ natrag korisniku
+```
+
+> Vrh (razumijevanje + safety) i dno (950 funkcija) su **isti**. Razlika je
+> srednji dio: u staroj moj bot sam orkestrira 950 ladica; u novoj stisne 1 od ~30
+> akcija, a Business API odradi orkestraciju.
+
+---
+
 ## Isti primjer kroz obje arhitekture
 
 **Korisnik:** *"Prijavljujem kvar na ZG-1234-AB, pukla je guma."*
