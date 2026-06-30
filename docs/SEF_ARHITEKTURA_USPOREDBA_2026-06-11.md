@@ -265,31 +265,4 @@ akcija = accuracy dobitak).
 
 ---
 
-## 7. Otvorena pitanja za Damira (donijeti na sastanak)
 
-1. **Tko gradi `/actions`?** Njegov backend tim (arhitektonski ispravno — poštuje
-   "bez duplikacije"), ili ja adapter/BFF na svojoj strani (brže, neovisno o
-   njima, ali orkestracija ostaje u botu)? — *Ovo je odluka #1; ne presuđujem
-   unaprijed.*
-2. **MCP = protokol ili pojam?** Ako protokol — je li driver M365 Copilot
-   integracija (Slika B)?
-3. **Auth na WhatsApp** — prihvaća li service-principal + identity-scoping model
-   (jer per-user token na WA ne ide), s autorizacijom u Business API-ju?
-4. **Prvih ~15 akcija** — koje capabilitije smatra MVP-jem? (Mapira se na naših
-   ~20 high-frequency — imam prijedlog spreman.)
-5. **M1 Swagger zahtjevi** — ostaju li svi relevantni, ili `/actions` sloj dio
-   njih čini suvišnima? (Ako Business API interno orkestrira granularno, treba li
-   nam i dalje sibling-distinkcija na 950, ili samo na ~30 akcija?)
-6. **Read-only vs write** — u QB mailu spominje read-only za dashboard; vrijedi
-   li to i za bota, ili bot ostaje read+write (s confirm gateom)?
-
----
-
-## Dodatak — kako provjeriti tvrdnje iz ovog dokumenta
-
-```bash
-grep -rn "/actions/" services/                     # prazno → /actions sloj ne postoji
-grep -rni "mcp" services/ *.py                      # prazno → nema MCP servera
-grep -n "client_credentials" services/token_manager.py   # single-principal auth
-grep -n "channel" webhook_simple.py worker.py       # prazno → danas sve implicitno WhatsApp
-```
