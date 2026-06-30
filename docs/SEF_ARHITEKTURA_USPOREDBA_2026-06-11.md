@@ -16,7 +16,7 @@
 Damirova arhitektura **nije kritika** našeg rada — to je **ista** arhitektura
 koju smo već sagradili, plus **jedan sloj koji ne postoji**: `/actions` Business
 API. I taj sloj koji fali je **točno** razlog zašto nam je routing accuracy
-zaglavljen (~35% na cijelom katalogu): danas LLM bira između **950 granularnih
+zaglavljen : danas LLM bira između **950 granularnih
 Swagger operacija** sa siblinzima (`delete_X` vs `delete_X_id`, PUT vs PATCH),
 a u Damirovom modelu bi birao između **~30 čistih, intent-oblikovanih akcija**
 (`book_vehicle`, `add_mileage`, `report_incident`). Sibling kolizije — naš #1
