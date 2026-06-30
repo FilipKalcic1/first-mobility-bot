@@ -241,3 +241,12 @@ Za uspješnu realizaciju projekta, na sastanku moramo definirati odgovore na slj
 
 6. 
 **Confirm Gate (Read/Write distinkcija):** Budući da se u Query Builderu spominje read-only pristup za dashboard, moramo potvrditi da za bota ostaje aktivno pravilo obaveznog confirm gate-a (ljudska potvrda prije bilo kakve mutacije podataka u bazi).
+
+
+
+---
+
+
+[cite_start]
+
+```
