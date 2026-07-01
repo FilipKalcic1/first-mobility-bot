@@ -508,6 +508,212 @@ polja), strukturiran error (`error_code`+`message`), i tko mapira šifrarnike
 
 ---
 
+## 10. Detaljne odluke (deep-dive)
+
+Svaka odluka iz tablice §9 razrađena: **što je izazov → opcije (s kodom/dijagramom)
+→ preporuka → posljedica za implementaciju.**
+
+### 10.1 Granica: koji parametar puni AI, a koji backend
+
+**Izazov:** akcija ima 3 vrste parametara. Ako AI pokuša puniti krivu vrstu →
+halucinacija (izmisli `CaseType:2`) ili sigurnosni problem (sam postavi `TenantId`).
+
+```
+                       ┌─────────────────────────────────────────────┐
+ "pukla mi je guma     │  AI PUNI (iz teksta)                         │
+  na ZG-1234-AB"  ────▶│    registration_plate = "ZG-1234-AB"         │
+                       │    description        = "pukla guma"         │
+                       ├─────────────────────────────────────────────┤
+                       │  BOT/BACKEND INJECT (iz identiteta)          │
+   identity.resolve ──▶│    person_id  = "p-77"   (nikad iz teksta!)  │
+                       │    tenant_id  = "t-A"                        │
+                       ├─────────────────────────────────────────────┤
+                       │  BACKEND DODAJE (interno mapiranje)          │
+   Business API    ───▶│    CaseType   = 3        (šifrarnik, §10.2)  │
+                       │    Status     = "open"   (default)          │
+                       │    EntryType  = 0        (computed)          │
+                       └─────────────────────────────────────────────┘
+```
+
+**Pravilo za `actions.json`:** u `ai.parameters` ide **isključivo prva skupina**
+(poslovni, korisnik ih izgovori). Druga skupina ide u `policy.inject`. Treća nije
+nigdje u botu — backend je dodaje.
+
+**Test za razvrstavanje novog parametra** (kad dizajniraš akciju):
+| Pitanje | Da → |
+|---|---|
+| Korisnik ovo izgovori u poruci? | `ai.parameters` (AI puni) |
+| Dolazi iz "tko je korisnik" (person/tenant/vlastito vozilo)? | `policy.inject` |
+| Interni kod / default / računato polje? | backend (ne spominji u botu) |
+
+> **Rubni slučaj:** `incident_type` je *poslovni izbor* (korisnik ga može reći)
+> ALI je i *šifrarnik* (kodiran po tenantu). Zato je u `ai.parameters` **s
+> markerom** `"codebook":"CaseType"` — AI izvuče semantiku ("kvar"), a razrješenje
+> u broj ide po §10.2.
+
+---
+
+### 10.2 Šifrarnici (`CaseType` različit po tenantu) — 3 opcije s kodom
+
+**Izazov:** `CaseType` je kodiran (1/2/3), tenant-specifičan, živi u backendu. AI
+mora "pukla guma" pretvoriti u točan broj za TOG tenanta.
+
+```
+Tenant A:  1=Kvar   2=Šteta   3=Nezgoda
+Tenant B:  1=Nezgoda 2=Kvar   4=Vandalizam        ← isti tekst, drugi broj!
+```
+
+**Opcija A — statični enum u schemi (❌ NE):**
+```json
+"incident_type": { "enum": [1, 2, 3] }   // puca: tenant B ima druge brojeve
+```
+
+**Opcija B — bot razrješuje (reuse `type_resolver.py`, već postoji):**
+```python
+# runtime, u botu, prije slanja akcije
+rows = await executor.get_codebook(tenant_id, "CaseType")   # GET /CaseTypes
+pairs = type_resolver.rows_to_pairs(rows)                    # [(3,"Kvar"),(2,"Šteta")]
+code, _ = type_resolver.match(user_says="kvar", pairs)      # → 3
+if code is None:                                            # nema jednoznačnog matcha
+    return clarify("Je li to kvar, šteta ili nezgoda?")     # pitaj korisnika
+params["incident_type_id"] = code
+```
+```
+FLOW (opcija B):
+ AI: incident_type="kvar" ──▶ bot: GET /CaseTypes?tenant=A ──▶ match "kvar"→3
+        └ jednoznačno? → pošalji 3    └ dvosmisleno? → clarify pitanje korisniku
+```
+
+**Opcija C — backend razrješuje (✅ PREPORUKA za World A):**
+```
+ AI: incident_type="kvar"  ──POST /actions/report-incident {incident_type:"kvar"}──▶
+     Business API: codebook.map("CaseType","kvar",tenant) → 3   (backend zna svoj šifrarnik)
+```
+AI/bot **nikad ne dira brojeve**. Backend, koji posjeduje šifrarnik, mapira semantiku.
+
+| | A statični | B bot-resolve | C backend-resolve |
+|---|---|---|---|
+| Radi per-tenant? | ❌ | ✅ | ✅ |
+| Tko zna kodove | nitko (hardkodirano) | bot (dohvaća) | backend (posjeduje) |
+| Extra HTTP poziv | — | da (dohvat šifrarnika) | ne |
+| Preporuka | nikad | fallback / World B | **default / World A** |
+
+---
+
+### 10.3 Registracija → VehicleId ("AI nikad ne tipka UUID")
+
+**Izazov:** AI prepozna `"ZG-1234-AB"` (ljudski), ali akcija/baza rade s
+`VehicleId` (UUID). Netko mora razriješiti tablicu → UUID.
+
+```
+ AI: registration_plate="ZG-1234-AB"
+        │
+        ├── World A:  pošalji tablicu → backend razriješi (GET /Vehicles?plate=…)
+        │             (kao report_incident §8 — jedno mjesto, čisto)
+        │
+        └── World B:  bot pre-resolve  ──▶  GET /Vehicles?Filter=LicencePlate(=)ZG-1234-AB
+                       nađe VehicleId → pošalji UUID
+                       BONUS: rana validacija — "to vozilo ne postoji" PRIJE akcije
+```
+
+**Preporuka:** World A → backend resolve (čišće). World B ili kad želiš rano
+javiti grešku → bot pre-resolve (imaš uzorak u `probe_filter.py` + `identity.py`
+koji već radi lookup za vozačevo vlastito vozilo).
+
+---
+
+### 10.4 ⭐ Tko gradi `/actions`: World A vs World B (glavno pitanje za Damira)
+
+**Ovo je jedna odluka koja mijenja tko radi 80% posla.** Pitanje je samo:
+**GDJE živi orkestracija** (GET vehicle → POST incident `CaseType:3` → PUT calendar)?
+
+#### World A — Business API na MobilityOne serveru (Damirov tim gradi)
+```
+   BOT (tanak)                              MOBILITYONE SERVER
+   report_incident{plate, desc}
+        │  POST /actions/report-incident
+        └──────────────────────────────────▶  ┌── Business API /actions ──┐
+                                               │  GET  /Vehicles           │
+                                               │  POST /Incidents CaseType:3│  ← orkestracija
+                                               │  PUT  /Calendar block      │    ŽIVI OVDJE
+        ◀─── {success, incident_id} ──────────  └───────────────────────────┘
+   (bot NE zna redoslijed ni kodove)            (Damir gradi i održava)
+```
+- **Bot:** samo prepozna akciju + izvuče poslovne parametre. Tanak.
+- **Logika:** na backendu, na JEDNOM mjestu → i web QB i Copilot je dijele.
+- **Trošak:** ovisi o Damirovom timelineu; bot je "blokiran" dok backend ne izloži akciju.
+
+#### World B — Bot-side BFF adapter (Filip gradi, poopćen `flow_engine.py`)
+```
+   BOT (deblji — sadrži orkestraciju)              MOBILITYONE
+   report_incident{plate, desc}
+        │  (lokalna funkcija = poopćen flow_engine)
+        ├─ GET  /Vehicles            ──┐
+        ├─ POST /Incidents CaseType:3 ─┼──────────▶  DOMAIN API (950 granularnih)
+        └─ PUT  /Calendar block      ──┘
+   (bot ZNA redoslijed + kodove + filtere)          ( /actions NE postoji na serveru )
+```
+- **Bot:** sam orkestrira granularne pozive (kao `flow_engine.py` danas za 3 flowa, samo za ~30).
+- **Logika:** u botu → web QB je ne može reuse-ati (krši "UI i AI dijele API").
+- **Trošak:** brzo, neovisno o Damiru — ALI vraća "debeli bot" i moraš znati
+  params/order/šifrarnike (točno ono što si u komentarima flagao kao teško + blokiran si na Swagger metapodacima).
+
+#### Usporedba
+| | **World A** (backend) | **World B** (bot BFF) |
+|---|---|---|
+| Tko gradi `/actions` | Damirov tim | ti (Filip) |
+| Gdje živi orkestracija | MobilityOne server | u botu |
+| Bot | tanak | debeo |
+| Reuse (web QB, Copilot) | ✅ dijele isti `/actions` | ❌ logika zaključana u botu |
+| Brzina početka | ovisi o Damiru | odmah, neovisno |
+| Tko zna kodove/redoslijed/filtere | backend | ti (blokiran na Swaggeru) |
+| Damirov princip "bez duplikacije" | ✅ poštuje | ❌ krši |
+| Glavni rizik | Damirov timeline | tech-debt u botu |
+
+#### Preporuka (hibrid — sigurno + brzo)
+```
+ Faza 1:  World B za prvih 2-3 akcije   → dokažeš vrijednost ODMAH (imaš flow_engine kao predložak),
+                                          ne čekaš nikoga
+ Faza 2+: migriraj na World A kako Damir isporučuje /actions
+                                          → bot se stanjuje, logika seli na backend
+```
+To je i Strangler Fig (iz `PLAN_KONVERGENCIJA_10_OD_10`): počneš s onim što imaš,
+zamijeniš komad-po-komad. **Na sastanku pitaj Damira: hoće li i kada graditi
+`/actions` na backendu (World A). Ako da → čekaš i tanjiš bot. Ako ne/kasnije →
+World B stopgap, s planom migracije na A.**
+
+---
+
+### 10.5 RAG / knowledge (Faza 2) — zasebna sposobnost, ne akcija
+
+**Izazov:** korisnik pita iz **dokumenta** ("smijem li službenim autom na godišnji?"
+→ car_policy.pdf), ne traži akciju. To nije `/actions/*` nego read-only Q&A.
+
+```
+ "smijem li autom na godišnji?"
+        │
+   llm_router: kind="answer" (policy pitanje, ne akcija)
+        │
+   knowledge/rag_retriever.py:
+        embed(upit) → cosine nad chunkovima tenantovog "car_policy.pdf"
+        → top-3 relevantna odlomka
+        │
+   llm_formatter(upit + odlomci, system="odgovori SAMO iz priloženih dokumenata,
+                 citiraj izvor, ne izmišljaj") → HR odgovor + "(izvor: Pravilnik, čl. 7)"
+```
+
+**Storage (per-tenant):**
+```
+config/tenants/<tenant>/knowledge/
+    car_policy.pdf · putni_nalozi.md · ...        ← korisnik uploada
+.cache/knowledge/<tenant>/embeddings.json         ← indeks (rebuild na upload)
+```
+**Router grananje:** dodaš u `actions.json` "meta-akciju" `answer_from_policy`
+(bez `execution.action`; umjesto `/actions/*` → RAG put). Ista kontrolna petlja
+(§4), samo je izvršni sloj RAG umjesto Business API. Scaffolding: `rag_scheduler.py` (postoji).
+
+---
+
 ### Reference u repou (za implementaciju)
 `services/v2/engine.py` (dispatch) · `services/v2/executor.py` (async gateway) ·
 `services/v2/type_resolver.py` (šifrarnik) · `services/v2/pending_params.py` +
