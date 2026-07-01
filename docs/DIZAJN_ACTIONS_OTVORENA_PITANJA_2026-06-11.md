@@ -1,16 +1,5 @@
 # Dizajn `/actions` sloja — otvorena pitanja i odluke
 
-*Na temelju Filipovih komentara, 11.06.2026. Za svaku točku: izazov → što VEĆ
-postoji u kodu → opcije → preporuka. Ovo su prave dizajn-odluke za sastanak.*
-
-> **Bitna ispravka mog ranijeg pojednostavljenja:** rekao sam da bot "ne mora
-> znati parametre" u `/actions` svijetu. To je **pretjerano**. Filip je u pravu:
-> `/actions` payload **nije prazan** — akcije i dalje imaju `CaseType`, `DateFrom`,
-> `Description`… AI i dalje puni **poslovne** parametre. Razlika je **koje**
-> parametre puni AI, a koje dodaje Business API. Sve ispod pojašnjava tu granicu.
-
----
-
 ## 1. Payload nije prazan — tko puni koji parametar
 
 **Izazov:** akcija `book_vehicle` i dalje treba `DateFrom`, `DateTo`; `report_incident`
