@@ -71,7 +71,7 @@ koristi **B** (`type_resolver` pattern koji već radi). **Nikad A.**
 
 ## 4. Resolve identifikatora (registracija → VehicleId)
 
-**Izazov (Filipovo "za razmisliti"):** bot može iz **registracije** dohvatiti
+bot može iz **registracije** dohvatiti
 **VehicleId** i poslati UUID akciji, umjesto registracije koju je AI prepoznao.
 
 **Načelo:** "AI nikad ne tipka UUID; bot/backend ga razriješi." (To je doslovno
