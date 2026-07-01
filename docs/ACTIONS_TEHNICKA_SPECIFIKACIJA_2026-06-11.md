@@ -496,7 +496,7 @@ polja), strukturiran error (`error_code`+`message`), i tko mapira šifrarnike
 
 ---
 
-## 9. Otvorene odluke (sažetak — puni kontekst u `DIZAJN_ACTIONS_OTVORENA_PITANJA`)
+## 9. Otvorene odluke (sažetak — puni deep-dive u §10)
 
 | # | Odluka | Preporuka |
 |---|---|---|
@@ -711,6 +711,431 @@ config/tenants/<tenant>/knowledge/
 **Router grananje:** dodaš u `actions.json` "meta-akciju" `answer_from_policy`
 (bez `execution.action`; umjesto `/actions/*` → RAG put). Ista kontrolna petlja
 (§4), samo je izvršni sloj RAG umjesto Business API. Scaffolding: `rag_scheduler.py` (postoji).
+
+
+---
+
+## 11. TOČAN FLOW — master tok + svi scenariji
+
+### 11.1 Master tok (numerirano, svaki korak = modul + state + error putanja)
+
+```
+━━ ULAZ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 1. Infobip POST /webhook/{whatsapp|viber}        [webhook_simple.py]
+      HMAC verify (fail→401, fail-closed) → parse payload (multi-format)
+ 2. Dedup:  SET wh_dedup:{message_id} NX EX 60    (duplikat→skip, 200)
+ 3. XADD whatsapp_stream_inbound {sender,text,message_id,tenant_id,channel}
+      retry ×3 backoff; totalni fail → file-DLQ; uvijek vrati 200 Infobipu
+━━ WORKER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 4. XREADGROUP (grupa "workers")                  [worker.py]
+ 5. Idempotency: SET msg_lock:{sender}:{msg_id} NX EX 300 (dup→ACK+skip)
+ 6. Per-sender in-process lock (redoslijed poruka istog korisnika)
+ 7. engine.process_message(sender, text, channel) — budžet 90s
+      timeout → "Obrada je trajala predugo…" + ACK
+━━ ENGINE: SIGURNOSNI KREVET ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 8. rate_limiter    v2:rl:m|h:{phone} (60s/3600s bucket) → blok→cooldown msg
+ 9. pii_scrubber    OIB/IBAN/tel → [REDACTED] (PRIJE ijednog LLM poziva)
+10. input_sanitizer prompt-injection → blok poruka
+11. identity.resolve(phone)   cache v2:identity:{phone} TTL 30s
+      → person_id, tenant_id, vlastito vozilo; nepoznat broj → enrollment msg (kraj)
+12. crisis_detector  suicid signal → hotline poruka (terminal)
+13. special_intents  GDPR delete/export (+audit zapis) / welcome / handover (terminal)
+━━ ENGINE: NASTAVCI STANJA (prije svježeg routinga!) ━━━━━━━━━━━━━━━━━━━━━━━
+14. pending_params?    v2_pending_params:{phone} 300s → poruka = odgovor na pitanje
+15. pending_mutation?  v2:pending_mut:{phone} 300s   → poruka = Da/Ne na confirm
+16. pending_clarify?   v2_pending_clarify:{phone} 300s → poruka = izbor 1/2/3
+━━ ENGINE: ODLUKA (LLM) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+17. llm_router.route(text, actions_schema(~30), history[-3:], identity_summary)
+      → { kind: "action"|"clarify"|"answer", action?, params?, text? }
+      Azure retry ×3 backoff na 429/5xx; totalni fail → siguran fallback msg
+18. kind=answer  → (RAG put §7.5 ili direktan odgovor) → korak 27
+    kind=clarify → pošalji pitanje korisniku (kraj turna)
+    kind=action  → nastavi ↓
+━━ ENGINE: VALIDACIJA + PRIPREMA PARAMETARA ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+19. action_validator: akcija postoji? nepoznata polja? tipovi?  (§5.2)
+      fail → clarify korisniku (nikad slijepo dalje)
+20. coercion: HR datumi/brojevi → ISO/int (param_ui.parse + _coerce_llm_params)
+21. missing required? → pending_params.save + HR pitanje (kraj turna;
+      sljedeća poruka ulazi na koraku 14 i NASTAVLJA odavde)
+22. codebook params (marker "codebook"): opcija C default (šalji semantiku),
+      opcija B fallback (type_resolver: dohvat šifrarnika→match; dvosmisleno→clarify)
+23. policy.inject: person_id/tenant_id iz identiteta (AI ih nikad ne generira)
+━━ ENGINE: POTVRDA + IZVRŠENJE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+24. policy.mutation=true → mutation_gate:
+      param echo ("Provjeri prije slanja: …") + "Potvrđuješ? (Da/Ne)"
+      → pending_mut.save 300s (kraj turna; "Da" ulazi na koraku 15)
+      pri "Da": exec lock v2:pending_mut_exec 30s (anti dupli-klik/Infobip retry)
+      + stale-confirm guard (>90s re-ask; >30s re-validate identity)
+25. executor.execute → api_gateway:
+      OAuth token (cache mobility:access_token) + x-tenant + Idempotency-Key
+      + SSRF guard → POST /actions/<name>  (budžet 15s, circuit breaker po servisu)
+26. Rezultat:  2xx → dalje │ 4xx → api_error_translator → HR objašnjenje
+      │ 5xx/timeout → generička HR + pending OSTAJE (korisnik može ponoviti "Da")
+━━ IZLAZ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+27. llm_formatter: JSON → hrvatski (grounding: samo podaci iz JSON-a; izlazni
+      PII scrub; liste s točnim ukupnim brojem)
+28. conv_history.append (PII-scrubbed, zadnjih 5, TTL 30min)
+29. enqueue_outbound {to, text, channel, idempotency_key}
+30. worker outbound loop: BLMOVE → send po channel tagu (WA/Viber)
+      fail: permanentna→DLQ │ tranzijentna→delayed retry ×3 backoff→DLQ
+      uspjeh: SET sent:{idem_key} EX 600 (crash-recovery dedup) → LREM processing
+```
+
+### 11.2 Tablica svih stanja (Redis) — tko, što, koliko
+
+| Ključ | Vlasnik (korak) | TTL | Svrha |
+|---|---|---|---|
+| `wh_dedup:{message_id}` | webhook (2) | 60s | Infobip retry dedup |
+| `whatsapp_stream_inbound` | webhook→worker (3-4) | maxlen 100k | ulazni red (AOF persist) |
+| `msg_lock:{sender}:{msg_id}` | worker (5) | 300s | idempotencija obrade |
+| `v2:rl:m|h:{phone}` | engine (8) | 60s/3600s | rate limit |
+| `v2:identity:{phone}` | engine (11) | 30s | identitet cache |
+| `tenant_phone:{e164}` | identity | 300s | phone→tenant cache |
+| `v2_pending_params:{phone}` | engine (14/21) | 300s | multi-turn prikupljanje parametara |
+| `v2:pending_mut:{phone}` | engine (15/24) | 300s | čekanje Da/Ne |
+| `v2:pending_mut_exec:{phone}` | engine (24) | 30s | anti-replay pri "Da" |
+| `v2_pending_clarify:{phone}` | engine (16) | 300s | izbor 1/2/3 + "nije točno" reoffer |
+| `v2_conv_history:{phone}` | engine (28) | 30min | zadnjih 5 turnova (PII-scrubbed) |
+| `tenant_cfg:{tenant_id}` ⟵ NOVO | §12 | 300s | tenant config cache (DB je istina) |
+| `mobility:access_token` | gateway (25) | ~expiry | OAuth cache |
+| `api_err_translate:{hash}` | translator (26) | 3600s | 4xx prijevod cache |
+| `whatsapp_outbound` (+`_processing`, `_delayed`, `dlq:*`) | worker (29-30) | — | izlazni red + retry + DLQ |
+| `sent:{idempotency_key}` | worker (30) | 600s | outbound dedup nakon crasha |
+
+### 11.3 Scenariji (sequence dijagrami)
+
+**S1 — READ happy-path** (`"pokaži moja zadnja putovanja"` → `list_trips`)
+```
+korisnik→WA→webhook(1-3)→worker(4-7)→safety(8-13: prolaz)→router(17)
+  →{action:list_trips, params:{limit:10}}→validator OK(19)→nema mutation
+  →executor(25) GET /actions/list-trips→{trips:[…], total:27}
+  →formatter(27) "Zadnjih 10 od ukupno 27 putovanja: …"→outbound(29-30)→korisnik
+                                                    (1 LLM decision + 1 LLM format)
+```
+
+**S2 — WRITE + Da/Ne** (`"prijavljujem kvar na ZG-1234-AB, pukla guma"`)
+```
+…safety→router→{action:report_incident, params:{plate,desc}}→validator OK
+  →inject person/tenant(23)→mutation_gate(24):
+     bot: "Prijavit ću kvar na ZG-1234-AB: 'pukla guma'. Potvrđuješ? (Da/Ne)"
+     [pending_mut 300s]                                        ── kraj turna 1
+korisnik: "Da" → worker → engine korak 15 (nastavak stanja):
+  parse_reply("Da")=execute → exec lock 30s → executor POST /actions/report-incident
+  → {status:success, incident_id:INC-5521} → clear pending → invalidate identity
+  → formatter: "Prijavljen kvar (INC-5521). Vozilo blokirano do servisa." ── turn 2
+korisnik: "Ne" umjesto "Da" → clear pending → "U redu, odustajem."
+korisnik: nešto treće → "Nisam siguran je li to Da ili Ne…" (pending ostaje)
+```
+
+**S3 — missing param multi-turn** (`"rezerviraj auto sutra od 9"` — fali `date_to`)
+```
+router→{action:book_vehicle, params:{date_from:"2026-06-12T09:00:00"}}
+  →validator: missing_required=[date_to]→pending_params.save(collected={date_from})
+  bot: "Do kada trebaš vozilo?"                                ── kraj turna 1
+korisnik: "do 15" → korak 14: pending_params nastavak
+  →param_ui.parse("do 15", datetime)→"2026-06-12T15:00:00"→required puni
+  →nastavi na korak 22-24 (confirm)→…→execute                  ── turn 2+
+korisnik umjesto odgovora: "odustani" → clear → "U redu, odustajem."
+korisnik: nova nevezana poruka → state se čisti, poruka ide kao svježa (korak 17)
+```
+
+**S4 — šifrarnik clarify** (`incident_type` dvosmislen, opcija B fallback)
+```
+AI: incident_type="problem"→type_resolver: GET /CaseTypes(tenant)→
+  [(3,Kvar),(5,Šteta),(7,Nezgoda)]→match("problem")=None (nije jednoznačno)
+  bot: "Kakav problem? Dostupno: Kvar, Šteta, Nezgoda."        ── clarify turn
+korisnik: "kvar"→match→3→nastavi (S2 tok)
+```
+
+**S5 — nepoznat identitet**
+```
+identity.resolve: Persons nema broj (ni NSN contains-fallback)→is_known=False
+  bot: "Tvoj broj još nije povezan s računom… kontaktiraj managera." (terminal)
+  [nikad se ne zove nijedan /actions — nema tenant konteksta = nema poziva]
+```
+
+**S6 — safety short-circuiti** (svaki PRIJE routinga, koraci 8-13)
+```
+rate-limit blok  → "Šalješ previše poruka, pričekaj…"      (korak 8)
+prompt-injection → blok poruka                              (korak 10)
+crisis signal    → hotline poruka (Plavi telefon 116 123)   (korak 12)
+GDPR "obriši me" → audit zapis + potvrda postupka           (korak 13)
+```
+
+**S7 — Business API greška**
+```
+executor→POST /actions/book-vehicle→409 {"error_code":"VEHICLE_UNAVAILABLE",
+  "message":"Nema slobodnih vozila u periodu"}
+  →api_error_translator (cache 1h)→bot: "Nažalost, nema slobodnih vozila
+   u tom periodu. Pokušaj drugi termin."       [strukturiran error = ugovor §8]
+5xx/timeout→circuit breaker broji; pending confirm OSTAJE→korisnik može "Da" opet
+```
+
+**S8 — RAG / knowledge (Faza 2)** (`"smijem li službenim autom na godišnji?"`)
+```
+router→{kind:answer, capability:answer_from_policy}
+  →rag_retriever: embed(upit)→top-3 chunka iz tenant car_policy.pdf (§12.4 storage)
+  →formatter(system="odgovori SAMO iz priloženih odlomaka, citiraj izvor")
+  →"Prema Pravilniku (čl. 7): privatno korištenje je dopušteno uz…"
+[nijedan /actions poziv; read-only; ako nema relevantnih chunkova→"Nemam tu
+ informaciju u dokumentima — kontaktiraj managera."]
+```
+
+**S9 — Viber krug** (isti mozak, drugi rub)
+```
+Infobip→POST /webhook/viber→HMAC→stream_data{…, channel:"viber"}→isti koraci 4-28
+  →enqueue_outbound nosi channel:"viber"→worker outbound grana→Infobip Viber send
+[V2Engine NE zna razliku — channel je samo tag na rubu; test: isti E2E s oba taga]
+```
+
+---
+
+## 12. TENANT MANAGEMENT — redizajn (JSON folder NIJE za produkciju)
+
+### 12.1 Presuda o današnjem stanju (iskreno)
+
+Danas: `config/tenants/<tenant_id>/tool_subset.json` — statični fileovi u repou.
+**Filipov instinkt je točan — to ne valja za produkciju:**
+
+| Problem | Posljedica |
+|---|---|
+| Dodavanje tenanta = commit + build + deploy | onboarding klijenta traje sate, ne sekunde |
+| Config živi u image-u | k8s pod restart = jedini način izmjene |
+| Nema audita | tko je i kada mijenjao tenant config → nepoznato |
+| Ne skalira | 100 tenanta = 100 foldera u repou |
+
+JSON folder ostaje **samo kao dev seed/fixture**. Produkcija ide na DB.
+
+### 12.2 Dizajn: Postgres (istina) + Redis (brzina) + Admin API (upravljanje)
+
+**Točan pattern već postoji u repou** — `tenant_resolver.py` radi identično za
+phone→tenant (Postgres `user_mappings` + `tenant_phone:` cache TTL 300s + purge/
+invalidate). Samo ga proširujemo na tenant konfiguraciju:
+
+```sql
+-- alembic migracija 004_tenants_table.py
+CREATE TABLE tenants (
+    id              TEXT PRIMARY KEY,          -- M1 TenantId (UUID)
+    name            TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'active',   -- active|paused|offboarded
+    settings        JSONB NOT NULL DEFAULT '{}',      -- jezik, radno vrijeme, limiti…
+    actions_enabled JSONB NOT NULL DEFAULT '{}',      -- {"book_vehicle":true,…} po tenantu
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+```python
+# services/tenant_config.py  ⟵ NOVO (po uzoru na postojeći TenantResolver)
+CACHE_PREFIX = "tenant_cfg:"
+CACHE_TTL = 300          # isti self-healing rationale kao tenant_phone:
+
+class TenantConfigStore:
+    """Read-through: Redis → Postgres. Invalidate na svaku admin izmjenu."""
+
+    async def get(self, tenant_id: str) -> dict | None:
+        cached = await self._redis.get(f"{CACHE_PREFIX}{tenant_id}")
+        if cached:
+            return json.loads(cached)
+        row = await self._db_fetch(tenant_id)          # SELECT … WHERE id=:id AND status='active'
+        if row is None:
+            return None                                 # nepoznat/pauziran tenant → odbij
+        await self._redis.set(f"{CACHE_PREFIX}{tenant_id}", json.dumps(row), ex=CACHE_TTL)
+        return row
+
+    async def upsert(self, tenant_id: str, *, name, settings, actions_enabled) -> None:
+        await self._db_upsert(...)                      # INSERT … ON CONFLICT DO UPDATE
+        await self._redis.delete(f"{CACHE_PREFIX}{tenant_id}")   # invalidate → sljedeći read s DB
+
+# webhook_simple.py — admin endpointi (isti admin_auth token pattern kao gdpr-process)
+POST  /admin/tenants          {id, name, settings?, actions_enabled?}   → upsert
+PATCH /admin/tenants/{id}     {status?|settings?|actions_enabled?}      → update+invalidate
+GET   /admin/tenants/{id}     → trenutno stanje (iz DB, bypass cache)
+```
+
+### 12.3 Walkthrough: "što se dogodi kad dodamo tenanta?"
+
+```
+1. Operater: POST /admin/tenants {id:"t-novi", name:"Firma X"}     (1 HTTP poziv)
+2. INSERT u Postgres + audit log (admin user iz tokena)
+3. Prva poruka vozača Firme X:
+     identity.resolve → Persons → TenantId="t-novi"
+     TenantConfigStore.get("t-novi") → cache miss → DB hit → active → keširaj 300s
+4. Bot radi za novog tenanta.        ⏱ ukupno: < 1 minuta, ZERO deploy, ZERO commit
+   (usporedi danas: commit JSON-a + build + rollout = sati)
+```
+
+### 12.4 Per-tenant znanje (RAG dokumenti — car policy itd.)
+
+Isti princip — **ne u repo**: upload preko admin endpointa → pohrana u Postgres
+(`tenant_documents` tablica: id, tenant_id, filename, content bytea/text,
+uploaded_at) ili object storage → indeksiranje (embeddings) u pozadini →
+`knowledge/rag_retriever` čita indeks po tenant_id. Dodavanje dokumenta = upload,
+ne deploy.
+
+### 12.5 Što umire s ovim redizajnom
+
+`config/tenants/*/tool_subset.json` — u /actions svijetu suvišan dvostruko:
+katalog je ~30 globalnih akcija (nema 950 za subsetirati), a per-tenant
+uključivanje/isključivanje akcija je `tenants.actions_enabled` u DB. Folder
+ostaje samo kao dev-seed dok migracija traje (Strangler Fig — vidi
+`PLAN_KONVERGENCIJA_10_OD_10_2026-06-11.md`).
+
+---
+
+## 13. PARAM LIFECYCLE — od korisnikove rečenice do API polja
+
+### 13.1 Cijeli cjevovod (jedan pogled)
+
+```
+ "rezerviraj auto sutra od 9 do 15, hitno je"
+        │
+ ┌──────▼──────────────────────────────────────────────────────────────────┐
+ │ ① LLM EKSTRAKCIJA (llm_router, §3 opisi+examples su KRITIČNI)            │
+ │    → {date_from:"sutra 9h", date_to:"15h", note:"hitno"}                │
+ ├──────────────────────────────────────────────────────────────────────────┤
+ │ ② VALIDACIJA (action_validator §5.2)                                     │
+ │    akcija postoji? polja u shemi? grubi tipovi?  fail→clarify            │
+ ├──────────────────────────────────────────────────────────────────────────┤
+ │ ③ COERCION (param_ui.parse_param_value + _coerce_llm_params — postoji)   │
+ │    "sutra 9h"→2026-06-12T09:00:00 · "12,5"→12.5 · "da"→true             │
+ │    (HR datumi/dani u tjednu/dijelovi dana; Europe/Zagreb)                │
+ ├──────────────────────────────────────────────────────────────────────────┤
+ │ ④ MISSING-REQUIRED LOOP (pending_params — postoji)                       │
+ │    fali polje→HR pitanje→ODGOVOR SE PAMTI (Redis 300s)→sljedeće polje    │
+ │    "odustani"→abort · nova tema→state clear + svježe routanje            │
+ ├──────────────────────────────────────────────────────────────────────────┤
+ │ ⑤ CODEBOOK RESOLVE (§10.2: C default → backend; B fallback→type_resolver)│
+ ├──────────────────────────────────────────────────────────────────────────┤
+ │ ⑥ IDENTITY INJECT (policy.inject: person_id, tenant_id — AI ih NE puni)  │
+ ├──────────────────────────────────────────────────────────────────────────┤
+ │ ⑦ PARAM ECHO u confirm poruci (_render_param_echo — postoji)             │
+ │    "Provjeri prije slanja: • Od: 12.06.2026. 09:00 • Do: … • Napomena…"  │
+ │    → korisnik VIDI točno što se šalje PRIJE nego se pošalje              │
+ ├──────────────────────────────────────────────────────────────────────────┤
+ │ ⑧ SLANJE + BACKEND VALIDACIJA (strukturiran 400 → HR prijevod)           │
+ └──────────────────────────────────────────────────────────────────────────┘
+```
+
+### 13.2 Tko hvata koju grešku (station-by-station)
+
+| Stanica | Greška | Tko hvata | Korisnik vidi |
+|---|---|---|---|
+| ① | LLM izmisli polje | ② validator (unknown_param) | clarify pitanje |
+| ① | LLM izmisli akciju | ② validator (unknown_action) | clarify pitanje |
+| ③ | "petak u 26h" neparsabilno | coercion→None | re-ask s primjerom formata |
+| ④ | korisnik šuti 5 min | Redis TTL istekne | sljedeća poruka = svježa |
+| ⑤ | šifrarnik dvosmislen | type_resolver match=None | pick-lista opcija |
+| ⑥ | identity nema vehicle_id | executor required-ctx guard | "ne mogu dohvatiti tvoj profil…" |
+| ⑦ | korisnik vidi krivi datum | on sam kaže "Ne" | odustajanje, ništa poslano |
+| ⑧ | backend odbije (pravilo) | api_error_translator | HR objašnjenje ŠTO i KAKO dalje |
+
+**Načelo:** nijedna stanica ne "propušta šutke" — svaka greška ima definiran
+ishod koji korisnik razumije, i **ništa se ne piše u backend bez ⑦ (echo + Da)**.
+
+---
+
+## 14. SCALABILITY & ENGINEERING PROOF
+
+### 14.1 Kako svaki sloj skalira
+
+| Sloj | Danas | Bottleneck | Put skaliranja |
+|---|---|---|---|
+| webhook api | ×2 replike, stateless, HPA 2-4 | — (verify+XADD, featherweight) | samo replike |
+| Redis | ×1, AOF everysec, noeviction | RAM (384MB cap) | queue TTL-ovi drže footprint malim; managed Redis za HA |
+| worker | ×1 (namjerno — per-sender redoslijed) | LLM+API latencija po turnu | consumer grupa VEĆ podržava ×N; prije toga per-sender lock seliti u Redis (recept: k8s/README) |
+| Azure LLM | gpt-4o-mini | TPM/RPM kvota | 2 poziva/turn (decision+format) ⇒ ~120 vozača komotno; kvota se diže zahtjevom |
+| Business API | Damirova strana | njihov capacity | ugovoriti SLA/limite (M1 addendum §6) |
+| Postgres | user_mappings + tenants | — (KB reda veličine) | managed PG |
+
+**Latency budžet po turnu:** webhook <50ms · queue hop <100ms · safety+identity
+<200ms (cache hit) · LLM decision 0.5-2s · executor→/actions 0.2-2s (cap 15s) ·
+LLM format 0.5-1.5s → **tipično 2-6s**; tvrdi capovi: 15s executor / 90s turn.
+
+### 14.2 Failure-mode matrica (ponašanje je već implementirano i testirano)
+
+| Kvar | Ponašanje | Mehanizam (postoji) |
+|---|---|---|
+| Redis pun | webhook 503 → Infobip retry (ništa se ne gubi tiho) | noeviction + retry |
+| M1/Business API down | fail-fast poruka, bez gomilanja | circuit breaker (executor+gateway) |
+| Azure 429/5xx | retry ×3 backoff → siguran fallback | llm_router retry petlja |
+| worker pod restart | poruke ČEKAJU u streamu; nastavlja novi pod | consumer grupa + AOF |
+| crash usred slanja odgovora | requeue iz processing liste; bez duplikata | sent:{idem} dedup 600s |
+| dupli webhook (Infobip retry) | jedna obrada | wh_dedup + msg_lock |
+| dupli "Da" (double-tap) | jedna mutacija | exec lock 30s + Idempotency-Key |
+
+### 14.3 Iskreni okvir tvrdnji (bez ovoga bi "radi" bila laž)
+
+**DOKAZANO (mjerljivo, danas):**
+- 1749 testova zeleno + 4 E2E razgovora kroz produkcijski factory s pravim
+  registrom (read, write+confirm, decline, reoffer) + ruff čist CI.
+- Svi safety/param/state mehanizmi iz §11 SU živi kod u produkcijskom putu.
+- k8s manifesti (YAML-validirani) + runbook; resilience mehanizmi iz §14.2.
+
+**DIZAJN s definiranim protokolom validacije (postaje "dokazano" tek kad prođe):**
+- `/actions` integracija (Business API još ne postoji). Protokol:
+  ① contract-testovi na §6/§8 ugovore → ② smoke na dev M1 (postojeće probe
+  skripte) → ③ benchmark ≥ 90/97/0 na golden setu (dual-seed) → ④ 2 tjedna
+  zelenog pilota. Redoslijed uvođenja: `PLAN_KONVERGENCIJA_10_OD_10_2026-06-11.md`
+  (Strangler Fig — ništa se ne briše prije dokazane zamjene).
+- Tenants DB redizajn (§12) — pattern je preslika VEĆ dokazanog tenant_resolvera.
+
+---
+
+## 15. USKLAĐENOST SA ŠEFOVIM OVERVIEW DOKUMENTOM (docx v2.1)
+
+Šefov dokument je kanonski overview; ova specifikacija je njegova razrada.
+Mapiranje njegovih 7 komponenti → naša implementacija:
+
+| Šefova komponenta | Naš modul(i) | Napomena |
+|---|---|---|
+| 1. Channels (WA/Viber/Web/M365) | `webhook_simple.py` + `services/channels/` | WA živ; Viber = §5.5; Web/M365 kasnije faze |
+| 2. AI Backend (thin) | `V2Engine` | postaje thin migracijom orkestracije u /actions; safety slojevi ostaju (nisu "business logika" — pravna/etička obveza) |
+| 3. OpenAI (decision+conversation) | `llm_router` + `llm_formatter` | + naš dodatak: Da/Ne gate između decision i execution (šef ga u QB mailu sam traži — human-in-the-loop) |
+| 4. Tool Config (ai/execution) | `config/actions.json` (§3) | identična struktura kao njegov primjer `book_vehicle` |
+| 5. MCP (execution+auth) | `executor.py`+`api_gateway.py`+`token_manager.py` | funkcionalni ekvivalent DANAS; literal MCP server = kasnija faza (otključava M365 Copilot) |
+| 6. Business API /actions | — (Damirova strana) | ugovor u §8; World A/B odluka u §10.4 |
+| 7. Domain/Granular API | 950 M1 Swagger ruta | ispod Business API-ja; bot ih (nakon migracije) ne zove direktno |
+
+**Njegov `/chat` endpoint vs naš async ulaz:** njegov dijagram implicira sync
+`/chat`. Naš WA/Viber ulaz je **async** (webhook→stream→worker) — to je ispravno
+za messaging kanale (Infobip očekuje brz 200; obrada traje sekunde; retry
+semantika). Za Web kanal (kasnije) izlaže se sync `/chat` fasada koja interno
+koristi ISTI engine — bez dupliranja.
+
+**Njegov MCP input format** `{tool, input, user:{email,phone,token}}` ≡ naš
+contract §6 ②: `tool`→ime akcije u ruti, `input`→body (poslovni parametri),
+`user`→naš identity inject (kod nas razriješen PRIJE poziva: phone→person_id/
+tenant_id kroz identity.py; per-user token nije primjenjiv na WA — §10.4).
+
+**Tri ispravka pseudokoda iz ranijih skica** (da implementacija ne zaluta):
+1. executor je `services/v2/executor.py`, **async** preko `api_gateway.call`
+   (`executor.py:90/187`) — ne sync `requests.post` (blokirao bi event-loop);
+2. auth ide kroz `TokenManager.get_token()` + `x-tenant` + `Idempotency-Key`
+   + SSRF guard — ne ručno slaganje headera i hardkodirani URL;
+3. **write akcije uvijek kroz mutation_gate (Da/Ne) prije poziva** — "OpenAI
+   odlučuje" znači *bira akciju*, ne *izvršava bez potvrde*.
+
+---
+
+## 16. DOKUMENTACIJSKA KARTA (egzaktno: što ostaje, što je apsorbirano)
+
+Session docs (9) — odluka po svakom:
+
+| # | File | Odluka | Gdje je sadržaj |
+|---|---|---|---|
+| 1 | `ACTIONS_TEHNICKA_SPECIFIKACIJA_2026-06-11.md` | ✅ **KEEP — MASTER** | ovaj dokument (§0-§16) |
+| 2 | `USPOREDBA_ARHITEKTURA_STARA_NOVA_2026-06-11.md` | ✅ KEEP | stara vs nova, prvo lice (za šefa) |
+| 3 | `PLAN_KONVERGENCIJA_10_OD_10_2026-06-11.md` | ✅ KEEP | migracijski plan (faze, gate na World A/B) — referenciran iz §12.5/§14.3 |
+| 4 | `M1_ZAHTJEV_ADDENDUM_2026-06-11.md` | ✅ KEEP | zapis poslanog zahtjeva M1 timu |
+| 5 | `SEF_ARHITEKTURA_USPOREDBA_2026-06-11.md` | 🗑 OBRISAN | apsorbiran u §15 (mapiranje 7 komponenti) |
+| 6 | `ACTIONS_ROUNDTRIP_TEHNICKI_2026-06-11.md` | 🗑 OBRISAN | apsorbiran u §4 (lifecycle), §10.4 (World A/B), §15 (3 ispravka) |
+| 7 | `DIZAJN_ACTIONS_OTVORENA_PITANJA_2026-06-11.md` | 🗑 OBRISAN | apsorbiran u §9 + §10 (deep-dive) |
+| 8 | `ROADMAP_DO_GOTOVOG_2026-06-11.md` | 🗑 OBRISAN | pisan za staru arhitekturu; važeći dijelovi (deploy/pilot/mjerenje) u §14 |
+| 9 | `_draft_poruka_damiru.md` | 🗑 OBRISAN | poruka poslana — svrha ispunjena |
+
+Ne diraju se: `docs/SUSTAV/` (16 — referenca ŽIVOG sustava), stariji `docs/` (37),
+root `*.md` — dokumentiraju postojeći sustav, nisu session-višak.
 
 ---
 
