@@ -103,6 +103,9 @@ mobilityone-whatsapp-bot/
 │   ├── channels/                    # ⟵ NOVO: adapteri po kanalu (edge)
 │   │   ├── whatsapp.py               #   (izdvoji iz whatsapp_service.py)
 │   │   └── viber.py                  #   Viber inbound parse + outbound send (Infobip)
+│   ├── tenant_config.py             # ⟵ NOVO (F1): bot-side tenant postavke (§12; kod primjer tamo)
+│   ├── mcp/
+│   │   └── server.py                # ⟵ NOVO (F-M365): MCP server — omata ISTE akcije za Copilot (§11.3 S10)
 │   ├── api_gateway.py               # (postoji) HTTP + circuit breaker + SSRF + idempotency
 │   ├── token_manager.py             # (postoji) OAuth client_credentials
 │   └── admin_auth.py                # (postoji)
@@ -110,11 +113,20 @@ mobilityone-whatsapp-bot/
 ├── worker.py                        # ⟵ MIJENJA: outbound grananje po channel tagu
 ├── k8s/                             # (postoji) produkcijski deploy (NE briši)
 ├── Dockerfile · docker-compose.yml  # (postoji)
-└── tests/                           # svaki novi modul + svoj test
+├── alembic/versions/004_tenant_settings.py   # ⟵ NOVO (F1): migracija za §12
+└── tests/                           # svaki novi modul + svoj test:
+    ├── test_action_registry.py · test_action_validator.py      ⟵ NOVO (F1)
+    ├── test_tenant_config.py · test_channels_dispatch.py        ⟵ NOVO (F0/F1)
+    ├── test_mcp_server.py                                       ⟵ NOVO (F-M365)
+    └── tests/v2/test_e2e_actions.py  # E2E razgovori nad akcijama ⟵ NOVO (F1)
 ```
 
 > Migracija je **fazna** (vidi `PLAN_KONVERGENCIJA_10_OD_10`): `actions.json` živi
 > PORED `tool_data.json` iza feature-flaga dok se ne dokaže, pa se staro povlači.
+>
+> **Potpunost liste (križno provjereno):** svaki modul spomenut u §5 (kod),
+> §12 (tenant_config), §11.3 S10 (mcp/server) i §17 (guarantee mehanizmi) je u
+> ovom stablu — stablo ⊇ spec. Faze: F0=odmah, F1=uz /actions, F-M365=uz Copilot.
 
 ---
 
@@ -888,11 +900,83 @@ Infobip→POST /webhook/viber→HMAC→stream_data{…, channel:"viber"}→isti 
 [V2Engine NE zna razliku — channel je samo tag na rubu; test: isti E2E s oba taga]
 ```
 
+**S10 — M365 Copilot krug (preko MCP servera — OBAVEZNA komponenta, faza uz Copilot kanal)**
+```
+User u Teamsu: "rezerviraj mi auto sutra 9-15"
+  → [Microsoft Copilot = MOZAK: razumije, ekstrahira, bira tool]
+  → MCP protokol → [naš services/mcp/server.py]
+       • tools = ISTE akcije iz config/actions.json (jedan izvor istine)
+       • identitet: Copilot daje user email → GET /Persons?Filter=Email(=)…
+         → person_id + TenantId (isti strict-binding kao phone put)
+       • write akcije deklarirane s MCP annotation "requiresConfirmation"
+         → POTVRDU RENDERIRA COPILOT UI (M365 confirmation prompt) — naš
+           Da/Ne gate je za chat kanale; ovdje istu ulogu ima Copilotov UI
+  → executor put → POST /actions/book-vehicle (identičan §6 contract)
+  → rezultat natrag Copilotu → COPILOT formatira odgovor korisniku
+[naš V2Engine (WhatsApp mozak) je ZAOBIĐEN — Copilot je mozak; mi dajemo alate]
+```
+Kod-skelet (Python `mcp` SDK; gradi se TEK kad /actions postoji jer ga samo omata):
+```python
+# services/mcp/server.py  ⟵ NOVO (F-M365)
+from mcp.server import Server
+from services.v2.action_registry import ActionRegistry
+
+registry = ActionRegistry.load(ACTIONS_JSON)
+server = Server("fleet-actions")
+
+@server.list_tools()
+async def list_tools():
+    return [tool_from_action(a) for a in registry.actions.values()]
+    # tool_from_action: name+description+inputSchema iz ai.parameters (§3),
+    # annotations={"requiresConfirmation": a["policy"]["mutation"]}
+
+@server.call_tool()
+async def call_tool(name: str, arguments: dict, *, context):
+    identity = await resolve_identity_by_email(context.user_email)  # /Persons
+    return await execute_action(name, arguments, identity)          # §5.3 — isti executor
+```
+
 ---
 
-## 12. TENANT MANAGEMENT — redizajn (JSON folder NIJE za produkciju)
+## 12. TENANTI — tko je izvor istine + bot-side postavke
 
-### 12.1 Presuda o današnjem stanju (iskreno)
+### 12.0 Odakle tenanti dolaze (izvor istine) — NEMA preseta
+
+**Pitanje:** imamo li preset tenante? Moramo li ih mi kreirati/spremati?
+**Odgovor (dokazano iz registryja):** NE. **M1 backend je izvor istine za
+tenante** — registry sadrži **44 tenant endpointa**, uključujući puni CRUD:
+
+```
+GET    tenantmgt/Tenants              ← bulk lista SVIH tenanta (get_Tenants)
+GET    tenantmgt/Tenants/{id}         ← pojedinačni (get_Tenants_id)
+POST   tenantmgt/Tenants              ← kreiranje (admin op, ne bot)
+PATCH/PUT/DELETE tenantmgt/Tenants/{id}
++ TenantPermissions familija (roles per user), Partners link/unlink…
+```
+
+Bot tenante **NE kreira i NE presetira** — samo ih OTKRIVA. Dva mehanizma:
+
+```
+MEHANIZAM 1 — LAZY per-user (ŽIV, DOKAZAN — radi danas u produkciji):
+  prva poruka korisnika → identity.resolve(phone) → GET /Persons?Filter=Phone(=)…
+  → response nosi TenantId (identity.py:487, strict binding — bez TenantId
+    korisnik se odbija, nikad env-default)
+  → tenant "stigne sa svakim korisnikom" — NULA pripreme unaprijed
+  → bot-side settings row se auto-kreira s defaultima ako ne postoji
+    (isti lazy-onboarding pattern kao postojeći upsert_user_mapping)
+
+MEHANIZAM 2 — BULK SYNC (opcionalan boost, na startu ili cron):
+  GET /Tenants → upsert svih u tenant_settings (poznata lista prije 1. poruke)
+  ⚠ iskreni caveat: smije li NAŠ client_credentials listati SVE tenante
+    (OAuth scope) potvrđujemo na dev accessu — pitanje je već poslano u
+    M1_ZAHTJEV_endpoint_tagging §2. LAZY mehanizam NE ovisi o tome i već radi.
+```
+
+**Dakle odgovor na "možemo li to UVIJEK na početku napraviti": DA** —
+mehanizam 1 garantira tenant za svakog korisnika bez ikakvog preseta;
+mehanizam 2 je ubrzanje, ne uvjet.
+
+### 12.1 Presuda o današnjem config/tenants/ folderu (iskreno)
 
 Danas: `config/tenants/<tenant_id>/tool_subset.json` — statični fileovi u repou.
 **Filipov instinkt je točan — to ne valja za produkciju:**
@@ -904,22 +988,27 @@ Danas: `config/tenants/<tenant_id>/tool_subset.json` — statični fileovi u rep
 | Nema audita | tko je i kada mijenjao tenant config → nepoznato |
 | Ne skalira | 100 tenanta = 100 foldera u repou |
 
-JSON folder ostaje **samo kao dev seed/fixture**. Produkcija ide na DB.
+**Preciznost (bitno):** problem NIJE JSON format — JSON(B) u bazi je potpuno
+ispravan i koristimo ga. Problem je **file u repou** (traži commit+deploy za
+izmjenu). JSON folder ostaje samo kao dev seed/fixture; produkcija ide na DB.
 
-### 12.2 Dizajn: Postgres (istina) + Redis (brzina) + Admin API (upravljanje)
+### 12.2 Dizajn bot-side postavki: Postgres + Redis cache + Admin API
 
 **Točan pattern već postoji u repou** — `tenant_resolver.py` radi identično za
 phone→tenant (Postgres `user_mappings` + `tenant_phone:` cache TTL 300s + purge/
 invalidate). Samo ga proširujemo na tenant konfiguraciju:
 
 ```sql
--- alembic migracija 004_tenants_table.py
-CREATE TABLE tenants (
-    id              TEXT PRIMARY KEY,          -- M1 TenantId (UUID)
-    name            TEXT NOT NULL,
-    status          TEXT NOT NULL DEFAULT 'active',   -- active|paused|offboarded
+-- alembic migracija 004_tenant_settings.py
+-- NAPOMENA: ovo NIJE tenant registry (izvor istine za tenante je M1 — §12.0).
+-- Ovo je BOT-SIDE OVERLAY postavki, keyed by M1 TenantId. Redak se kreira
+-- lazy s defaultima na prvi susret s tenantom, ili bulk syncom.
+CREATE TABLE tenant_settings (
+    tenant_id       TEXT PRIMARY KEY,          -- = M1 TenantId (iz /Persons ili /Tenants)
+    name            TEXT,                      -- display (iz GET /Tenants, informativno)
+    bot_status      TEXT NOT NULL DEFAULT 'active',   -- active|paused (bot-side gate)
     settings        JSONB NOT NULL DEFAULT '{}',      -- jezik, radno vrijeme, limiti…
-    actions_enabled JSONB NOT NULL DEFAULT '{}',      -- {"book_vehicle":true,…} po tenantu
+    actions_enabled JSONB NOT NULL DEFAULT '{}',      -- {"book_vehicle":true,…}; prazno = sve default-on
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -937,9 +1026,9 @@ class TenantConfigStore:
         cached = await self._redis.get(f"{CACHE_PREFIX}{tenant_id}")
         if cached:
             return json.loads(cached)
-        row = await self._db_fetch(tenant_id)          # SELECT … WHERE id=:id AND status='active'
+        row = await self._db_fetch(tenant_id)          # SELECT … FROM tenant_settings WHERE tenant_id=:id
         if row is None:
-            return None                                 # nepoznat/pauziran tenant → odbij
+            row = await self._db_insert_defaults(tenant_id)   # lazy: prvi susret → defaulti
         await self._redis.set(f"{CACHE_PREFIX}{tenant_id}", json.dumps(row), ex=CACHE_TTL)
         return row
 
@@ -953,16 +1042,20 @@ PATCH /admin/tenants/{id}     {status?|settings?|actions_enabled?}      → upda
 GET   /admin/tenants/{id}     → trenutno stanje (iz DB, bypass cache)
 ```
 
-### 12.3 Walkthrough: "što se dogodi kad dodamo tenanta?"
+### 12.3 Walkthrough: "što se dogodi kad M1 dobije NOVOG tenanta?"
 
 ```
-1. Operater: POST /admin/tenants {id:"t-novi", name:"Firma X"}     (1 HTTP poziv)
-2. INSERT u Postgres + audit log (admin user iz tokena)
-3. Prva poruka vozača Firme X:
-     identity.resolve → Persons → TenantId="t-novi"
-     TenantConfigStore.get("t-novi") → cache miss → DB hit → active → keširaj 300s
-4. Bot radi za novog tenanta.        ⏱ ukupno: < 1 minuta, ZERO deploy, ZERO commit
-   (usporedi danas: commit JSON-a + build + rollout = sati)
+0. MI NE RADIMO NIŠTA. (Tenant je kreiran u M1 — njihov admin, njihov posao.)
+1. Prva poruka vozača nove firme:
+     identity.resolve → GET /Persons → TenantId="t-novi"   (mehanizam 1, §12.0)
+2. TenantConfigStore.get("t-novi") → cache miss → DB miss
+     → lazy INSERT defaults u tenant_settings → keširaj 300s
+3. Bot RADI za novog tenanta.     ⏱ nula pripreme, ZERO deploy, ZERO commit
+   (opcionalno: bulk sync ga je već upisao prije prve poruke — mehanizam 2)
+
+Admin API (/admin/tenants) služi SAMO za bot-postavke postojećih tenanta:
+  isključi/uključi akciju, promijeni jezik, upload RAG dokumenata —
+  NE za "kreiranje tenanta" (to je M1).
 ```
 
 ### 12.4 Per-tenant znanje (RAG dokumenti — car policy itd.)
@@ -1070,6 +1163,8 @@ LLM format 0.5-1.5s → **tipično 2-6s**; tvrdi capovi: 15s executor / 90s turn
 - 1749 testova zeleno + 4 E2E razgovora kroz produkcijski factory s pravim
   registrom (read, write+confirm, decline, reoffer) + ruff čist CI.
 - Svi safety/param/state mehanizmi iz §11 SU živi kod u produkcijskom putu.
+- Garancija odgovora korisniku — formalno dokazana enumeracijom svih izlaznih
+  putanja u **§17** (svaka završava porukom ili DLQ+alarm).
 - k8s manifesti (YAML-validirani) + runbook; resilience mehanizmi iz §14.2.
 
 **DIZAJN s definiranim protokolom validacije (postaje "dokazano" tek kad prođe):**
@@ -1093,7 +1188,7 @@ Mapiranje njegovih 7 komponenti → naša implementacija:
 | 2. AI Backend (thin) | `V2Engine` | postaje thin migracijom orkestracije u /actions; safety slojevi ostaju (nisu "business logika" — pravna/etička obveza) |
 | 3. OpenAI (decision+conversation) | `llm_router` + `llm_formatter` | + naš dodatak: Da/Ne gate između decision i execution (šef ga u QB mailu sam traži — human-in-the-loop) |
 | 4. Tool Config (ai/execution) | `config/actions.json` (§3) | identična struktura kao njegov primjer `book_vehicle` |
-| 5. MCP (execution+auth) | `executor.py`+`api_gateway.py`+`token_manager.py` | funkcionalni ekvivalent DANAS; literal MCP server = kasnija faza (otključava M365 Copilot) |
+| 5. MCP (execution+auth) | danas: `executor.py`+`api_gateway.py`+`token_manager.py` (funkcionalni ekvivalent); cilj: **+ `services/mcp/server.py` — OBAVEZAN** jer je M365 Copilot kanal u šefovom docu (S10). Gradi se čim /actions postoji (samo ga omata) |
 | 6. Business API /actions | — (Damirova strana) | ugovor u §8; World A/B odluka u §10.4 |
 | 7. Domain/Granular API | 950 M1 Swagger ruta | ispod Business API-ja; bot ih (nakon migracije) ne zove direktno |
 
@@ -1136,6 +1231,62 @@ Session docs (9) — odluka po svakom:
 
 Ne diraju se: `docs/SUSTAV/` (16 — referenca ŽIVOG sustava), stariji `docs/` (37),
 root `*.md` — dokumentiraju postojeći sustav, nisu session-višak.
+
+
+---
+
+## 17. DOKAZ: korisnik UVIJEK dobije odgovor
+
+**Tvrdnja (precizno):** za svaku primljenu poruku bot ili (a) pošalje odgovor,
+ili (b) parkira odgovor u DLQ **s alarmom** (operater vidi) — nikad tiha smrt.
+**Honest bound:** finalna DOSTAVA ovisi o Infobip/WhatsApp/Viber platformi
+(korisnik blokirao bota, kanal down) — to ni jedan sustav ne može garantirati;
+naša granica odgovornosti je "predano platformi ili DLQ+alarm".
+
+### 17.1 Enumeracija SVIH izlaznih putanja (mapirano na §11 korake)
+
+| # | Izlaz iz flowa (korak §11) | Što korisnik dobije | Dokaz (kod/test) |
+|---|---|---|---|
+| 1 | HMAC fail (1) | ništa (napadač, ne korisnik) — 401 | webhook_simple HMAC fail-closed |
+| 2 | dupli webhook (2) | ništa (već odgovoren original) | wh_dedup + msg_lock, test_webhook |
+| 3 | Redis pun na XADD (3) | odgovor NAKON Infobip retryja | 503→Infobip retry; noeviction (k8s/redis.yaml) |
+| 4 | rate-limit (8) | "Šalješ previše poruka…" | rate_limiter + test |
+| 5 | prompt-injection (10) | blok poruka | input_sanitizer + test_prompt_injection |
+| 6 | nepoznat broj (11) | enrollment poruka | engine unknown-phone gate |
+| 7 | crisis signal (12) | hotline poruka | crisis_detector + test |
+| 8 | GDPR/special (13) | potvrda postupka | special_intents + audit + test |
+| 9 | clarify / param-ask / confirm (18/21/24) | pitanje (Da/Ne, param, izbor) | pending_* stores + testovi |
+| 10 | akcija OK (25-27) | formatirani HR odgovor | E2E test_e2e_trips_scenario (4 scenarija) |
+| 11 | Business API 4xx (26) | HR objašnjenje ŠTO i KAKO dalje | api_error_translator + test |
+| 12 | Business API 5xx/timeout (26) | generička HR + pending OSTAJE (retry "Da") | executor + circuit breaker testovi |
+| 13 | engine vrati None/prazno (7) | "Greška pri obradi poruke…" | **worker.py:945** fallback |
+| 14 | engine timeout 90s (7) | "Obrada je trajala predugo…" | **worker.py:964** |
+| 15 | engine iznimka (7) | generička HR + poruka u dlq:inbound | **worker.py:981** + _store_dlq |
+| 16 | outbound send fail — tranzijentan (30) | odgovor nakon retry ×3 (backoff 5/10/20s) | _send_whatsapp + test_worker_edge_fixes |
+| 17 | outbound fail — permanentan/iscrpljen (30) | DLQ + `dlq_growing` alarm u health logu | _store_outbound_dlq + health reporter |
+| 18 | crash NAKON slanja, prije ACK-a | NEMA duplikata pri requeue | sent:{idem} dedup 600s + test |
+| 19 | worker pod restart usred obrade | odgovor od novog poda (stream čuva poruku) | consumer grupa + AOF; ack-tek-nakon-enqueue |
+| 20 | iznimka u samoj outbound petlji | poruka u DLQ + petlja ŽIVI dalje | audit fix (pump-death) + test_aud3_* |
+
+**Zašto je tablica potpuna:** redci 1-12 pokrivaju svaki *odlučni* izlaz iz §11
+(svaki `→ kraj turna` ili `terminal`); redci 13-15 su worker safety-net koji
+hvata SVE što engine ne vrati uredno (tri jedina ishoda poziva: vrijednost /
+timeout / iznimka — sva tri pokrivena); redci 16-20 pokrivaju izlazni put i
+crash prozore. Ne postoji izlaz koji nije u jednoj od te tri klase.
+
+### 17.2 Što je od ovoga POPRAVLJENO u auditu (prije NIJE vrijedilo!)
+
+Iskrenost: prije audita 2026-06-11 garancija NIJE vrijedila — 4 rupe su nađene
+i zatvorene s testovima: outbound pump death (UnboundLocalError ubijao petlju
+do restarta), zaglavljene poruke u processing listi bez DLQ-a, ACK-as-duplicate
+na non-text enqueue failu, idempotency kolizija na delayed retryju. Svi fixovi
+u `test_worker_edge_fixes.py` (AUD-3 sekcija). Garancija vrijedi OD tog commita.
+
+### 17.3 Kako se garancija ČUVA (regression osiguranje)
+
+Svaki novi izlazni put u kodu MORA dodati redak u ovu tablicu + test. CI gate:
+suite zelena = tablica važi. (Za /actions svijet: redci 10-12 dobivaju nove
+testove nad `/actions` contractom — test_e2e_actions.py u §2 stablu.)
 
 ---
 
