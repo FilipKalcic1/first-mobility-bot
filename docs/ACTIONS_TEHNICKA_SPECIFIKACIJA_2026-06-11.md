@@ -110,6 +110,7 @@ mobilityone-whatsapp-bot/
 │   ├── token_manager.py             # (postoji) OAuth client_credentials
 │   └── admin_auth.py                # (postoji)
 ├── webhook_simple.py                # ⟵ MIJENJA: +channel tag, +/webhook/viber
+│                                     #   (F-Web: + sync /chat fasada u main.py — isti engine, bez dupliranja)
 ├── worker.py                        # ⟵ MIJENJA: outbound grananje po channel tagu
 ├── k8s/                             # (postoji) produkcijski deploy (NE briši)
 ├── Dockerfile · docker-compose.yml  # (postoji)
@@ -222,7 +223,16 @@ Svaka akcija ima 3 bloka: `ai` (za LLM), `execution` (kamo puca), `policy` (gate
 > **Granica AI ↔ backend (ključno):** `ai.parameters` sadrži SAMO ono što korisnik
 > izgovori. Interno (`AssigneeType:1`, `EntryType:0`, tenant defaulti, computed
 > polja) **nikad nije ovdje** — to backend dodaje. Šifrarnici (`incident_type`)
-> nose `codebook` marker i razrješuju se po §7.4.
+> nose `codebook` marker i razrješuju se po §10.2.
+
+### 3.3 Operativna semantika `actions.json` (boot, reload, versioning, flag)
+
+| Aspekt | Pravilo |
+|---|---|
+| **Boot validacija** | fail-fast na startu (isti pattern kao tool_data.json danas: malformiran file / prazna `actions` / akcija bez `ai.description` → `RuntimeError`, pod se ne digne — bolje glasno nego tiho krivo) |
+| **Reload bez deploya** | `POST /admin/cache-invalidate` (POSTOJEĆI endpoint pattern u repou) → `ActionRegistry.load()` ponovno; izmjena opisa/parametra akcije = edit JSON + 1 HTTP poziv |
+| **Versioning** | akcije su ADITIVNE: novi parametar = uvijek `required:false`; breaking promjena = NOVO ime (`book_vehicle_v2`) dok staro ne istekne — za k8s rollouta žive stari+novi pod istovremeno i oba moraju raditi |
+| **Feature flag** | `V2_USE_ACTIONS=1` uključuje action-mode PORED postojećeg routera (Strangler Fig — PLAN_KONVERGENCIJA); `=0` je kill-switch natrag na staro |
 
 ---
 
@@ -502,9 +512,20 @@ async def report_incident(body: IncidentIn, x_tenant: str = Header(...)):
     return {"status": "success", "incident_id": inc.id, "vehicle_status": "blocked"}
 ```
 
-**Ugovor koji tražimo od backenda po akciji:** ruta, input DTO (čista poslovna
-polja), strukturiran error (`error_code`+`message`), i tko mapira šifrarnike
-(preporuka: backend — §7.4 opcija C).
+**Ugovor koji tražimo od backenda PO AKCIJI (kompletan — ovo je checklist za
+Damira prije nego počne graditi):**
+
+| # | Zahtjev | Zašto |
+|---|---|---|
+| 1 | ruta + input DTO (čista poslovna polja) | §3 granica AI↔backend |
+| 2 | strukturiran error `{error_code, field?, message}` za SVE 4xx | HR prijevod korisniku (§13.2 ⑧) |
+| 3 | tko mapira šifrarnike (preporuka: backend — §10.2 opcija C) | per-tenant kodovi |
+| 4 | **honoriranje `Idempotency-Key`** headera (dedup prozor ≥ 10 min) | bot ga VEĆ šalje na svaku mutaciju; bez backend dedupa mrežni timeout+retry = dupla rezervacija |
+| 5 | **READ liste vraćaju `{items, total}`** + max page size | bez `total` bot ne može reći "imaš 27, prikazujem 10" (S1 primjer to zahtijeva) |
+| 6 | objavljeni **rate-limiti** (429 + `Retry-After` header) | botov backoff je danas kalibriran naslijepo |
+
+*(Zahtjevi 4/5/6 namjerno preklapaju M1_ZAHTJEV_ADDENDUM #3/#1-2/#6 — addendum
+je pitanje za DANAŠNJI granularni API, ovo je UGOVOR za novi /actions sloj.)*
 
 ---
 
@@ -517,6 +538,7 @@ polja), strukturiran error (`error_code`+`message`), i tko mapira šifrarnike
 | 3 | Registracija → VehicleId | backend resolve (World A) ili bot pre-resolve (rana validacija) |
 | 4 | Tko gradi `/actions` | **pitanje za Damira** — World A (backend) vs World B (bot BFF) |
 | 5 | RAG/knowledge | Faza 2, zasebna sposobnost `answer_from_policy` |
+| 6 | Auth MCP servera (tko smije zvati naše akcije iz M365) | Entra ID token validacija — dizajn u F-M365 fazi (S10) |
 
 ---
 
@@ -908,6 +930,12 @@ User u Teamsu: "rezerviraj mi auto sutra 9-15"
        • tools = ISTE akcije iz config/actions.json (jedan izvor istine)
        • identitet: Copilot daje user email → GET /Persons?Filter=Email(=)…
          → person_id + TenantId (isti strict-binding kao phone put)
+         [✓ Email polje VERIFICIRANO u Persons output_keys (34 polja);
+          filterabilnost po Email = potvrditi uz M1 filter-schema odgovor —
+          Phone(=) filter već živo radi, pa je rizik nizak]
+       • AUTH SAMOG MCP SERVERA: prima SAMO autenticirane M365 pozive
+         (Entra ID token validacija na našem MCP endpointu) — dizajn otvoren,
+         vlasnik F-M365 faza (otvorena odluka #6 u §9)
        • write akcije deklarirane s MCP annotation "requiresConfirmation"
          → POTVRDU RENDERIRA COPILOT UI (M365 confirmation prompt) — naš
            Da/Ne gate je za chat kanale; ovdje istu ulogu ima Copilotov UI
@@ -1066,6 +1094,10 @@ uploaded_at) ili object storage → indeksiranje (embeddings) u pozadini →
 `knowledge/rag_retriever` čita indeks po tenant_id. Dodavanje dokumenta = upload,
 ne deploy.
 
+**GDPR / offboarding tenanta:** kad tenant ode, briše se `tenant_settings`
+red + svi njegovi RAG dokumenti + embeddings indeks + `tenant_cfg:` cache —
+isti purge pattern kao postojeći `/admin/gdpr-process` (dry-run pa stvarni).
+
 ### 12.5 Što umire s ovim redizajnom
 
 `config/tenants/*/tool_subset.json` — u /actions svijetu suvišan dvostruko:
@@ -1140,6 +1172,15 @@ ishod koji korisnik razumije, i **ništa se ne piše u backend bez ⑦ (echo + D
 | Azure LLM | gpt-4o-mini | TPM/RPM kvota | 2 poziva/turn (decision+format) ⇒ ~120 vozača komotno; kvota se diže zahtjevom |
 | Business API | Damirova strana | njihov capacity | ugovoriti SLA/limite (M1 addendum §6) |
 | Postgres | user_mappings + tenants | — (KB reda veličine) | managed PG |
+
+**Telemetrija /actions puta (mjerenje 90/97/0):** postojeći `TelemetryEvent`
+shape se NE mijenja — `tool_picked`=ime akcije, `error`=`validation_fail:<razlog>`
+/ `action_http_<code>`, `latency_ms`, `clarify` — isti KQL upiti, novi prostor
+vrijednosti. Golden-set harvester (build_golden_set.py) radi bez izmjena.
+
+**Cost po turnu (gruba procjena, gpt-4o-mini):** 2 LLM poziva (decision ~2-4k
+input tokena za 30 akcija + format ~1-2k) ≈ **$0.001-0.002/poruci** → 1000
+poruka ≈ $1-2. S gpt-4o ~15-20×. Nije bottleneck ni na 100× volumenu.
 
 **Latency budžet po turnu:** webhook <50ms · queue hop <100ms · safety+identity
 <200ms (cache hit) · LLM decision 0.5-2s · executor→/actions 0.2-2s (cap 15s) ·
