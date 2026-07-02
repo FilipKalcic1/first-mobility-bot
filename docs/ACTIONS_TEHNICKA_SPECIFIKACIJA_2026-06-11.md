@@ -104,6 +104,7 @@ mobilityone-whatsapp-bot/
 │   │   ├── whatsapp.py               #   (izdvoji iz whatsapp_service.py)
 │   │   └── viber.py                  #   Viber inbound parse + outbound send (Infobip)
 │   ├── tenant_config.py             # ⟵ NOVO (F1): bot-side tenant postavke (§12; kod primjer tamo)
+│   ├── auth_preflight.py            # ⟵ NOVO (F1): token scope introspection + route probe (PP1 — PRESSURE_POINTS doc §1)
 │   ├── mcp/
 │   │   └── server.py                # ⟵ NOVO (F-M365): MCP server — omata ISTE akcije za Copilot (§11.3 S10)
 │   ├── api_gateway.py               # (postoji) HTTP + circuit breaker + SSRF + idempotency
@@ -119,7 +120,9 @@ mobilityone-whatsapp-bot/
     ├── test_action_registry.py · test_action_validator.py      ⟵ NOVO (F1)
     ├── test_tenant_config.py · test_channels_dispatch.py        ⟵ NOVO (F0/F1)
     ├── test_mcp_server.py                                       ⟵ NOVO (F-M365)
-    └── tests/v2/test_e2e_actions.py  # E2E razgovori nad akcijama ⟵ NOVO (F1)
+    ├── tests/v2/test_e2e_actions.py  # E2E razgovori nad akcijama ⟵ NOVO (F1)
+    ├── test_auth_preflight.py                                   ⟵ NOVO (F1)
+    └── tests/contract/test_actions_contract.py + fixtures/      ⟵ NOVO (F1): golden par po akciji
 ```
 
 > Migracija je **fazna** (vidi `PLAN_KONVERGENCIJA_10_OD_10`): `actions.json` živi
@@ -1241,7 +1244,7 @@ s vlasnikom i statusom. Nema nepraćenih showstoppera.
 | # | Stavka | Simptom ako fali | Mitigacija | Vlasnik | Status |
 |---|---|---|---|---|---|
 | 1 | World A/B — `/actions` uopće ne postoji | nema se što zvati | odluka na sastanku; World B stopgap postoji (flow_engine predložak) | Filip+Damir (pon.) | 🔴 GATE |
-| 2 | **OAuth scope za `/actions/*` rute** | SVAKI poziv = 403 (⚠ dokazano živo 2026-05-30: "403 scope — bot nema ovlasti", DAMIR_ACCURACY_UGOVOR:27) | ugovor §8 #7 — pisana potvrda PRIJE deploya + smoke test scope-a na dev-u | Damir/M1 | 🔴 OPEN |
+| 2 | **OAuth scope za `/actions/*` rute** | SVAKI poziv = 403 (⚠ dokazano živo 2026-05-30: "403 scope — bot nema ovlasti", DAMIR_ACCURACY_UGOVOR:27) | **`auth_preflight.py`: token scope introspection + route probe na startu (Filipov uvid — scope se VIDI iz tokena; deterministički, prije prvog korisnika)** + ugovor §8 #7 kao redundanca | Filip (preflight) + Damir/M1 (grant) | 🟡 mitigacija dizajnirana |
 | 3 | Business API hosting (koji host?) | 404/DNS na svakom pozivu ako je drugi host | `BUSINESS_API_URL` env (§3.3, §5.3) — config, ne pretpostavka | Filip (config), Damir (info) | 🟡 TRACKED |
 | 4 | Viber sender registracija kod Infobipa | Viber kanal mrtav bez obzira na kod (approval = dani-tjedni) | pokrenuti registraciju ODMAH, paralelno s razvojem (§5.5) | Filip/ops | 🟡 TRACKED |
 | 5 | Timezone semantika /actions datetimea | rezervacije pomaknute 1-2h (radi-ali-krivo) | ugovor §8 #8 | Damir/M1 | 🟡 TRACKED |
@@ -1250,6 +1253,13 @@ s vlasnikom i statusom. Nema nepraćenih showstoppera.
 | 8 | Auth MCP servera (Entra ID) | tuđi pozivi na naše akcije | dizajn u F-M365 fazi (§9 #6, S10) | Filip (F-M365) | 🟡 TRACKED |
 | 9 | Azure TPM/RPM kvota | 429 oluje na skoku volumena | retry+backoff živ; kvota se diže zahtjevom (§14.1) | Filip/AZ | 🟢 mitigirano |
 | 10 | Dostava poruke (WA/Viber platforma) | korisnik blokirao bota / kanal down | DLQ+alarm (§17) — trajni bound, nitko ne kontrolira | — | 🟢 bound |
+| 11 | Infobip SPOF (svi kanali kroz 1 providera) | Infobip down = svi kanali down | adapter sloj (channels/) čini providera zamjenjivim; DLQ preživi outage | Filip (dizajn) | 🟢 mitigirano |
+| 12 | LLM model update mijenja ponašanje | tiha regresija točnosti | PIN deployment verziju; benchmark gate (oba seeda) na svaki bump | Filip | 🟢 protokol postoji |
+| 13 | Redis SPOF (1 replica) | kratki zastoj na restart (AOF čuva) | danas dovoljno; prag >500 aktivnih → managed Redis/HA | Filip/ops | 🟡 prag definiran |
+| 14 | Jutarnji burst prometa | latencija raste u redu (bez gubitka) | queue apsorbira; ~75-150 msg/min/workeru; prag → Redis per-sender lock (k8s/README) | Filip | 🟡 prag definiran |
+| 15 | Poison message | crash loop | msg_lock + iznimka→DLQ inbound bez auto-retryja — dokazano testom | — | 🟢 zatvoreno |
+| 16 | Rotacija secreta (uklj. ngrok-era) | istekli/procurjeli kredencijali | k8s secret + rolling restart runbook; rotirati ngrok-era ODMAH | Filip/ops | 🟡 TODO |
+| 17 | Proaktivne poruke vs WA 24h prozor | neisporuka / template pravila | danas samo reply (OK); proaktivno TEK s template approvalom | budućnost | 🟢 ograđeno |
 
 **Kriterij zatvaranja registra prije go-livea:** nijedan 🔴; svi 🟡 imaju
 potvrđen datum/odgovor ili degradaciju koja ne ruši sustav.
@@ -1302,6 +1312,7 @@ Session docs (9) — odluka po svakom:
 | 2 | `USPOREDBA_ARHITEKTURA_STARA_NOVA_2026-06-11.md` | ✅ KEEP | stara vs nova, prvo lice (za šefa) |
 | 3 | `PLAN_KONVERGENCIJA_10_OD_10_2026-06-11.md` | ✅ KEEP | migracijski plan (faze, gate na World A/B) — referenciran iz §12.5/§14.3 |
 | 4 | `M1_ZAHTJEV_ADDENDUM_2026-06-11.md` | ✅ KEEP | zapis poslanog zahtjeva M1 timu |
+| 4b | `PRESSURE_POINTS_JEDNA_SLIKA_2026-06-11.md` | ✅ KEEP (novi) | radni fokus-doc: jedna slika + PP garancije + files + redoslijed napada |
 | 5 | `SEF_ARHITEKTURA_USPOREDBA_2026-06-11.md` | 🗑 OBRISAN | apsorbiran u §15 (mapiranje 7 komponenti) |
 | 6 | `ACTIONS_ROUNDTRIP_TEHNICKI_2026-06-11.md` | 🗑 OBRISAN | apsorbiran u §4 (lifecycle), §10.4 (World A/B), §15 (3 ispravka) |
 | 7 | `DIZAJN_ACTIONS_OTVORENA_PITANJA_2026-06-11.md` | 🗑 OBRISAN | apsorbiran u §9 + §10 (deep-dive) |
