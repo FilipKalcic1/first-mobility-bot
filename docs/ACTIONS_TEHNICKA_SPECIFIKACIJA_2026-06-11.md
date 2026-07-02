@@ -233,6 +233,7 @@ Svaka akcija ima 3 bloka: `ai` (za LLM), `execution` (kamo puca), `policy` (gate
 | **Reload bez deploya** | `POST /admin/cache-invalidate` (POSTOJEĆI endpoint pattern u repou) → `ActionRegistry.load()` ponovno; izmjena opisa/parametra akcije = edit JSON + 1 HTTP poziv |
 | **Versioning** | akcije su ADITIVNE: novi parametar = uvijek `required:false`; breaking promjena = NOVO ime (`book_vehicle_v2`) dok staro ne istekne — za k8s rollouta žive stari+novi pod istovremeno i oba moraju raditi |
 | **Feature flag** | `V2_USE_ACTIONS=1` uključuje action-mode PORED postojećeg routera (Strangler Fig — PLAN_KONVERGENCIJA); `=0` je kill-switch natrag na staro |
+| **Hosting akcija** | `BUSINESS_API_URL` env (default = `MOBILITY_API_URL`) — gdje `/actions/*` živi je CONFIG, ne pretpostavka; odvojeni host = 1 env var (§5.3) |
 
 ---
 
@@ -372,12 +373,16 @@ async def execute_action(self, action_name: str, params: dict, identity: dict):
         if identity.get(key) is not None:
             body[key] = identity[key]
     # async poziv preko postojećeg gatewaya (token + x-tenant + Idempotency-Key + SSRF)
+    # HOSTING: gdje Business API živi NIJE pretpostavka nego config —
+    # BUSINESS_API_URL env (default = MOBILITY_API_URL ako je isti host).
+    # Ako Damir hosta /actions odvojeno, mijenja se 1 env var, ne kod.
     resp = await self._gateway.call(
         method=spec["execution"]["method"],
-        service="",                                   # /actions je na root Business API
+        service="",                                   # path je već pun ("/actions/…")
         path=spec["execution"]["action"],            # "/actions/report-incident"
         body=body if spec["execution"]["method"] == "POST" else None,
         tenant_id=identity["tenant_id"],
+        base_url_override=settings.BUSINESS_API_URL,  # ⟵ NOVO (fallback: MOBILITY_API_URL)
     )
     return resp   # {success, data|error_body, status_code}
 ```
@@ -393,6 +398,12 @@ async def execute_action(self, action_name: str, params: dict, identity: dict):
 ```
 
 ### 5.5 Viber adapter (⟵ NOVO, edge — mozak netaknut)
+
+> **⚠ OPS PREREQUISITE (bez ovoga kanal NE RADI bez obzira na kod):**
+> Viber business sender mora biti **registriran i odobren kod Infobipa**
+> (poslovni proces, tipično dani-tjedni!) + Viber sender u secretima. Pokreni
+> registraciju ODMAH, paralelno s razvojem — approval je kritični put Viber
+> kanala, ne kod. (Isti princip vrijedi za budući WhatsApp broj novog tenanta.)
 
 ```python
 # webhook_simple.py  ── novi inbound
@@ -523,9 +534,12 @@ Damira prije nego počne graditi):**
 | 4 | **honoriranje `Idempotency-Key`** headera (dedup prozor ≥ 10 min) | bot ga VEĆ šalje na svaku mutaciju; bez backend dedupa mrežni timeout+retry = dupla rezervacija |
 | 5 | **READ liste vraćaju `{items, total}`** + max page size | bez `total` bot ne može reći "imaš 27, prikazujem 10" (S1 primjer to zahtijeva) |
 | 6 | objavljeni **rate-limiti** (429 + `Retry-After` header) | botov backoff je danas kalibriran naslijepo |
+| 7 | **OAuth scope grant za SVE `/actions/*` rute našem client_id-u** — pisana potvrda PRIJE prvog deploya | ⚠ DOKAZANO ŽIVO da je ovo failure mode: test 2026-05-30 — glavne blokade bile **403 scope ("bot nema ovlasti")** na granularnim rutama (DAMIR_ACCURACY_UGOVOR:27). Bez granta: SVAKI poziv nove akcije = 403 = mrtav bot |
+| 8 | **timezone semantika datetime polja**: dokumentirati tretman naive ISO (preporuka: backend tretira kao Europe/Zagreb, ILI ugovoriti offset format `2026-06-12T09:00:00+02:00`) | bez toga rezervacije mogu biti pomaknute 1-2h — radi-ali-krivo (tiha korupcija) |
 
-*(Zahtjevi 4/5/6 namjerno preklapaju M1_ZAHTJEV_ADDENDUM #3/#1-2/#6 — addendum
-je pitanje za DANAŠNJI granularni API, ovo je UGOVOR za novi /actions sloj.)*
+*(Zahtjevi 4/5/6/8 namjerno preklapaju M1_ZAHTJEV_ADDENDUM #3/#1-2/#6/#4 —
+addendum je pitanje za DANAŠNJI granularni API, ovo je UGOVOR za novi /actions
+sloj. Zahtjev 7 je NOV — naučen iz živog testa.)*
 
 ---
 
@@ -920,6 +934,7 @@ router→{kind:answer, capability:answer_from_policy}
 Infobip→POST /webhook/viber→HMAC→stream_data{…, channel:"viber"}→isti koraci 4-28
   →enqueue_outbound nosi channel:"viber"→worker outbound grana→Infobip Viber send
 [V2Engine NE zna razliku — channel je samo tag na rubu; test: isti E2E s oba taga]
+[⚠ prerequisite: Viber sender registriran/odobren kod Infobipa — vidi §5.5]
 ```
 
 **S10 — M365 Copilot krug (preko MCP servera — OBAVEZNA komponenta, faza uz Copilot kanal)**
@@ -1215,6 +1230,29 @@ LLM format 0.5-1.5s → **tipično 2-6s**; tvrdi capovi: 15s executor / 90s turn
   zelenog pilota. Redoslijed uvođenja: `PLAN_KONVERGENCIJA_10_OD_10_2026-06-11.md`
   (Strangler Fig — ništa se ne briše prije dokazane zamjene).
 - Tenants DB redizajn (§12) — pattern je preslika VEĆ dokazanog tenant_resolvera.
+
+---
+
+### 14.4 SHOWSTOPPER REGISTAR — sve što bi značilo "neće raditi" (trajna tablica)
+
+Pravilo (kao §17.3): svaki poznati "neće raditi zbog toga" rizik MORA biti ovdje
+s vlasnikom i statusom. Nema nepraćenih showstoppera.
+
+| # | Stavka | Simptom ako fali | Mitigacija | Vlasnik | Status |
+|---|---|---|---|---|---|
+| 1 | World A/B — `/actions` uopće ne postoji | nema se što zvati | odluka na sastanku; World B stopgap postoji (flow_engine predložak) | Filip+Damir (pon.) | 🔴 GATE |
+| 2 | **OAuth scope za `/actions/*` rute** | SVAKI poziv = 403 (⚠ dokazano živo 2026-05-30: "403 scope — bot nema ovlasti", DAMIR_ACCURACY_UGOVOR:27) | ugovor §8 #7 — pisana potvrda PRIJE deploya + smoke test scope-a na dev-u | Damir/M1 | 🔴 OPEN |
+| 3 | Business API hosting (koji host?) | 404/DNS na svakom pozivu ako je drugi host | `BUSINESS_API_URL` env (§3.3, §5.3) — config, ne pretpostavka | Filip (config), Damir (info) | 🟡 TRACKED |
+| 4 | Viber sender registracija kod Infobipa | Viber kanal mrtav bez obzira na kod (approval = dani-tjedni) | pokrenuti registraciju ODMAH, paralelno s razvojem (§5.5) | Filip/ops | 🟡 TRACKED |
+| 5 | Timezone semantika /actions datetimea | rezervacije pomaknute 1-2h (radi-ali-krivo) | ugovor §8 #8 | Damir/M1 | 🟡 TRACKED |
+| 6 | Bulk `GET /Tenants` scope | bulk sync ne radi (LAZY put NE ovisi — radi i bez) | potvrda na dev accessu; lazy je default | M1 | 🟢 NIJE blokator |
+| 7 | Email filterabilnost u /Persons | Copilot identitet treba drugi lookup | potvrda uz filter-schema odgovor; Phone(=) već živo radi | M1 | 🟡 TRACKED (F-M365) |
+| 8 | Auth MCP servera (Entra ID) | tuđi pozivi na naše akcije | dizajn u F-M365 fazi (§9 #6, S10) | Filip (F-M365) | 🟡 TRACKED |
+| 9 | Azure TPM/RPM kvota | 429 oluje na skoku volumena | retry+backoff živ; kvota se diže zahtjevom (§14.1) | Filip/AZ | 🟢 mitigirano |
+| 10 | Dostava poruke (WA/Viber platforma) | korisnik blokirao bota / kanal down | DLQ+alarm (§17) — trajni bound, nitko ne kontrolira | — | 🟢 bound |
+
+**Kriterij zatvaranja registra prije go-livea:** nijedan 🔴; svi 🟡 imaju
+potvrđen datum/odgovor ili degradaciju koja ne ruši sustav.
 
 ---
 
