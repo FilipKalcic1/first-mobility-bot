@@ -104,7 +104,7 @@ mobilityone-whatsapp-bot/
 │   │   ├── whatsapp.py               #   (izdvoji iz whatsapp_service.py)
 │   │   └── viber.py                  #   Viber inbound parse + outbound send (Infobip)
 │   ├── tenant_config.py             # ⟵ NOVO (F1): bot-side tenant postavke (§12; kod primjer tamo)
-│   ├── auth_preflight.py            # ⟵ NOVO (F1): token scope introspection + route probe (PP1 — PRESSURE_POINTS doc §1)
+│   ├── auth_preflight.py            # (postoji — IMPLEMENTIRAN 2026-06-11): token scope introspection + route probe (PP1)
 │   ├── mcp/
 │   │   └── server.py                # ⟵ NOVO (F-M365): MCP server — omata ISTE akcije za Copilot (§11.3 S10)
 │   ├── api_gateway.py               # (postoji) HTTP + circuit breaker + SSRF + idempotency
@@ -121,8 +121,8 @@ mobilityone-whatsapp-bot/
     ├── test_tenant_config.py · test_channels_dispatch.py        ⟵ NOVO (F0/F1)
     ├── test_mcp_server.py                                       ⟵ NOVO (F-M365)
     ├── tests/v2/test_e2e_actions.py  # E2E razgovori nad akcijama ⟵ NOVO (F1)
-    ├── test_auth_preflight.py                                   ⟵ NOVO (F1)
-    └── tests/contract/test_actions_contract.py + fixtures/      ⟵ NOVO (F1): golden par po akciji
+    ├── test_auth_preflight.py                                   (postoji — 20 testova)
+    └── tests/contract/test_actions_contract.py + fixtures/      (postoji — offline+live mod; 3 fixturea: report_incident/book_vehicle/add_mileage)
 ```
 
 > Migracija je **fazna** (vidi `PLAN_KONVERGENCIJA_10_OD_10`): `actions.json` živi

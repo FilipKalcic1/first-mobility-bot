@@ -488,6 +488,19 @@ class Worker:
         self._v2_engine = bundle.engine
         log("info", "v2_engine_ready")
 
+        # Auth preflight (PP1): scope introspection + route probe — a missing
+        # OAuth grant becomes a STARTUP fact instead of a production 403
+        # (the 2026-05-30 live-test failure mode). Log-only by default;
+        # AUTH_PREFLIGHT_STRICT=1 makes a failed report fatal. Never crashes
+        # the worker on its own errors (module contract).
+        try:
+            from services.auth_preflight import run_startup_preflight
+            await run_startup_preflight(self._gateway, settings)
+        except RuntimeError:
+            raise  # strict mode explicitly asked to fail startup
+        except Exception as e:
+            log("warn", "auth_preflight_skipped", {"error": str(e)})
+
         # Register Lua script for atomic lock release
         self._release_lock_sha = await self.redis.script_load(_RELEASE_LOCK_LUA)
         log("info", "lock_lua_script_registered")
