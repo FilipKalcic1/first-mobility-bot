@@ -7,7 +7,9 @@
 > Redoslijed gradnje je u §23. Definicija "gotovo" je u §21. Ako nešto nije
 > ovdje specificirano, primijeni konzervativni default i ZAPIŠI odluku.
 >
-> **Verzija:** 2026-07-04 · Konsolidacija 5 dokumenata (TEHNIČKA SPECIFIKACIJA,
+> **Verzija:** 2026-07-04 **v1.1** (revizija po pressure-testu: ciljno stanje
+> normativno — §0.5; skela karantenizirana — §9.2/§22.5; potpunost per-akcija —
+> §21.2) · Konsolidacija 5 dokumenata (TEHNIČKA SPECIFIKACIJA,
 > PRESSURE POINTS, PLAN KONVERGENCIJA, USPOREDBA ARHITEKTURA, M1 ADDENDUM) +
 > **stvarno stanje koda** (suite: 1754 passed / 0 failed, coverage 87%).
 > Gdje se spec i implementacija razlikuju, OVAJ dokument nosi istinu.
@@ -31,9 +33,70 @@ BOT          = jezik + sigurnost + JEDNA čista akcija po turnu
 BUSINESS API = poslovna pravila + orkestracija granularnih poziva   (cilj, /actions)
 DOMAIN API   = podaci (≈950 granularnih CRUD ruta, M1 Swagger)
 ```
-Danas bot još ruta nad 950 granularnih ruta (Model A kaskada, §9); ciljno stanje
-je ~30 poslovnih akcija (`/actions/*`, §11) — migracija je fazna (Strangler Fig,
-§23), **ništa se ne briše prije dokazane zamjene**.
+**Normativna hijerarhija ovog dokumenta:** CILJNI sustav je §0.5 — bot zove
+ISKLJUČIVO `/actions` (~30 akcija). Model A kaskada nad 950 ruta je PRIJELAZNA
+SKELA (§9.2) koja postoji samo dok `/actions` API ne postoji; ima egzaktnu
+delete listu (§22.5) i datum smrti (Faza 4). Migracija je fazna (Strangler Fig,
+§23.2) — **ništa se ne briše prije dokazane zamjene, ali NIŠTA prijelazno se ne
+smije zamijeniti za cilj.**
+
+---
+
+## §0.5 CILJNO STANJE — NORMATIVNO (ovo je sustav koji gradimo)
+
+**Bot zove ISKLJUČIVO `POST/GET /actions/*` (~30 akcija). Ništa od prijelazne
+skele (§22.5) ne postoji u ovom stanju.**
+
+### Ciljno stablo (end-state; usporedi sa §3 koji je današnja stvarnost)
+```
+mobilityone-whatsapp-bot/                (CILJNO — višak iz §22.5 NE postoji)
+├── config/
+│   ├── actions.json                     # ~30 akcija — JEDINI katalog (§11)
+│   └── entity_translations_hr.json
+├── services/
+│   ├── api_gateway.py · token_manager.py · auth_preflight.py
+│   ├── whatsapp_service.py · viber_service.py      # kanali (hook seam §15.2)
+│   ├── tenant_resolver.py · tenant_config.py       # §16
+│   ├── queue_service.py · errors.py · retry_utils.py · tracing.py · admin_auth.py
+│   ├── router/llm_router.py             # SAMO: 30 shema → 1 LLM tool-call
+│   │                                    #   (BEZ Stage A / anchora / scopinga)
+│   ├── formatter/llm_formatter.py
+│   ├── mcp/server.py                    # Copilot kanal — omata ISTE akcije
+│   └── v2/
+│       ├── engine.py                    # orkestrator (~8 slojeva)
+│       ├── rate_limiter · pii_scrubber · input_sanitizer · output_sanitizer
+│       ├── identity · crisis_detector · special_intents · gdpr_audit
+│       ├── negation_handler · multi_intent_detector · meta_intents
+│       ├── action_registry · action_validator       # §11 (jedini "katalog" kod)
+│       ├── clarify_ui · pending_clarify · mutation_gate · pending_mutation
+│       ├── param_ui · pending_params · optional_extractor · param_labeler
+│       ├── type_resolver · api_error_translator · executor
+│       ├── conversation_history · telemetry · latency_ux · azure_rate_guard
+│       └── knowledge/                   # F2 RAG (rag_retriever · doc_store)
+├── webhook_simple.py · worker.py · main.py · config.py · database.py · alembic/
+├── k8s/ · Dockerfile · docker-compose.yml
+└── tests/                               # po modulu + e2e razgovori + contract
+                                         #   fixturei + benchmark NAD AKCIJAMA
+```
+
+### Ciljni flow (end-state)
+```
+poruka (WA / Viber / Copilot / Web)
+→ [chat kanali] safety krevet (rate→PII→inject) → identity(→tenant strict)
+→ pending nastavci (params/confirm/clarify)
+→ LLM: 30 akcija DIREKTNO u tool-call (nema retrievala — sve stane u prompt)
+     → { action | clarify | answer }
+→ action_validator (anti-halucinacija) → coercion → fali required? pitaj
+→ codebook? semantika ide backendu (on mapira po tenantu)
+→ inject person/tenant → [write] param echo + "Potvrđuješ? (Da/Ne)"
+→ executor → POST /actions/<name> {čisti poslovni payload}
+→ BUSINESS API orkestrira (pravila + granularni pozivi + šifrarnici)
+→ čisti JSON → formatter → hrvatski → outbound po kanalu
+[Copilot put: mcp/server.py izlaže ISTE akcije; Copilot je mozak — §15.3]
+```
+
+**Definicija "stigli smo":** ovo stablo + ovaj flow + §21.2 potpunost po akciji
++ §22 registar bez 🔴. Sve što je u §3 a nije ovdje = višak s planom smrti (§22.5).
 
 ---
 
@@ -123,7 +186,8 @@ mobilityone-whatsapp-bot/
 │   ├── processed_tool_registry.json  # boot-obavezan registar (registry ga učitava)
 │   ├── actions.json                  # F1: ~30 akcija (§11) — PORED tool_data, iza flaga
 │   ├── entity_translations_hr.json   # HR nazivi entiteta
-│   └── tenants/                      # dev-seed per-tenant scoping (produkcija → DB, §16)
+│   └── tenants/                      # ⚠ SKELA: dev-seed za catalog_scoper (950-svijet);
+│                                     #   NIJE tenant-identitet! umire u Fazi 4 (§16.0, §22.5)
 ├── services/
 │   ├── api_gateway.py                # HTTP + OAuth + x-tenant + Idempotency-Key + SSRF
 │   │                                 #   + circuit breaker + list-serializacija (§12)
@@ -406,30 +470,42 @@ livenessProbe — worker nema HTTP port).
 
 ---
 
-## §9 ROUTING — dvije generacije, ista kontrolna petlja
+## §9 ROUTING
 
-### 9.1 DANAS (živo): Model A kaskada nad ~950 alata
+### 9.1 CILJNI routing (NORMATIVAN): ~30 akcija direktno u LLM
+```
+korisnikov tekst + history[-3:] + identity sažetak
+→ gpt-4o-mini tool-call nad SVIH ~30 shema iz actions.json (stanu u prompt —
+  NEMA retrievala, NEMA action-pickera, NEMA scopinga)
+→ { kind: "action" | "clarify" | "answer", action?, params?, text? }
+→ nesigurno → TOP-3 clarify kartice (1/2/3; "nije točno" → reoffer)   [ostaje!]
+→ dalje ista petlja: validator → params → confirm → execute
+```
+`action_registry.openai_tools()` pretvara §11 sheme u OpenAI tools;
+`action_validator` = anti-halucinacija (nepoznata akcija/polje/tip → clarify,
+NIKAD slijepo dalje). Točnost nosi KVALITETA OPISA u actions.json
+(description + use_when + examples — §11), ne retrieval mašinerija.
+Uvođenje: iza `V2_USE_ACTIONS=1` dok benchmark ≥ skela na oba seeda, zatim
+postaje jedini put (§23.2 Faza 3/4).
+
+### 9.2 ⚠ PRIJELAZNA SKELA (VIŠAK — umire u Fazi 4): Model A kaskada nad ~950
+**Postoji iz JEDNOG razloga: `/actions` API još ne postoji (gate §24#1), a bot
+mora raditi danas.** Ne brisati prije dokazane zamjene (mrtav bot = Gemini
+lekcija), ali NE ULAGATI u nju ništa novo osim bug-fixeva.
 ```
 korisnikov tekst
 → ACTION PICKER: POGLEDATI / UNIJETI / IZMIJENITI / IZBRISATI (+global intents)
 → scoped L3: anchor retrieval (top-50 kandidata za taj action-tip)
    → gpt-4o-mini tool-call (tool_choice="required") nad top-50 shema
-→ nesigurno → TOP-3 clarify kartice (1/2/3 izbor; "nije točno" → reoffer)
-→ dalje ista petlja: params → confirm → execute
+→ nesigurno → TOP-3 clarify (isti mehanizam kao 9.1)
+→ dalje ISTA petlja: params → confirm → execute
 ```
-Detalji: `tool_schema_builder` SUPPRESSA `filter`/`useandfor` parametre (LLM ih
-ne smije pogađati); anchor cache na `ANCHOR_CACHE_PATH`; đ/č/ć normalizacija u
-type_resolveru; benchmark dual-seed golden set. **Registar alata se generira iz
-M1 Swaggera** (`scripts/sync_tools.py` → `tool_data.json` +
-`processed_tool_registry.json`; registry je boot-obavezan — fali li, bot se ne
-digne). Router ulazi: `(text, sheme, history[-3:], identity sažetak)`.
-
-### 9.2 CILJ (F1, iza `V2_USE_ACTIONS=1`): ~30 akcija direktno u LLM
-Stage A (anchor retrieval) postaje nepotreban — 30 akcija stane u prompt.
-`action_registry.openai_tools()` pretvara §11 sheme u OpenAI tools; router vraća
-`{kind, action, params}`; `action_validator` (anti-halucinacija: nepoznata
-akcija/polje/tip → clarify, NIKAD slijepo dalje). Stari put ostaje **default**
-dok novi ne dokaže benchmark ≥ stari; brisanje starog TEK po §23 Fazi 3/4.
+Detalji skele: `tool_schema_builder` SUPPRESSA `filter`/`useandfor`; anchor
+cache na `ANCHOR_CACHE_PATH`; registar se generira iz M1 Swaggera
+(`scripts/sync_tools.py` → `tool_data.json` 3.8MB + `processed_tool_registry.json`
+3.4MB; boot-obavezan u skeli). **Kriterij smrti:** sposobnost dokazana na
+/actions putu u produkciji → njen skela-put se briše (po sposobnosti, Faza 3);
+kad SVE high-frequency prijeđe → cijela kaskada + registar van (Faza 4, §22.5).
 
 ---
 
@@ -624,9 +700,64 @@ Teams user → COPILOT JE MOZAK (razumije/ekstrahira/bira tool) → MCP protokol
 Sync `/chat` fasada u main.py koja interno zove ISTI engine (bez dupliranja) —
 messaging kanali ostaju async (webhook→stream→worker; Infobip očekuje brz 200).
 
+### 15.5 Usklađenost sa šefovim overview dokumentom (Fleet AI Copilot v2.1)
+Njegovih 7 komponenti → naša implementacija — dizajn JE njegov dizajn, razrađen:
+
+| Šefova komponenta | Naše | Napomena |
+|---|---|---|
+| 1 Channels (WA/Viber/Web/M365) | webhook rute + whatsapp/viber_service; Web=15.4; M365=15.3 | WA živ; Viber kod gotov |
+| 2 AI Backend (thin) | V2Engine | postaje thin migracijom orkestracije u /actions |
+| 3 OpenAI (decision+conversation) | llm_router + llm_formatter | + Da/Ne gate (on ga u QB mailu sam traži — human-in-the-loop) |
+| 4 Tool Config (ai/execution) | `config/actions.json` (§11) | identična struktura kao njegov book_vehicle primjer |
+| 5 MCP (execution+auth) | danas executor+gateway+token_manager (funkc. ekvivalent); cilj + `mcp/server.py` | OBAVEZAN — M365 kanal je u njegovom docu |
+| 6 Business API /actions | backendova strana | ugovor §17.1; World A/B §24#1 |
+| 7 Domain/Granular API | 950 M1 ruta | u cilju ih bot NE zove direktno |
+
+**3 NAMJERNE devijacije (obrazložene, ne slučajne):**
+1. **Async ingress za messaging** umjesto sync `/chat` — Infobip očekuje brz
+   200, obrada traje sekunde, retry semantika; sync `/chat` postoji kao fasada
+   za Web kanal (15.4), isti engine.
+2. **Da/Ne mutation gate između decision i execution** — "OpenAI odlučuje"
+   znači *bira akciju*, ne *izvršava bez potvrde* (i njegov QB zahtjev).
+3. **Safety slojevi ostaju u botu** (crisis/PII/injection/GDPR) — to je
+   pravna/etička obveza kanala prema korisniku, ne "business logika" koja
+   seli u /actions.
+Njegov MCP input `{tool, input, user:{email,phone,token}}` ≡ naš contract:
+`tool`→ime akcije, `input`→poslovni body, `user`→identity inject (kod nas
+razriješen PRIJE poziva; per-user token nije primjenjiv na WA kanalu).
+
 ---
 
 ## §16 TENANTI
+
+### 16.0 Kako tenant logika radi END-TO-END (jedan pogled)
+```
+ poruka s broja +385 99 …
+   │
+   ├─ 1. tenant_resolver / identity.resolve(phone)
+   │      Postgres user_mappings + Redis cache (tenant_phone: 300s /
+   │      v2:identity: 30s); miss → GET /Persons?Filter=Phone(=)…
+   │      (NSN contains-fallback za 3 živa formata broja + post-verifikacija)
+   │
+   ├─ 2. response NOSI TenantId  ← M1 JE IZVOR ISTINE, bez preseta
+   │      STRICT BINDING: nema TenantId → korisnik ODBIJEN (enrollment
+   │      poruka); tenant NIKAD iz env-defaulta ni iz teksta poruke
+   │
+   ├─ 3. x-tenant: {TenantId} na SVAKOM API pozivu → izolacija podataka
+   │
+   ├─ 4. bot-side postavke: tenant_settings red u DB (lazy-kreiran s
+   │      defaultima na PRVI susret; cache tenant_cfg: 300s) —
+   │      jezik, bot_status, actions_enabled per akcija
+   │
+   └─ 5. per-tenant ŠIFRARNICI (CaseType…): backend mapira semantiku (§16.3)
+
+ NOVI TENANT U M1 → mi ne radimo NIŠTA (korak 1-4 se dogodi sam na prvu poruku).
+```
+**Presuda za `config/tenants/` folder (da bude kristalno):** on NIJE dio tenant
+logike gore. Sadrži samo `_default/tool_subset.json` = dev-seed za
+`catalog_scoper` koji u 950-SKELI sužava katalog alata per tenant. Umire sa
+skelom (Faza 4, §22.5) — per-tenant uključivanje akcija u cilju je
+`tenant_settings.actions_enabled` u bazi, mijenja se admin pozivom bez deploya.
 
 ### 16.1 Izvor istine = M1 backend (bot NE kreira i NE presetira tenante)
 ```
@@ -767,12 +898,25 @@ E2E: 4 puna razgovora kroz produkcijski factory s pravim registrom (read,
 write+confirm, decline, reoffer) s **exact-call asertacijama**
 (method/service/path/body/tenant/idempotency) + Viber e2e pipeline.
 
-### 21.2 Acceptance (prije go-livea)
-- Benchmark **90/97/0** (top-1 accuracy / top-3 / halucinirane akcije) na
-  dual-seed golden setu; 2 tjedna zelenog pilota na živom prometu.
-- Showstopper registar (§22): nijedan 🔴; svi 🟡 s potvrđenim datumom/odgovorom.
-- `verify_production_readiness.py` PASS uz live kredencijale (uklj. auth
-  preflight `ok AND verified`).
+### 21.2 Acceptance = POTPUNOST PO AKCIJI, ne samo agregat
+
+**Akcija POSTOJI tek kad ima SVIH 6 (nijedna "na ruke"):**
+```
+ 1. actions.json entry (two-level opisi: tehnički type/format + poslovni
+    description + use_when + examples)
+ 2. offline contract fixture (request/response/errors s placeholderima)
+ 3. LIVE contract PASS protiv dev Business API-ja (uklj. error slučajeve)
+ 4. smoke na dev M1 (stvarni poziv, stvaran odgovor)
+ 5. e2e razgovorni test (poruka→…→HR odgovor, exact-call asertacije)
+ 6. uključena u benchmark golden set
+```
+**Sustav je GOTOV kad:** SVIH ~30 akcija prošlo svih 6 gore + agregat
+**90/97/0** (top-1 / top-3 / halucinirane) na dual-seed golden setu + 2 tjedna
+zelenog pilota + showstopper registar bez 🔴 (svi 🟡 s potvrđenim odgovorom) +
+`verify_production_readiness.py` PASS uz live kredencijale (auth preflight
+`ok AND verified`). **Capability tablica ~30 akcija sa statusom 6 kvačica se
+vodi u repou** (počinje s 5 iz Faze 1: book_vehicle, add_mileage,
+report_incident, list_trips, vehicle_status — fixturei za 3 već postoje).
 
 ### 21.3 Garancija "uvijek odgovor" — enumeracija SVIH izlaza (čuvati tablicu!)
 20 putanja, svaka s testom: HMAC fail(401) · dup webhook · Redis pun(503→retry)
@@ -811,26 +955,74 @@ Performance okviri: latencija turna tipično 2-6s (capovi 15s executor / 90s
 turn) · trošak ~$0.001-0.002/poruci (gpt-4o-mini, 2 poziva/turn) · kapacitet
 ~120 vozača komotno na 1 workeru.
 
+### §22.5 REGISTAR VIŠKA — egzaktno što je prijelazna skela (izmjereno 2026-07-04)
+
+**Ukupno viška: ~7.2 MB configa + ~4.5k linija koda + pripadni testovi.**
+Sve umire u Fazi 4 (osim gate-ovisnih redaka) — svako brisanje iza testa +
+benchmarka, po Strangler Fig pravilu.
+
+| Višak | Veličina | Umire | Zamjena |
+|---|---|---|---|
+| `config/tool_data.json` | 3.8 MB (950 alata) | Faza 4 | `actions.json` ~30 akcija (~30 KB) |
+| `config/processed_tool_registry.json` | 3.4 MB (boot-obavezan u skeli) | Faza 4 | ne treba — action_registry čita actions.json |
+| Stage A u `router/llm_router.py` | dio od 375 L | Faza 4 | 30 shema direktno u prompt |
+| `router/catalog_scoper.py` (korisnici: engine, llm_router) | 210 L | Faza 4 | ne treba (nema što subsetirati) |
+| `router/anchor_vocab.py` + anchor cache | 340 L | Faza 4 | ne treba |
+| `router/tool_schema_builder.py` (950-specifična suppresija) | 270 L | Faza 4 | `action_registry.openai_tools()` |
+| `v2/intent_type.py` (action picker pre-stage) | 159 L | Faza 4 ako mjereno suvišan | direktan tool-call |
+| `v2/driver_basics.py` (anchor index za self-pitanja) | 279 L | Faza 4 ako mjereno suvišan | akcija/RAG put |
+| `services/registry/` (swagger_parser 660 + embedding_engine 462 + entity_mappings 547 + tool_store 106 + __init__ 225) | 2.0k L | Faza 4 | akcije se pišu ručno, ne generiraju |
+| Skripte: `sync_tools`, `regenerate_anchors`(×2), `regenerate_tkb_examples`, `regenerate_tool_data` | 5 skripti | Faza 4 | — |
+| `config/tenants/` (_default dev-seed za catalog_scoper) | 2 filea | Faza 4 | `tenant_settings.actions_enabled` u DB (§16) |
+| 950-vezani benchmarki (`tests/benchmarks/*` paraphrase setovi) | ~10 fileova | Faza 4 | actions golden set (isti dual-seed protokol) |
+| `v2/flow_engine.py` | 870 L | **GATE**: World A → umire (backend orkestrira); World B → POSTAJE BFF jezgra (nije višak) | /actions ili on sam |
+
+**NIKAD višak (trajna lista — brisanje = neispravan build):** crisis_detector ·
+pii_scrubber · input_sanitizer · output_sanitizer · special_intents+gdpr_audit ·
+mutation_gate+pending_mutation · pending_params+param_ui · pending_clarify+
+clarify_ui · identity · rate_limiter · conversation_history · api_gateway
+resilience (breaker/SSRF/idempotency) · formatter · kanali (whatsapp/viber
+service) · type_resolver · api_error_translator · telemetry · k8s.
+
 ---
 
 ## §23 REDOSLIJED GRADNJE
 
-### 23.1 Za graditelja OD NULE (svaki korak: modul + test, suite zelena)
+### 23.1 Za graditelja OD NULE — dva patha, izbor NIJE tvoj nego stanja svijeta
+
+**Pravilo izbora:** postoji li `/actions` Business API (ili World B BFF nalog)?
+**DA → PATH T (ciljni build).** NE → PATH P, i to samo uz eksplicitnu potvrdu
+da se gradi prijelazno stanje.
+
+**PATH T — CILJNI build (bez ijednog retka skele iz §22.5):**
 ```
- 1. config.py (env §4) + errors.py + database + osnovni k8s/compose skeleton
- 2. api_gateway + token_manager (+SSRF, breaker, list-serializacija) — testovi
+ 1. config.py (env §4, uklj. BUSINESS_API_URL) + errors.py + database + skeleton
+ 2. api_gateway + token_manager (+SSRF, breaker, Idempotency-Key) — testovi
  3. webhook_simple (HMAC, dedup, parse, channel, XADD, DLQ) — test_webhook*
- 4. worker skeleton (XREADGROUP, msg_lock, ACK protokol, outbound pump,
+ 4. worker (XREADGROUP, msg_lock, ACK protokol, outbound pump,
     klasifikacija §7.3, split §7.4, heartbeat) — test_worker_*
  5. WhatsAppService (s 4 hooka!) + ViberService — test_*_service
  6. engine SAFETY slojevi (§8 koraci 8-13) — po modulu test
- 7. identity + tenant_resolver (strict binding) — testovi
- 8. pending trojka (params/mutation/clarify) + param_ui + coercion
- 9. router (Model A kaskada §9.1 nad tool_data.json) + formatter
-10. executor + api_error_translator + telemetry + conversation_history
-11. auth_preflight (§13) + contract harness (§17.3) + readiness skripta
-12. E2E testovi (4 razgovora + Viber pipeline) + benchmark harness
-13. k8s deploy + runbook → pilot
+ 7. identity + tenant_resolver (strict binding) + tenant_config (§16)
+ 8. actions.json (~30 akcija, §11) + action_registry + action_validator
+ 9. router = 1 LLM tool-call nad 30 shema (§9.1) + top-3 clarify + formatter
+10. pending trojka (params/mutation/clarify) + param_ui + coercion
+11. executor → POST /actions/* + api_error_translator + telemetry + history
+12. auth_preflight (§13, probe IZ actions.json) + contract harness (§17.3:
+    fixture po akciji!) + readiness
+13. E2E razgovori nad akcijama + actions golden set benchmark
+14. k8s deploy + runbook → pilot → §21.2 potpunost po akciji
+    [NIGDJE: tool_data, registry machinery, sync_tools, anchor, action picker]
+```
+
+**PATH P — PRIJELAZNI build (današnja stvarnost repoa; skela markirana):**
+```
+ koraci 1-7 identični PATH T (jezgra je ISTA — zato migracija uopće radi)
+ 8p. ⚠[SKELA] registar: sync_tools iz Swaggera → tool_data + processed_registry
+ 9p. ⚠[SKELA] router = Model A kaskada (§9.2: picker + anchor top-50 + scoping)
+10-14. identično PATH T (pending/executor/preflight/e2e/k8s — sve ostaje
+    kroz migraciju; benchmark = dual-seed nad 950-imenima dok skela živi)
+ → zatim §23.2 Faza 1+ dodaje /actions PORED skele i skida je po sposobnosti
 ```
 
 ### 23.2 Migracija na /actions (Strangler Fig — NIŠTA se ne briše prije zamjene)
@@ -873,7 +1065,10 @@ NIKAD ne brisati (bez obzira na fazu): crisis_detector · pii_scrubber ·
 
 ## §25 KAKO KORISTITI OVAJ DOKUMENT KAO PROMPT
 
-1. Gradi redoslijedom §23.1; NIKAD ne preskači invarijante §1.
+1. **Prvo odaberi build path (§23.1):** postoji li `/actions` API (ili World B
+   nalog) → PATH T; skelu (PATH P) gradi SAMO uz eksplicitnu potvrdu da
+   /actions još ne postoji. NIKAD ne preskači invarijante §1. Ciljno stanje
+   koje isporučuješ je §0.5 — sve iz §22.5 je dug, ne feature.
 2. Svaki modul dobiva test u istom koraku; suite mora biti zelena NAKON SVAKOG
    koraka (ne na kraju). `tests/v2/test_architecture.py` manifest ažuriraj uz
    svaki novi v2 modul.
