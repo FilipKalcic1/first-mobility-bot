@@ -12,6 +12,7 @@ connections).
 from __future__ import annotations
 
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -22,6 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from worker import Worker  # noqa: E402
+from services.errors import ErrorCode  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +160,86 @@ async def test_edge2_permanent_error_goes_straight_to_dlq():
     assert len(svc.calls) == 1  # tried once, no retry
     assert len(redis.lists.get("dlq:outbound", [])) == 1  # parked in DLQ
     assert len(redis.zsets.get("whatsapp_outbound_delayed", {})) == 0  # NOT re-enqueued
+
+
+@pytest.mark.asyncio
+async def test_edge2_real_errorcode_enum_member_is_permanent():
+    """Klasifikacijski fix: pravi WhatsAppService vraća SendResult s
+    ErrorCode ENUM ČLANOM (whatsapp_service.py:407), čija je str vrijednost
+    "VALIDATION_PHONE_INVALID" — ne legacy literal "INVALID_PHONE". Prije
+    fixa je prava trajna greška išla u delayed retry (3×) umjesto u DLQ."""
+    svc = FakeWhatsAppService([
+        FakeSendResult(success=False, error_code=ErrorCode.PHONE_INVALID,
+                       error_message="uuid trap"),
+    ])
+    redis = FakeRedisOutbound()
+    w = _make_worker(svc, redis)
+
+    await w._send_whatsapp("385999", "test", attempt=0)
+
+    assert len(redis.lists.get("dlq:outbound", [])) == 1
+    assert len(redis.zsets.get("whatsapp_outbound_delayed", {})) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("code", [
+    ErrorCode.PARAMETER_MISSING.value,  # API key nije konfiguriran
+    ErrorCode.BAD_REQUEST.value,        # 400
+    ErrorCode.UNAUTHORIZED.value,       # 401 — mrtav API key
+    ErrorCode.FORBIDDEN.value,          # 403
+    ErrorCode.NOT_FOUND.value,          # 404 — krivi endpoint/sender
+    ErrorCode.VALIDATION_ERROR.value,   # 422
+])
+async def test_edge2_real_errorcode_values_are_permanent(code):
+    """Sve stvarne trajne vrijednosti iz HTTP_STATUS_TO_ERROR_CODE mape idu
+    odmah u DLQ — retry ne može popraviti 400/401/403/404/422."""
+    svc = FakeWhatsAppService([
+        FakeSendResult(success=False, error_code=code),
+    ])
+    redis = FakeRedisOutbound()
+    w = _make_worker(svc, redis)
+
+    await w._send_whatsapp("385999", "test", attempt=0)
+
+    assert len(redis.lists.get("dlq:outbound", [])) == 1, code
+    assert len(redis.zsets.get("whatsapp_outbound_delayed", {})) == 0, code
+
+
+@pytest.mark.asyncio
+async def test_edge2_real_errorcode_rate_limited_honors_retry_after():
+    """GATEWAY_RATE_LIMITED (prava vrijednost, whatsapp_service.py:528) mora
+    poštovati serverov retry_after — prije fixa je padao u granu
+    eksponencijalnog backoffa (5s) umjesto serverovih 15s."""
+    svc = FakeWhatsAppService([
+        FakeSendResult(success=False, error_code=ErrorCode.RATE_LIMITED,
+                       retry_after=15),
+    ])
+    redis = FakeRedisOutbound()
+    w = _make_worker(svc, redis)
+
+    t0 = time.time()
+    await w._send_whatsapp("385999", "test", attempt=0)
+
+    delayed = redis.zsets.get("whatsapp_outbound_delayed", {})
+    assert len(delayed) == 1
+    score = next(iter(delayed.values()))
+    assert 13 <= score - t0 <= 17, f"očekivan delay ~15s, dobiven {score - t0:.1f}s"
+
+
+@pytest.mark.asyncio
+async def test_edge2_retry_exhausted_stays_transient():
+    """GATEWAY_RETRY_EXHAUSTED (timeout/mreža nakon internih retryja) OSTAJE
+    transijentan — vanjski delayed-retry je današnje ponašanje, ne DLQ."""
+    svc = FakeWhatsAppService([
+        FakeSendResult(success=False, error_code=ErrorCode.RETRY_EXHAUSTED),
+    ])
+    redis = FakeRedisOutbound()
+    w = _make_worker(svc, redis)
+
+    await w._send_whatsapp("385999", "test", attempt=0)
+
+    assert len(redis.lists.get("dlq:outbound", [])) == 0
+    assert len(redis.zsets.get("whatsapp_outbound_delayed", {})) == 1
 
 
 @pytest.mark.asyncio

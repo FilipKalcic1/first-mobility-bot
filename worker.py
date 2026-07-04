@@ -1301,9 +1301,21 @@ class Worker:
     # Before this, only RATE_LIMIT re-queued — every other failure silently
     # dropped the reply, so the user never learned their action's outcome.
     MAX_SEND_ATTEMPTS = 3
+    # WhatsAppService/ViberService vraćaju ErrorCode str-enum VRIJEDNOSTI
+    # (npr. "VALIDATION_PHONE_INVALID"), ne kratke literale — bez njih je
+    # svaka trajna greška išla u delayed retry umjesto odmah u DLQ.
+    # Legacy literali ostaju zbog starih DLQ zapisa i ručnih replayeva.
     _PERMANENT_SEND_ERRORS = frozenset({
         "INVALID_PHONE", "INVALID_RECIPIENT", "INVALID_NUMBER",
         "AUTH", "UNAUTHORIZED", "FORBIDDEN", "BLOCKED",
+        ErrorCode.PHONE_INVALID.value,       # validacija broja (preflight)
+        ErrorCode.PARAMETER_MISSING.value,   # API key nije konfiguriran
+        ErrorCode.BAD_REQUEST.value,         # 400 — payload odbijen
+        ErrorCode.UNAUTHORIZED.value,        # 401 — mrtav API key
+        ErrorCode.FORBIDDEN.value,           # 403
+        ErrorCode.NOT_FOUND.value,           # 404 — krivi endpoint/sender
+        ErrorCode.METHOD_NOT_ALLOWED.value,  # 405
+        ErrorCode.VALIDATION_ERROR.value,    # 422 — semantički neispravan
     })
 
     async def _send_whatsapp(
@@ -1357,8 +1369,10 @@ class Worker:
             await self._store_outbound_dlq(to, text, result.error_code, attempt)
             return
 
-        # RATE_LIMIT honors server retry_after; others use exponential backoff.
-        if result.error_code == "RATE_LIMIT":
+        # Rate limit honors server retry_after; others use exponential
+        # backoff. Servis vraća ErrorCode.RATE_LIMITED ("GATEWAY_RATE_LIMITED");
+        # legacy literal ostaje zbog starih queue entryja.
+        if result.error_code in ("RATE_LIMIT", ErrorCode.RATE_LIMITED.value):
             delay = result.retry_after or 30
         else:
             delay = 5 * (2 ** attempt)  # 5s, 10s, 20s
