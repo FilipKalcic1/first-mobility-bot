@@ -1,6 +1,6 @@
 # 12 — OBSERVABILITY (telemetrija, GDPR audit, tracing)
 
-**Svrha**: Bilježi jednu strukturiranu telemetrijsku event po routing-odluci, vodi GDPR/handover audit trag, nudi offline analize (active learning + anchor QA) i opcionalni OpenTelemetry tracing. Sve best-effort, nikad ne blokira korisnika.
+**Svrha**: Bilježi jednu strukturiranu telemetrijsku event po routing-odluci, vodi GDPR/handover audit trag i opcionalni OpenTelemetry tracing. Sve best-effort, nikad ne blokira korisnika. (Offline analize — active learning + anchor QA — OBRISANE u Fazi 0; sirova telemetrija ostaje.)
 
 ## Datoteke
 
@@ -10,8 +10,8 @@
 | `services/v2/gdpr_audit.py` | 131 | LIVE | GdprAuditStore: append-only GDPR delete/export + handover u Redis |
 | `services/tracing.py` | 181 | LIVE | OpenTelemetry setup. No-op kad OTEL_ENABLED=false (default) |
 | `services/v2/latency_ux.py` | 162 | PARTIAL | Samo `chunk_for_whatsapp` je LIVE; ostalo (hint_for_query, typing_watchdog) samo testovi |
-| `services/v2/active_learning.py` | 347 | **DEV_ONLY** | 4 analitičke funkcije + render_markdown_report. Pokreće `scripts/run_active_learning.py` |
-| `services/v2/anchor_audit.py` | 417 | **DEV_ONLY** | Statički QA anchora (5 flag detektora). Pokreće `scripts/audit_anchor_quality.py` |
+| ~~`services/v2/active_learning.py`~~ | 347 | **OBRISANO (Faza 0)** | Offline-analitika ugašena; obrisan sa skriptom `run_active_learning.py` i testom |
+| ~~`services/v2/anchor_audit.py`~~ | 417 | **OBRISANO (Faza 0)** | Statički QA anchora ugašen; obrisan sa skriptom `audit_anchor_quality.py` i testom |
 
 ## Ulazne točke
 
@@ -33,8 +33,8 @@
 | Sinkovi | telemetry.py:205-424 | StdoutJsonSink (prod primarni→Log Analytics), RedisSink (bounded lista), BufferedAsyncFileSink (dev), FileSink (legacy, nije u from_env), NullSink (disabled) |
 | from_env selekcija | telemetry.py:448-479 | V2_TELEMETRY=0→Null. Default `stdout+redis`: Stdout+Redis (Redis samo ako klijent proslijeđen). U prod aktivni: **StdoutJsonSink + RedisSink** |
 | Redis key + LTRIM/TTL | telemetry.py:63-80, :374-384 | `routing:accuracy_log:{tenant_id}` (ili legacy unscoped). Pipeline: LPUSH + LTRIM 0..999 (1000 zadnjih) + EXPIRE 30 dana |
-| 4 extract_* analize | active_learning.py:62/:105/:142/:182 | negation per tool, query patterns, confidence distribution, tool coverage. Tenant-scoped aproksimacija (ne session) |
-| 5 flag detektora | anchor_audit.py:103-185 | is_verbose, doc_style, capitalized_formal, repetitive_verbs, paraphrase_of_intent |
+| ~~4 extract_* analize~~ | ~~active_learning.py~~ | **OBRISANO (Faza 0)** — telemetrija (`routing:accuracy_log*`) ostaje; analize po potrebi ručno nad Redis podacima |
+| ~~5 flag detektora~~ | ~~anchor_audit.py~~ | **OBRISANO (Faza 0)** |
 | `_handle_special_side_effects` | engine.py:712-755 | Most special_intents → GdprAuditStore (record_gdpr/handover) |
 
 ## Redis ključevi
@@ -52,14 +52,14 @@
 ## Što NE radi
 
 - Ne radi PII scrubbing — pretpostavlja da je pozivatelj već redigirao query (telemetrija dobiva `query_scrubbed`).
-- **Ne pohranjuje phone/phone_hash** u TelemetryEvent (privatnost) → active_learning ne može precizno povezati Turn N→N+1 za istog korisnika (tenant-scoped aproksimacija).
+- **Ne pohranjuje phone/phone_hash** u TelemetryEvent (privatnost) → offline analize ne mogu precizno povezati Turn N→N+1 za istog korisnika (tenant-scoped aproksimacija).
 - gdpr_audit NE izvršava brisanje/export — samo bilježi zahtjev; operator djeluje ručno (GDPR čl. 17/20).
 - tracing ne emitira spanove osim ako OTEL_ENABLED=true.
 - Telemetrija nikad ne blokira/ruši zahtjev (greške sinka izolirane).
 
 ## Caveati
 
-- **active_learning + anchor_audit su DEV_ONLY**: importaju ih samo `scripts/` runneri i testovi; nisu na webhook→worker→V2Engine putu.
+- **active_learning + anchor_audit OBRISANI u Fazi 0** (bili DEV_ONLY, nisu bili na webhook→worker→V2Engine putu); sirova telemetrija u Redisu netaknuta.
 - **latency_ux PARTIAL**: samo `chunk_for_whatsapp` LIVE; hint_for_query/typing_watchdog/LatencyHint samo testovi. Stvarna funkcija je `typing_watchdog` (latency_ux.py:119), ali **modul docstring (latency_ux.py:16) zastario** — referencira nepostojeću `make_typing_watchdog`.
 - tracing LIVE po importu ali funkcionalno no-op u defaultnoj prod (OTEL_ENABLED=false).
 - TelemetryEvent ima 13 polja (12 + `correction` dodan 2026-06-10); docstring (telemetry.py:9) zastario ("11 fields"). NAPOMENA: schema-primjer u docstringu (telemetry.py:13) ipak prikazuje `tenant_id`; `redactions` i `correction` nisu u tom primjeru.

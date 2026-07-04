@@ -517,8 +517,8 @@ class V2Engine:
             )
 
         # Dormant V2_USE_TOOL_USE / V2_USE_UNIFIED_RESPONDER / V2_USE_V3_ROUTER
-        # branches removed 2026-05-12. The new L3 LLM router (Phase 4) will
-        # replace the recognition + confidence_gate path entirely.
+        # branches removed 2026-05-12; the old L5 confidence-gate path was
+        # deleted in Faza 0 (replaced by Model A router + pending_clarify).
 
         # ---- L2a Intent Type ----
         itype = await self.intent_type.classify(safe_query)

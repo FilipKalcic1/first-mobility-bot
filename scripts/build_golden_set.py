@@ -58,10 +58,7 @@ ROUTING_LOG_KEY_BASE = "routing:accuracy_log"
 
 
 async def fetch_events(redis_client, tenants_filter: list | None) -> list:
-    """SCAN all routing-log keys, LRANGE + JSON-decode. Returns flat list.
-
-    Mirrors scripts/run_active_learning.py::fetch_events (read-only).
-    """
+    """SCAN all routing-log keys, LRANGE + JSON-decode. Returns flat list."""
     events: list = []
     pattern = f"{ROUTING_LOG_KEY_BASE}*"
     keys: list = []

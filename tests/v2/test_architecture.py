@@ -5,7 +5,7 @@ Encodes the layered design:
   - L-1 rate_limiter, L0 identity, L0.5 pii_scrubber, L0.6 input_sanitizer,
     L0.7 crisis_detector, L0.75 negation, L0.8 multi_intent, L0.85 meta_intents,
     L1 special_intents, L2a intent_type, L2b driver_basics,
-    L4 flow_engine, L5 confidence_gate + clarify_ui + pending_clarify,
+    L4 flow_engine, L5.5 clarify_ui + pending_clarify,
     L6 mutation_gate + pending_mutation, L7 executor, L8 formatter (legacy).
     NEW L3 router lives at services/router/ (not in v2 namespace).
     NEW L8 LLM formatter lives at services/formatter/ (not in v2).
@@ -35,7 +35,6 @@ LEAF_MODULES = {
     "intent_type",           # L2a 4-way intent classifier
     "driver_basics",         # L2b anchor index for driver self-questions
     "flow_engine",           # L4 multi-step state machine
-    "confidence_gate",       # L5 execute / clarify / fallback
     "clarify_ui",            # L5.5 Top-3 cards
     "pending_clarify",       # L5.5 state for "1"/"2"/"3" replies
     "mutation_gate",         # L6 confirm dialog (POST/PUT/DELETE)
@@ -46,8 +45,6 @@ LEAF_MODULES = {
     "api_error_translator",  # L7.5 LLM translate 4xx body → Croatian message
     "param_labeler",         # L5.7 LLM generate Croatian param labels
     "type_resolver",         # L5.7 *TypeId FK word→id (fetch /…Types + match)
-    "active_learning",       # offline: telemetry → actionable report
-    "anchor_audit",          # offline: anchor quality → actionable report
     "executor",              # L7 API call + circuit breaker + idempotency
     "output_sanitizer",      # L7.5 indirect-prompt-injection guard
     "formatter",             # L8 Croatian template (replaced in Phase 4)
@@ -91,10 +88,6 @@ def _v2_imports(path: Path) -> set[str]:
 
 
 SIBLING_IMPORTS_ALLOWED = {
-    # confidence_gate (L5) renders Top-3 fallback via clarify_ui (L5.5).
-    # Lazy-imported inside _context_fallback to avoid import cycles —
-    # this is a single-direction render-helper composition.
-    "confidence_gate": {"clarify_ui"},
     # flow_engine (L4) reuses pending_mutation's (L6) single Da/Ne classifier
     # (`parse_reply`) so flow confirms parse IDENTICALLY to the general [C]
     # path — one source of truth for "Da"/"Ne"/"može biti". Single-direction

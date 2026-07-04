@@ -132,7 +132,7 @@ Posebno **screenshot + opis** za:
 
 ## Tjedni izvještaj
 
-Filip prati statistiku svaki ponedjeljak (`scripts/run_active_learning.py` cron). Ako vidi 2+ puta isti problem, javit će se da pita više detalja.
+Filip ručno pregledava routing telemetriju (Redis `routing:accuracy_log*`) tjedno. Ako vidi 2+ puta isti problem, javit će se da pita više detalja.
 
 ## Privatnost
 
