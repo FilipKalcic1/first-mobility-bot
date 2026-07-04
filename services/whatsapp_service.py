@@ -75,6 +75,11 @@ class WhatsAppService:
     MAX_BACKOFF = 60.0  # Hard cap: prevents CPU death spiral on 0.5 CPU
     MAX_JITTER = 1.0    # Random jitter (0-1s) — decorrelates fleet retries
 
+    # Channel hooks — ViberService overrides these; retry/backoff/error
+    # handling below is Infobip-platform-wide and stays shared.
+    ENDPOINT_PATH = "/whatsapp/1/message/text"
+    SPAN_NAME = "whatsapp_service.send"
+
     def __init__(
         self,
         api_key: Optional[str] = None,
@@ -91,7 +96,7 @@ class WhatsAppService:
         """
         self.api_key = api_key or _get_settings().INFOBIP_API_KEY
         self.base_url = base_url or _get_settings().INFOBIP_BASE_URL
-        self.sender_number = sender_number or _get_settings().INFOBIP_SENDER_NUMBER
+        self.sender_number = sender_number or self._default_sender()
 
         # Validate configuration
         self._validate_config()
@@ -110,6 +115,11 @@ class WhatsAppService:
             f"base_url={self.base_url}, "
             f"sender={self.sender_number[-4:] if self.sender_number else 'N/A'}"
         )
+
+    def _default_sender(self) -> Optional[str]:
+        """Sender iz settingsa kad ctor ne dobije eksplicitni argument.
+        ViberService overridea na VIBER_SENDER (registrirano ime)."""
+        return _get_settings().INFOBIP_SENDER_NUMBER
 
     def _validate_config(self) -> None:
         """Validate configuration at startup."""
@@ -394,7 +404,7 @@ class WhatsAppService:
         Returns:
             SendResult with success/failure info
         """
-        with trace_span(_tracer, "whatsapp_service.send", {"to_suffix": to[-4:] if to else "", "validate": validate}) as span:
+        with trace_span(_tracer, self.SPAN_NAME, {"to_suffix": to[-4:] if to else "", "validate": validate}) as span:
             # Step 1: Validate phone number
             if validate:
                 is_valid, normalized_to, error = self.validate_phone_number(to)
@@ -447,13 +457,23 @@ class WhatsAppService:
             )
 
             # Step 6: Send with retry
-            url = f"https://{self.base_url}/whatsapp/1/message/text"
+            url = f"https://{self.base_url}{self.ENDPOINT_PATH}"
 
             result = await self._send_with_retry(url, payload, headers)
             span.set_attribute("result.success", result.success)
             if result.message_id:
                 span.set_attribute("result.message_id", result.message_id)
             return result
+
+    def _payload_recipient(self, payload: Dict[str, Any]) -> str:
+        """Primatelj iz kanal-specifičnog payloada (za success log).
+
+        KRITIČNO da je hook: Viber payload nema top-level "to" — KeyError
+        NAKON uspješnog senda bi se progutao u retry petlji i ISPORUČENA
+        poruka bi se slala ponovno (duplikati). Ista KeyError semantika za
+        WhatsApp kao prije.
+        """
+        return payload["to"]
 
     async def _send_with_retry(
         self,
@@ -496,7 +516,7 @@ class WhatsAppService:
 
                     logger.info(
                         f"Message sent successfully: "
-                        f"to={payload['to'][-4:]}..., "
+                        f"to={self._payload_recipient(payload)[-4:]}..., "
                         f"message_id={message_id}"
                     )
 

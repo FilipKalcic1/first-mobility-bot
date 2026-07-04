@@ -70,6 +70,14 @@ class Settings(BaseSettings):
         description="Secret key for webhook HMAC-SHA256 signature validation"
     )
     INFOBIP_SENDER_NUMBER: Optional[str] = Field(default=None)
+    VIBER_SENDER: Optional[str] = Field(
+        default=None,
+        description=(
+            "Infobip Viber Business Messages sender NAME (registrirano ime, "
+            "ne broj). Neset → Viber kanal isključen (poruke idu u DLQ s "
+            "VIBER_NOT_CONFIGURED)."
+        ),
+    )
     WHATSAPP_VERIFY_TOKEN: Optional[str] = Field(
         default=None,
         description="Token for WhatsApp webhook verification (hub.verify_token)"

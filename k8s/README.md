@@ -57,6 +57,9 @@ kubectl -n mobility-bot logs deploy/bot-worker | tail   # expect anchor_index + 
 curl https://<your-host>/webhook/whatsapp                # → "ok"
 
 # 7) point the Infobip webhook at https://<your-host>/webhook/whatsapp
+#    Viber (kad je sender registriran): Infobip Viber subscription →
+#    https://<your-host>/webhook/viber  +  VIBER_SENDER u bot-secrets.
+#    Isti HMAC secret (X-Hub-Signature-256), isti stream, isti worker.
 ```
 
 ## Rollout / rollback

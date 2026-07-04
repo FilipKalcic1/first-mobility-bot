@@ -267,6 +267,76 @@ class TestEdgeCases:
 
 
 # ============================================================================
+# CHANNEL TAG (Faza 0 multichannel: WhatsApp + Viber)
+# ============================================================================
+
+class TestChannelTag:
+    """Svaki stream entry nosi channel tag — worker po njemu bira outbound
+    servis. Kanal: integrationType iz payloada kad postoji, inače default
+    rute (/whatsapp → whatsapp, /viber → viber)."""
+
+    def test_whatsapp_route_tags_whatsapp(self, client, mock_redis_client):
+        payload = {"results": [{
+            "from": "385991234567", "messageId": "ch-1",
+            "integrationType": "WHATSAPP",
+            "message": {"type": "TEXT", "text": "Bok"},
+        }]}
+        assert client.post("/webhook/whatsapp", json=payload).status_code == 200
+        assert mock_redis_client.xadd.call_args[0][1]["channel"] == "whatsapp"
+
+    def test_viber_route_tags_viber_without_integration_type(
+        self, client, mock_redis_client,
+    ):
+        """Alias ruta /viber: kanal determinističan i ako Infobip Viber
+        payload ne nosi integrationType. Isti stream, isti parser."""
+        payload = {"results": [{
+            "from": "385991234567", "messageId": "ch-2",
+            "message": {"type": "TEXT", "text": "Bok s Vibera"},
+        }]}
+        assert client.post("/webhook/viber", json=payload).status_code == 200
+        assert mock_redis_client.xadd.call_args[0][0] == "whatsapp_stream_inbound"
+        stream_data = mock_redis_client.xadd.call_args[0][1]
+        assert stream_data["channel"] == "viber"
+        assert stream_data["text"] == "Bok s Vibera"
+
+    def test_integration_type_wins_over_route_default(
+        self, client, mock_redis_client,
+    ):
+        """Payload je izvor istine: VIBER integrationType i na /whatsapp
+        ruti daje channel viber (pogrešno usmjerena subscription)."""
+        payload = {"results": [{
+            "from": "385991234567", "messageId": "ch-3",
+            "integrationType": "VIBER",
+            "message": {"type": "TEXT", "text": "Cross"},
+        }]}
+        client.post("/webhook/whatsapp", json=payload)
+        assert mock_redis_client.xadd.call_args[0][1]["channel"] == "viber"
+
+    def test_unknown_integration_falls_back_to_route_default(
+        self, client, mock_redis_client,
+    ):
+        payload = {"results": [{
+            "from": "385991234567", "messageId": "ch-4",
+            "integrationType": "SMS",
+            "message": {"type": "TEXT", "text": "X"},
+        }]}
+        client.post("/webhook/whatsapp", json=payload)
+        assert mock_redis_client.xadd.call_args[0][1]["channel"] == "whatsapp"
+
+    def test_non_text_viber_also_tagged(self, client, mock_redis_client):
+        """Non-text put gradi ZASEBAN stream_data — i on mora nositi kanal
+        (worker vraća 'samo tekst' poruku kroz pravi kanal)."""
+        payload = {"results": [{
+            "from": "385991234567", "messageId": "ch-5",
+            "message": {"type": "IMAGE", "url": "https://x/i.jpg"},
+        }]}
+        client.post("/webhook/viber", json=payload)
+        stream_data = mock_redis_client.xadd.call_args[0][1]
+        assert stream_data["channel"] == "viber"
+        assert stream_data["text"] == "[NON_TEXT:IMAGE]"
+
+
+# ============================================================================
 # WEBHOOK VERIFICATION
 # ============================================================================
 

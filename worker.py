@@ -219,6 +219,7 @@ class Worker:
         self._registry = None
         self._v2_engine = None
         self._whatsapp_service = None
+        self._viber_service = None  # lazy — samo ako je VIBER_SENDER postavljen
 
         # Per-request services
         self._queue = None
@@ -452,6 +453,9 @@ class Worker:
         self._whatsapp_service = WhatsAppService()
         health = self._whatsapp_service.health_check()
         log("info", "whatsapp_service_init", {"healthy": health["healthy"]})
+
+        viber = self._init_viber_service()
+        log("info", "viber_service_init", {"configured": viber is not None})
 
         swagger_sources = settings.swagger_sources
         if not swagger_sources:
@@ -832,6 +836,9 @@ class Worker:
         # it to a per-session Redis key BEFORE engine runs so V6.2 precedence
         # in api_gateway picks it up via user_context["tenant_id"].
         tenant_id = data.get("tenant_id", "")
+        # Kanal odgovora = kanal ulaza (webhook tag). Default "whatsapp" zbog
+        # backward-compata sa stream entryjima enqueue-anima prije deploya.
+        channel = data.get("channel", "whatsapp")
         if tenant_id and sender:
             try:
                 await self.redis.set(
@@ -892,7 +899,7 @@ class Worker:
                 "Molimo pošaljite svoju poruku kao tekst."
             )
             try:
-                await self._enqueue_outbound(sender, response)
+                await self._enqueue_outbound(sender, response, channel=channel)
             except Exception as enq_err:  # noqa: BLE001
                 # Mirror the text path's ack protocol: enqueue failed →
                 # release the lock and do NOT ack. Without this, the
@@ -911,7 +918,7 @@ class Worker:
 
         if not self._check_rate_limit(sender):
             log("warn", "rate_limited", {"sender": sender[-4:]})
-            await self._enqueue_outbound(sender, "Šaljete previše poruka. Molimo pričekajte kratko pa pokušajte ponovo.")
+            await self._enqueue_outbound(sender, "Šaljete previše poruka. Molimo pričekajte kratko pa pokušajte ponovo.", channel=channel)
             await self._release_message_lock(sender, message_id)
             await self._ack_message(msg_id)
             return
@@ -959,7 +966,7 @@ class Worker:
                   log("warn", "empty_response_fallback", {"sender": sender[-4:]})
 
               span.set_attribute("response.length", len(response))
-              await self._enqueue_outbound(sender, response)
+              await self._enqueue_outbound(sender, response, channel=channel)
               ack_ok = True  # Outbound enqueue succeeded — safe to ACK
 
               self._messages_processed += 1
@@ -974,7 +981,8 @@ class Worker:
               self._messages_failed += 1
               await self._enqueue_outbound(
                   sender,
-                  "Obrada poruke je trajala predugo. Molimo pokušajte ponovno."
+                  "Obrada poruke je trajala predugo. Molimo pokušajte ponovno.",
+                  channel=channel,
               )
               ack_ok = True  # Timeout response enqueued — safe to ACK
 
@@ -991,7 +999,8 @@ class Worker:
               try:
                   await self._enqueue_outbound(
                       sender,
-                      "Došlo je do greške pri obradi vaše poruke. Molimo pokušajte ponovno."
+                      "Došlo je do greške pri obradi vaše poruke. Molimo pokušajte ponovno.",
+                      channel=channel,
                   )
               except Exception:
                   log("warn", "error_response_failed", {"sender": f"***{sender[-4:]}"})
@@ -1116,6 +1125,7 @@ class Worker:
                         to="", text=payload.get("text") or "",
                         error_code="MISSING_RECIPIENT",
                         attempt=payload.get("attempt", 0),
+                        channel=payload.get("channel", "whatsapp"),
                     )
                     await self.redis.lrem("whatsapp_outbound_processing", 1, data)
                     continue
@@ -1124,6 +1134,7 @@ class Worker:
                     to=to, text=payload.get("text"),
                     attempt=payload.get("attempt", 0),
                     idempotency_key=idem_key,
+                    channel=payload.get("channel", "whatsapp"),
                 )
 
                 # Mark as sent for idempotency (TTL 10 min)
@@ -1162,6 +1173,7 @@ class Worker:
                             text=_p.get("text") or "",
                             error_code=f"EXCEPTION:{type(e).__name__}",
                             attempt=_p.get("attempt", 0),
+                            channel=_p.get("channel", "whatsapp"),
                         )
                     with suppress(Exception):
                         await self.redis.lrem("whatsapp_outbound_processing", 1, data)
@@ -1194,6 +1206,9 @@ class Worker:
                 whatsapp_stats = {}
                 if self._whatsapp_service:
                     whatsapp_stats = self._whatsapp_service.get_stats()
+                viber_stats = {}
+                if getattr(self, "_viber_service", None):
+                    viber_stats = self._viber_service.get_stats()
 
                 # Calculate uptime
                 uptime_sec = 0
@@ -1213,8 +1228,8 @@ class Worker:
                 # queues aren't a silent black hole. We do NOT auto-retry
                 # inbound DLQ (poison-message risk — a msg that crashed the
                 # engine would crash it again). Instead make depth visible so
-                # the weekly active-learning report + ops can inspect/replay
-                # manually. Warn when either DLQ grows past threshold.
+                # ops inspection/replay. Warn when either DLQ grows past
+                # threshold.
                 dlq_inbound = 0
                 dlq_outbound = 0
                 with suppress(Exception):
@@ -1243,6 +1258,8 @@ class Worker:
                     "tools": len(self._registry.tools) if self._registry else 0,
                     "wa_sent": whatsapp_stats.get("messages_sent", 0),
                     "wa_retries": whatsapp_stats.get("total_retries", 0),
+                    "viber_sent": viber_stats.get("messages_sent", 0),
+                    "viber_retries": viber_stats.get("total_retries", 0),
                     "memory_mb": round(memory_mb, 1),
                     "uptime_sec": uptime_sec,
                     "lua_lock_cached": lua_cached,
@@ -1318,11 +1335,32 @@ class Worker:
         ErrorCode.VALIDATION_ERROR.value,    # 422 — semantički neispravan
     })
 
+    def _init_viber_service(self):
+        """Lazy ViberService — kreira se samo ako je VIBER_SENDER postavljen.
+
+        getattr guard: testovi grade Worker preko object.__new__ (bez
+        __init__), pa atribut ne mora postojati. Vraća None kad Viber nije
+        konfiguriran — pozivatelj tada parkira poruku u DLQ, bez crasha.
+        """
+        existing = getattr(self, "_viber_service", None)
+        if existing is not None:
+            return existing
+        if not (settings.VIBER_SENDER and settings.INFOBIP_API_KEY):
+            return None
+        from services.viber_service import ViberService
+        self._viber_service = ViberService()
+        log("info", "viber_service_ready", {"sender": settings.VIBER_SENDER})
+        return self._viber_service
+
     async def _send_whatsapp(
         self, to: str, text: str, attempt: int = 0,
-        idempotency_key: str = "",
+        idempotency_key: str = "", channel: str = "whatsapp",
     ):
-        """Send WhatsApp message via WhatsAppService.
+        """Send message via the channel's Infobip service (WA default).
+
+        channel: "whatsapp" | "viber" — tag putuje s porukom od webhooka
+        kroz stream i outbound queue; retry/DLQ/idempotency logika ispod
+        je zajednička jer oba servisa vraćaju isti SendResult ugovor.
 
         attempt: 0-based retry counter (carried through the delayed-outbound
         queue). On transient failure we re-enqueue with attempt+1 until
@@ -1333,17 +1371,32 @@ class Worker:
         across the whole retry chain (a regenerated key would let a
         crash-recovered retry re-send an already-delivered message).
         """
-        if not self._whatsapp_service:
-            log("warn", "whatsapp_not_initialized")
-            return
+        if channel == "viber":
+            service = self._init_viber_service()
+            if service is None:
+                # Trajno: bez VIBER_SENDER konfiguracije retry nikad ne
+                # uspijeva — glasno u DLQ da ops vidi propuštene odgovore.
+                log("error", "viber_not_configured", {
+                    "to": to[-4:] if to else "",
+                })
+                await self._store_outbound_dlq(
+                    to, text, "VIBER_NOT_CONFIGURED", attempt, channel=channel,
+                )
+                return
+        else:
+            service = self._whatsapp_service
+            if not service:
+                log("warn", "whatsapp_not_initialized")
+                return
 
-        result = await self._whatsapp_service.send(to, text)
+        result = await service.send(to, text)
 
         if result.success:
             log("info", "sent", {
                 "to": to[-4:] if to else "",
                 "message_id": result.message_id,
                 "attempt": attempt,
+                "channel": channel,
             })
             return
 
@@ -1355,7 +1408,9 @@ class Worker:
 
         # Permanent errors: retry would never succeed → DLQ immediately.
         if result.error_code in self._PERMANENT_SEND_ERRORS:
-            await self._store_outbound_dlq(to, text, result.error_code, attempt)
+            await self._store_outbound_dlq(
+                to, text, result.error_code, attempt, channel=channel,
+            )
             return
 
         # Transient (RATE_LIMIT, timeout, 5xx, connection reset): retry with
@@ -1366,7 +1421,9 @@ class Worker:
                 "error_code": result.error_code,
                 "attempts": attempt + 1,
             })
-            await self._store_outbound_dlq(to, text, result.error_code, attempt)
+            await self._store_outbound_dlq(
+                to, text, result.error_code, attempt, channel=channel,
+            )
             return
 
         # Rate limit honors server retry_after; others use exponential
@@ -1378,14 +1435,16 @@ class Worker:
             delay = 5 * (2 ** attempt)  # 5s, 10s, 20s
         await self._enqueue_outbound_delayed(
             to, text, delay=delay, attempt=attempt + 1,
-            idempotency_key=idempotency_key,
+            idempotency_key=idempotency_key, channel=channel,
         )
 
     async def _store_outbound_dlq(
         self, to: str, text: str, error_code: str, attempt: int,
+        channel: str = "whatsapp",
     ) -> None:
         """Park an undeliverable outbound reply in the outbound DLQ.
-        Full text retained (access-controlled recovery store, 7d TTL)."""
+        Full text retained (access-controlled recovery store, 7d TTL).
+        channel u zapisu → ops replay zna kroz koji kanal ponoviti slanje."""
         try:
             entry = json.dumps({
                 "dlq": "outbound",
@@ -1393,6 +1452,7 @@ class Worker:
                 "text": text,
                 "error_code": error_code,
                 "attempts": attempt + 1,
+                "channel": channel,
                 "time": datetime.now(timezone.utc).isoformat(),
             })
             await self.redis.rpush("dlq:outbound", entry)
@@ -1406,7 +1466,7 @@ class Worker:
 
     async def _enqueue_outbound_delayed(
         self, to: str, text: str, delay: int = 30, attempt: int = 0,
-        idempotency_key: str = "",
+        idempotency_key: str = "", channel: str = "whatsapp",
     ):
         """Enqueue outbound message with delay for rate limiting / retry.
 
@@ -1431,6 +1491,7 @@ class Worker:
                 "text": text,
                 "attempt": attempt,
                 "idempotency_key": idempotency_key,
+                "channel": channel,
                 "scheduled_at": time.time() + delay
             })
 
@@ -1476,19 +1537,26 @@ class Worker:
                 log("warn", "delayed_outbound_redis_error", {"error": str(e)})
                 await asyncio.sleep(10)
 
-    async def _enqueue_outbound(self, to: str, text: str):
-        # Split long messages to respect WhatsApp's 4096 char limit.
+    # Per-channel split prag (margina ispod tvrdog limita servisa zbog
+    # encoding overheada): WhatsApp 4096 → 4000; Viber BM 1000 → 960.
+    # Bez ovoga bi Viber poruke od 1000-4000 znakova prošle split pa ih
+    # servis TRUNCIRA na 1000 — korisnik bi dobio odrezan odgovor.
+    _CHANNEL_SPLIT_LIMITS = {"whatsapp": 4000, "viber": 960}
+
+    async def _enqueue_outbound(self, to: str, text: str, channel: str = "whatsapp"):
+        # Split long messages to respect the channel's text limit.
         # A5 fix: batch multi-chunk rpush into ONE round-trip — was
         # N synchronous awaits per long message.
-        MAX_WA_LENGTH = 4000  # Leave margin for encoding overhead
+        max_len = self._CHANNEL_SPLIT_LIMITS.get(channel, 4000)
         ts_ns = time.time_ns()
-        if len(text) > MAX_WA_LENGTH:
-            chunks = self._split_message(text, MAX_WA_LENGTH)
+        if len(text) > max_len:
+            chunks = self._split_message(text, max_len)
             log("info", "message_split", {"chunks": len(chunks), "original_len": len(text)})
             payloads = [
                 json.dumps({
                     "to": to,
                     "text": chunk,
+                    "channel": channel,
                     "idempotency_key": (
                         f"{to}:"
                         f"{hashlib.md5(chunk.encode(), usedforsecurity=False).hexdigest()[:12]}"
@@ -1503,6 +1571,7 @@ class Worker:
             payload = json.dumps({
                 "to": to,
                 "text": text,
+                "channel": channel,
                 "idempotency_key": (
                     f"{to}:"
                     f"{hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()[:12]}"

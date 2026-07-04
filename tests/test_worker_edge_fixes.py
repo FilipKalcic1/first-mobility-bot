@@ -11,6 +11,7 @@ connections).
 """
 from __future__ import annotations
 
+import json
 import sys
 import time
 from dataclasses import dataclass
@@ -460,3 +461,108 @@ async def test_aud3_unexpected_send_exception_parks_in_dlq_and_unsticks():
     assert entry["to"] == "385999"
     assert ("whatsapp_outbound_processing", payload) in redis.lrem_calls
     assert redis.lists.get("whatsapp_outbound_processing", []) == []
+
+
+# ---------------------------------------------------------------------------
+# Channel dispatch (Faza 0: Viber kanal)
+# ---------------------------------------------------------------------------
+
+
+class FakeViberService(FakeWhatsAppService):
+    """Isti scripted fake, zasebna klasa da dispatch assert bude nedvosmislen."""
+
+
+@pytest.mark.asyncio
+async def test_channel_dispatch_viber_uses_viber_service():
+    """channel=viber → ViberService; WhatsApp servis se NE dira."""
+    wa = FakeWhatsAppService([])
+    viber = FakeViberService([FakeSendResult(success=True, message_id="v1")])
+    redis = FakeRedisOutbound()
+    w = _make_worker(wa, redis)
+    w._viber_service = viber
+
+    await w._send_whatsapp("385999", "viber poruka", channel="viber")
+
+    assert viber.calls == [("385999", "viber poruka")]
+    assert wa.calls == []
+
+
+@pytest.mark.asyncio
+async def test_channel_default_whatsapp_backward_compat():
+    """Poziv bez channel parametra (stari queue entryji pri deployu) →
+    WhatsApp servis, ponašanje identično kao prije Faze 0."""
+    wa = FakeWhatsAppService([FakeSendResult(success=True, message_id="w1")])
+    redis = FakeRedisOutbound()
+    w = _make_worker(wa, redis)
+
+    await w._send_whatsapp("385999", "stara poruka")
+
+    assert wa.calls == [("385999", "stara poruka")]
+    assert len(redis.lists.get("dlq:outbound", [])) == 0
+
+
+@pytest.mark.asyncio
+async def test_viber_not_configured_goes_to_dlq(monkeypatch):
+    """channel=viber bez VIBER_SENDER konfiguracije → glasno u DLQ s
+    VIBER_NOT_CONFIGURED (trajno; bez crasha, bez delayed retryja)."""
+    import worker as worker_mod
+
+    monkeypatch.setattr(worker_mod.settings, "VIBER_SENDER", None, raising=False)
+    wa = FakeWhatsAppService([])
+    redis = FakeRedisOutbound()
+    w = _make_worker(wa, redis)
+    w._viber_service = None
+
+    await w._send_whatsapp("385999", "poruka", channel="viber")
+
+    dlq = redis.lists.get("dlq:outbound", [])
+    assert len(dlq) == 1
+    entry = json.loads(dlq[0])
+    assert entry["error_code"] == "VIBER_NOT_CONFIGURED"
+    assert entry["channel"] == "viber"
+    assert wa.calls == []
+    assert len(redis.zsets.get("whatsapp_outbound_delayed", {})) == 0
+
+
+@pytest.mark.asyncio
+async def test_viber_transient_retry_preserves_channel():
+    """Transijentna Viber greška → delayed entry NOSI channel=viber i
+    originalni idempotency_key — inače bi retry otišao kroz WA servis."""
+    viber = FakeViberService([
+        FakeSendResult(success=False, error_code=ErrorCode.RETRY_EXHAUSTED),
+    ])
+    redis = FakeRedisOutbound()
+    w = _make_worker(FakeWhatsAppService([]), redis)
+    w._viber_service = viber
+
+    await w._send_whatsapp("385999", "poruka", channel="viber",
+                           idempotency_key="k1")
+
+    delayed = redis.zsets.get("whatsapp_outbound_delayed", {})
+    assert len(delayed) == 1
+    payload = json.loads(next(iter(delayed)))
+    assert payload["channel"] == "viber"
+    assert payload["idempotency_key"] == "k1"
+
+
+@pytest.mark.asyncio
+async def test_enqueue_outbound_splits_viber_at_960():
+    """Split prag je per-channel: 2000 znakova → Viber 3 chunka (≤960,
+    unutar 1000-limita servisa), WhatsApp ISTA poruka = 1 entry (prag 4000
+    netaknut — byte-identično ponašanje za WA)."""
+    redis = FakeRedisOutbound()
+    w = _make_worker(FakeWhatsAppService([]), redis)
+    text = "x" * 2000
+
+    await w._enqueue_outbound("385999", text, channel="viber")
+    viber_entries = [json.loads(p) for p in redis.lists["whatsapp_outbound"]]
+    assert len(viber_entries) == 3  # 960 + 960 + 80
+    assert all(e["channel"] == "viber" for e in viber_entries)
+    assert all(len(e["text"]) <= 960 for e in viber_entries)
+    assert "".join(e["text"] for e in viber_entries) == text
+
+    redis.lists["whatsapp_outbound"] = []
+    await w._enqueue_outbound("385999", text, channel="whatsapp")
+    wa_entries = [json.loads(p) for p in redis.lists["whatsapp_outbound"]]
+    assert len(wa_entries) == 1
+    assert wa_entries[0]["channel"] == "whatsapp"
