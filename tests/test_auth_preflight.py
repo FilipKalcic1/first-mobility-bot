@@ -60,6 +60,19 @@ def test_opaque_token_returns_empty_not_crash():
     assert read_token_claims("a.!!!notb64!!!.c") == {}
 
 
+def test_non_dict_json_payload_returns_empty_dict():
+    """Payload that decodes to valid JSON but NOT an object must yield {} —
+    otherwise granted_scopes() crashes on .get and masks as token_fetch."""
+    def seg_raw(raw: bytes) -> str:
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    for payload in (b'["a","b"]', b'"just-a-string"', b"42", b"null", b"true"):
+        token = f"{seg_raw(b'{}')}.{seg_raw(payload)}.sig"
+        claims = read_token_claims(token)
+        assert claims == {}, f"payload {payload!r} leaked non-dict"
+        assert granted_scopes(claims) == set()
+
+
 def test_granted_scopes_space_separated_string():
     assert granted_scopes({"scope": "a b c"}) == {"a", "b", "c"}
 
@@ -132,6 +145,23 @@ def test_probe_routes_from_actions_only_get():
     assert routes[0].path == "/actions/list-trips"
 
 
+def test_probe_routes_skip_entries_without_usable_path():
+    """GET action bez pravog patha ne smije postati ProbeRoute(path="") —
+    probe na service root bi trovao verdikt (403 roota != 403 akcije)."""
+    actions = {
+        "no_exec": {},
+        "exec_none": {"execution": None},
+        "no_path": {"execution": {"method": "GET"}},
+        "empty_path": {"execution": {"method": "GET", "action": ""}},
+        "spec_not_dict": "malformed",
+        "good": {"execution": {"method": "GET", "action": "/actions/list-trips"}},
+    }
+    routes = probe_routes_from_actions(actions)
+    assert [(r.name, r.path) for r in routes] == [("good", "/actions/list-trips")]
+    assert probe_routes_from_actions(None) == []
+    assert probe_routes_from_actions({}) == []
+
+
 # ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
@@ -155,6 +185,7 @@ async def test_preflight_ok_when_scopes_granted_and_routes_open():
     assert report.missing_scopes == []
     assert report.forbidden_routes == []
     assert report.introspection_available is True
+    assert report.verified is True
 
 
 async def test_preflight_fails_on_missing_scope():
@@ -172,6 +203,7 @@ async def test_preflight_fails_on_403_route():
     report = await run_preflight(tm, gw, "t1")
     assert report.ok is False
     assert report.forbidden_routes == ["persons"]
+    assert report.verified is True  # 403 JE pravi odgovor — dokaz problema
 
 
 async def test_preflight_opaque_token_skips_scope_diff_but_probes():
@@ -199,8 +231,42 @@ async def test_preflight_token_fetch_failure_never_raises():
     gw = FakeGateway({"/Persons": 200})
     report = await run_preflight(tm, gw, "t1", required={"x"})
     assert report.error.startswith("token_fetch:")
-    assert report.ok is True  # no PROVEN auth problem
+    assert report.ok is True  # no PROVEN auth problem...
+    assert report.verified is False  # ...but nothing verified either
     log_report(report)  # smoke: must not raise
+
+
+async def test_verified_requires_a_real_http_answer():
+    """Mrtvi kredencijali se često manifestiraju kao status 0 / transport
+    error, NE kao 401 — ok ostaje True (ništa dokazano), ali verified mora
+    biti False da strict gate ne propusti neverificiran auth."""
+    tm = FakeTokenManager(_jwt({"scope": "s"}))
+
+    report = await run_preflight(tm, FakeGateway({"/Persons": 0}), "t1")
+    assert report.ok is True
+    assert report.verified is False
+
+    report = await run_preflight(
+        tm, FakeGateway({}, raise_on="/Persons"), "t1")
+    assert report.ok is True
+    assert report.verified is False
+
+    # Miješano: bar jedan pravi odgovor = verificirano.
+    gw = FakeGateway({"/a": 200}, raise_on="/b")
+    routes = [ProbeRoute("a", "", "/a"), ProbeRoute("b", "", "/b")]
+    report = await run_preflight(tm, gw, "t1", routes=routes)
+    assert report.verified is True
+
+
+async def test_preflight_gateway_none_runs_layer1_only():
+    """Layer-1-only pozivatelj (bez gatewaya) — probe sloj se preskače,
+    ponašanje pinano: nema route_statusa, nema lažnih forbidden ruta."""
+    tm = FakeTokenManager(_jwt({"scope": "a"}))
+    report = await run_preflight(tm, None, "t1", required={"a"})
+    assert report.ok is True
+    assert report.route_status == {}
+    assert report.forbidden_routes == []
+    assert report.verified is True  # bez traženih probea Layer 1 je dovoljan
 
 
 # ---------------------------------------------------------------------------
@@ -218,28 +284,76 @@ class _Settings:
     MOBILITY_TENANT_ID = "t-env"
 
 
+def _clean_env(monkeypatch):
+    """Startup testovi ne smiju ovisiti o ambijentalnom env-u — naslijeđeni
+    AUTH_PREFLIGHT=0 / STRICT=1 / MOBILITY_REQUIRED_SCOPES bi ih rušili."""
+    for var in ("AUTH_PREFLIGHT", "AUTH_PREFLIGHT_STRICT",
+                "MOBILITY_REQUIRED_SCOPES"):
+        monkeypatch.delenv(var, raising=False)
+
+
 async def test_startup_disabled_via_env(monkeypatch):
+    _clean_env(monkeypatch)
     monkeypatch.setenv("AUTH_PREFLIGHT", "0")
     assert await run_startup_preflight(_GW({}, _jwt({})), _Settings()) is None
 
 
 async def test_startup_log_only_by_default(monkeypatch):
-    monkeypatch.delenv("AUTH_PREFLIGHT", raising=False)
-    monkeypatch.delenv("AUTH_PREFLIGHT_STRICT", raising=False)
+    _clean_env(monkeypatch)
     gw = _GW({"/Persons": 403}, _jwt({"scope": "s"}))
     report = await run_startup_preflight(gw, _Settings())
     assert report is not None and report.ok is False  # logged, NOT raised
 
 
 async def test_startup_strict_raises_on_failure(monkeypatch):
+    _clean_env(monkeypatch)
     monkeypatch.setenv("AUTH_PREFLIGHT_STRICT", "1")
     gw = _GW({"/Persons": 403}, _jwt({"scope": "s"}))
     with pytest.raises(RuntimeError, match="forbidden_routes"):
         await run_startup_preflight(gw, _Settings())
 
 
+async def test_startup_strict_raises_when_token_fetch_fails(monkeypatch):
+    """Fails-open fix: mrtvi kredencijali (IdP odbija token) ne smiju proći
+    strict gate čak i ako probe sloj slučajno 'radi'."""
+    _clean_env(monkeypatch)
+    monkeypatch.setenv("AUTH_PREFLIGHT_STRICT", "1")
+    gw = _GW({"/Persons": 200}, RuntimeError("invalid_client"))
+    with pytest.raises(RuntimeError, match="verified=False"):
+        await run_startup_preflight(gw, _Settings())
+
+
+async def test_startup_strict_raises_without_real_http_answer(monkeypatch):
+    """Gateway koji nikad ne dobije pravi HTTP odgovor (status 0) = ništa
+    verificirano → strict mora odbiti start, log-only smije proći."""
+    _clean_env(monkeypatch)
+    monkeypatch.setenv("AUTH_PREFLIGHT_STRICT", "1")
+    gw = _GW({"/Persons": 0}, _jwt({"scope": "s"}))
+    with pytest.raises(RuntimeError, match="verified=False"):
+        await run_startup_preflight(gw, _Settings())
+
+
+async def test_startup_log_only_tolerates_unverified(monkeypatch):
+    _clean_env(monkeypatch)
+    gw = _GW({"/Persons": 0}, _jwt({"scope": "s"}))
+    report = await run_startup_preflight(gw, _Settings())
+    assert report is not None
+    assert report.ok is True and report.verified is False
+
+
+async def test_startup_gateway_without_token_manager(monkeypatch):
+    """Gateway bez .token_manager atributa: log-only proguta (None),
+    strict odbija start — unverifiable ne smije biti tiho preskočen."""
+    _clean_env(monkeypatch)
+    gw = FakeGateway({"/Persons": 200})  # nema token_manager
+    assert await run_startup_preflight(gw, _Settings()) is None
+    monkeypatch.setenv("AUTH_PREFLIGHT_STRICT", "1")
+    with pytest.raises(RuntimeError, match="errored"):
+        await run_startup_preflight(gw, _Settings())
+
+
 async def test_startup_uses_settings_tenant(monkeypatch):
-    monkeypatch.delenv("AUTH_PREFLIGHT", raising=False)
+    _clean_env(monkeypatch)
     gw = _GW({"/Persons": 200}, _jwt({"scope": "s"}))
     await run_startup_preflight(gw, _Settings())
     assert gw.calls[0]["tenant"] == "t-env"

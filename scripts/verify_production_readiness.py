@@ -156,14 +156,20 @@ async def verify_auth_preflight():
 
     Skips gracefully (returns True) when M1 credentials/network are absent
     (offline CI) — the check is meaningful only against a real environment.
-    Fails when a required scope is missing or a probed route answers 401/403.
+    Fails when a required scope is missing, a probed route answers 401/403,
+    or (with live credentials) no POSITIVE verification was obtained
+    (report.verified False — dead credentials / IdP down / no HTTP answer).
     """
     required_env = ("MOBILITY_API_URL", "MOBILITY_AUTH_URL",
                     "MOBILITY_CLIENT_ID", "MOBILITY_CLIENT_SECRET",
                     "MOBILITY_TENANT_ID")
     if any(not os.environ.get(k) or "example.com" in os.environ.get(k, "")
            for k in required_env):
-        logger.info("[SKIP] auth_preflight — no live M1 credentials (offline run)")
+        logger.warning(
+            "[SKIP] auth_preflight — nema live M1 kredencijala pa auth NIJE "
+            "verificiran (offline run). [SKIP] nije dokaz da auth radi: "
+            "prije deploya pokreni skriptu s pravim MOBILITY_* varijablama."
+        )
         return True
     try:
         from services.api_gateway import APIGateway
@@ -180,7 +186,13 @@ async def verify_auth_preflight():
         finally:
             await gateway.close()
         log_report(report)
-        return report.ok
+        # Uz live kredencijale tražimo POZITIVNU potvrdu, ne samo "nema
+        # dokazanog problema" — mrtvi kredencijali/mreža ne smiju proći.
+        if report.ok and not report.verified:
+            logger.error(
+                "[FAIL] auth_preflight — bez pozitivne potvrde "
+                "(verified=False) uz live kredencijale")
+        return bool(report.ok and report.verified)
     except Exception as e:  # noqa: BLE001 — readiness must report, not crash
         logger.error(f"auth_preflight errored: {e}")
         return False

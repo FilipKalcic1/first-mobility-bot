@@ -16,11 +16,15 @@ startup FACT, using two independent layers:
 
 Neither layer ever raises — a broken preflight must not take down the
 worker. Default is LOG-ONLY; set AUTH_PREFLIGHT_STRICT=1 to treat failures
-as fatal (readiness gate in CI/deploy).
+as fatal (readiness gate in CI/deploy). Strict mode demands POSITIVE
+verification (report.verified) — a token-fetch error or a probe run that
+never got a real HTTP answer (dead credentials often surface as status
+0/-1, not 401) must NOT pass the gate.
 
 Env knobs:
   AUTH_PREFLIGHT=0            disable entirely (default: enabled)
-  AUTH_PREFLIGHT_STRICT=1     report.ok False → caller may refuse to start
+  AUTH_PREFLIGHT_STRICT=1     refuse startup unless report.ok AND
+                              report.verified (fail-closed gate)
   MOBILITY_REQUIRED_SCOPES    space/comma separated scope names the token
                               MUST carry (empty/unset → skip Layer 1 diff;
                               Layer 2 still runs)
@@ -65,9 +69,12 @@ def read_token_claims(access_token: str) -> dict:
     payload_b64 = access_token.split(".")[1]
     payload_b64 += "=" * (-len(payload_b64) % 4)  # restore base64 padding
     try:
-        return json.loads(base64.urlsafe_b64decode(payload_b64))
+        claims = json.loads(base64.urlsafe_b64decode(payload_b64))
     except (binascii.Error, ValueError, UnicodeDecodeError):
         return {}
+    # A JWT payload can be valid JSON that is NOT an object ("x", [...], 42);
+    # the contract here is "dict or {}" — never leak a non-dict to callers.
+    return claims if isinstance(claims, dict) else {}
 
 
 def granted_scopes(claims: dict) -> set:
@@ -121,13 +128,17 @@ def probe_routes_from_actions(actions: dict) -> list:
     """F1: derive one probe per enabled action from config/actions.json.
     GET actions probe directly; mutations probe their route with a benign
     method the backend agrees to (part of the §8 contract — until agreed,
-    only GET actions are probed)."""
+    only GET actions are probed). Entries without a usable path are skipped
+    — a ProbeRoute(path="") would probe the service root and poison the
+    verdict."""
     routes = []
     for name, spec in (actions or {}).items():
-        execution = spec.get("execution") or {}
-        if (execution.get("method") or "").upper() == "GET":
-            routes.append(ProbeRoute(name=name, service="",
-                                     path=execution.get("action") or ""))
+        execution = spec.get("execution") if isinstance(spec, dict) else None
+        if not isinstance(execution, dict):
+            continue
+        path = execution.get("action") or ""
+        if path and (execution.get("method") or "").upper() == "GET":
+            routes.append(ProbeRoute(name=name, service="", path=path))
     return routes
 
 
@@ -165,6 +176,10 @@ class PreflightReport:
     forbidden_routes: list = field(default_factory=list)
     introspection_available: bool = False
     error: Optional[str] = None
+    # POSITIVE evidence obtained: token fetch succeeded AND (if probes ran)
+    # at least one route answered with a real HTTP status. ok=True with
+    # verified=False means "no proven problem, but no proof it works either".
+    verified: bool = False
 
 
 async def run_preflight(
@@ -181,6 +196,12 @@ async def run_preflight(
     (Layer 1) or a probed route answered 401/403 (Layer 2). Transport
     errors / 5xx / 404 are NOT auth verdicts and don't fail preflight —
     they surface through the normal circuit-breaker path instead.
+
+    verified=True iff POSITIVE evidence was obtained: the token was fetched
+    without error AND, when probes ran, at least one returned a real HTTP
+    status (>=200; a 403 IS real evidence — of a real problem). Strict
+    callers must require ok AND verified, otherwise dead credentials
+    (status 0 / transport errors everywhere) would pass the gate.
     """
     report = PreflightReport(ok=True)
 
@@ -207,16 +228,28 @@ async def run_preflight(
         )
 
     report.ok = not report.missing_scopes and not report.forbidden_routes
+    statuses = list(report.route_status.values())
+    report.verified = report.error is None and (
+        not statuses or any(s >= 200 for s in statuses)
+    )
     return report
 
 
 def log_report(report: PreflightReport) -> None:
     """One loud, grep-able line per outcome (`auth_preflight` marker)."""
-    if report.ok:
+    if report.ok and report.verified:
         logger.info(
             "auth_preflight OK granted=%d introspection=%s routes=%s",
             len(report.granted), report.introspection_available,
             report.route_status,
+        )
+        return
+    if report.ok:
+        logger.warning(
+            "auth_preflight NEVERIFICIRAN — nema dokazanog auth problema, "
+            "ali ni pozitivne potvrde da auth radi (error=%s routes=%s); "
+            "u strict modu ovo NE prolazi gate",
+            report.error, report.route_status,
         )
         return
     logger.error(
@@ -232,10 +265,14 @@ async def run_startup_preflight(gateway, settings) -> Optional[PreflightReport]:
     """Worker-startup convenience: honors AUTH_PREFLIGHT / _STRICT env.
 
     Returns the report (None when disabled). Raises RuntimeError ONLY in
-    strict mode with a failed report — log-only otherwise.
+    strict mode — when the report is not ok, when auth could not be
+    POSITIVELY verified (report.verified False: dead credentials, IdP down,
+    no real HTTP answer from any probe), or when the preflight itself
+    errored. Log-only mode never raises.
     """
     if (os.environ.get("AUTH_PREFLIGHT") or "1").strip() in ("0", "false", "no"):
         return None
+    strict = os.environ.get("AUTH_PREFLIGHT_STRICT") == "1"
     try:
         report = await run_preflight(
             gateway.token_manager, gateway,
@@ -243,12 +280,18 @@ async def run_startup_preflight(gateway, settings) -> Optional[PreflightReport]:
             required=required_scopes_from_env(),
         )
     except Exception as e:  # noqa: BLE001 — belt and braces
+        if strict:
+            # Strict = fail-closed: an unverifiable preflight must not be
+            # silently skipped (that is exactly the fails-open bug).
+            raise RuntimeError(f"auth preflight errored (strict): {e}") from e
         logger.warning("auth preflight unexpected error (skipping): %s", e)
         return None
     log_report(report)
-    if not report.ok and os.environ.get("AUTH_PREFLIGHT_STRICT") == "1":
+    if strict and (not report.ok or not report.verified):
         raise RuntimeError(
-            f"auth preflight failed: missing_scopes={report.missing_scopes} "
-            f"forbidden_routes={report.forbidden_routes}"
+            "auth preflight failed strict gate: "
+            f"ok={report.ok} verified={report.verified} "
+            f"missing_scopes={report.missing_scopes} "
+            f"forbidden_routes={report.forbidden_routes} error={report.error}"
         )
     return report
