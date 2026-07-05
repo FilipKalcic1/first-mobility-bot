@@ -63,13 +63,21 @@ class TestConfigDefaults:
         assert settings.APP_ENV == "development" or settings.APP_ENV  # has a value
         assert settings.LOG_LEVEL  # has a value
 
-    def test_cost_tracker_defaults(self):
+    def test_dead_config_vars_stay_removed(self):
+        """Config higijena (2026-07-04): mrtve varijable (čitao ih samo
+        config) su uklonjene i ne smiju se tiho vratiti bez potrošača —
+        cost tracking (admin_api obrisan), drift detekcija (nikad spojena),
+        SENTRY_DSN (nikad inicijaliziran), WHATSAPP_VERIFY_TOKEN (GET
+        verifikacija je bezuvjetni 'ok')."""
         from config import get_settings
 
         settings = get_settings()
-        assert settings.LLM_INPUT_PRICE_PER_1K > 0
-        assert settings.LLM_OUTPUT_PRICE_PER_1K > 0
-        assert settings.DAILY_COST_BUDGET_USD > 0
+        for dead in ("LLM_INPUT_PRICE_PER_1K", "LLM_OUTPUT_PRICE_PER_1K",
+                     "DAILY_COST_BUDGET_USD", "DRIFT_BASELINE_DAYS",
+                     "DRIFT_ANALYSIS_HOURS", "DRIFT_MIN_SAMPLES",
+                     "SENTRY_DSN", "WHATSAPP_VERIFY_TOKEN"):
+            assert not hasattr(settings, dead), (
+                f"{dead} se vratio u Settings bez živog potrošača")
 
     def test_tenant_id_property(self):
         from config import get_settings

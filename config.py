@@ -78,10 +78,8 @@ class Settings(BaseSettings):
             "VIBER_NOT_CONFIGURED)."
         ),
     )
-    WHATSAPP_VERIFY_TOKEN: Optional[str] = Field(
-        default=None,
-        description="Token for WhatsApp webhook verification (hub.verify_token)"
-    )
+    # (WHATSAPP_VERIFY_TOKEN uklonjen 2026-07-04 — GET verifikacija webhooka
+    #  je bezuvjetni reachability "ok" i nikad ga nije čitala.)
     
     # ---
     # MOBILITYONE API - REQUIRED (no defaults, must be set via environment)
@@ -140,19 +138,8 @@ class Settings(BaseSettings):
     CACHE_TTL_TOOLS: int = Field(default=3600)
     CACHE_TTL_CONVERSATION: int = Field(default=1800)
     
-    # ---
-    # COST TRACKING (LLM token pricing)
-    # ---
-    LLM_INPUT_PRICE_PER_1K: float = Field(default=0.00015, description="Input token price per 1K tokens")
-    LLM_OUTPUT_PRICE_PER_1K: float = Field(default=0.0006, description="Output token price per 1K tokens")
-    DAILY_COST_BUDGET_USD: float = Field(default=50.0, description="Daily cost budget alert threshold in USD")
-
-    # ---
-    # MODEL DRIFT DETECTION
-    # ---
-    DRIFT_BASELINE_DAYS: int = Field(default=7, description="Days of data for baseline metrics")
-    DRIFT_ANALYSIS_HOURS: int = Field(default=6, description="Hours of recent data to analyze for drift")
-    DRIFT_MIN_SAMPLES: int = Field(default=50, description="Minimum samples needed for valid drift analysis")
+    # (COST TRACKING i MODEL DRIFT varijable uklonjene 2026-07-04 — čitao ih
+    #  je samo config; potrošači su obrisani (admin_api) ili nikad spojeni.)
 
     # ---
     # GDPR
@@ -186,10 +173,9 @@ class Settings(BaseSettings):
     ADMIN_DATABASE_URL: Optional[str] = Field(default=None, description="Full-access DB URL for admin (falls back to DATABASE_URL)")
 
     # ---
-    # ERROR TRACKING & LOGGING
+    # LOGGING  (SENTRY_DSN uklonjen 2026-07-04 — deklariran a nikad inicijaliziran;
+    #  vrati se TEK sa sentry_sdk.init() u main.py/worker.py, ne prije)
     # ---
-    SENTRY_DSN: Optional[str] = Field(default=None)
-
     # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
     # In production, set to WARNING or ERROR to reduce noise
     LOG_LEVEL: str = Field(default="INFO", description="Logging level (DEBUG/INFO/WARNING/ERROR)")

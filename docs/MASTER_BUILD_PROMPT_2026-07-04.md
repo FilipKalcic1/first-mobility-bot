@@ -264,6 +264,9 @@ mobilityone-whatsapp-bot/
 | `MOBILITY_CLIENT_ID` / `MOBILITY_CLIENT_SECRET` | ✅ | OAuth client_credentials |
 | `MOBILITY_TENANT_ID` | ✅ | dev/default tenant (probe; NIKAD za user pozive — §1.3) |
 | `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_API_KEY` | ✅ | LLM (gpt-4o-mini deployment, PIN verziju) |
+| `AZURE_OPENAI_API_VERSION` / `AZURE_OPENAI_DEPLOYMENT_NAME` | default u kodu | API verzija + ime TVOG chat deploymenta |
+| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | ⚠ skela/F2 | embeddingi: danas ih troši SAMO 950-skela (anchor/registry); u cilju tek F2 RAG |
+| `GDPR_HASH_SALT` | ✅ prod | konzistentna PII pseudonimizacija kroz restarte; generiraš JEDNOM (`openssl rand -hex 32`) i čuvaš ZAUVIJEK — **rotacija mijenja sve hash-eve, NE rotira se rutinski** |
 | `AZURE_OPENAI_API_VERSION` / `AZURE_OPENAI_DEPLOYMENT_NAME` / `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | default 2024-08-01-preview / gpt-4o-mini / text-embedding-ada-002 | API verzija + deployment imena (chat + embeddings) |
 | `LLM_INPUT_PRICE_PER_1K` / `LLM_OUTPUT_PRICE_PER_1K` / `DAILY_COST_BUDGET_USD` | default | cost tracking + dnevni budžet alarm |
 | `DRIFT_BASELINE_DAYS` / `DRIFT_ANALYSIS_HOURS` / `DRIFT_MIN_SAMPLES` | default 7/6/50 | model-drift detekcija nad telemetrijom |
@@ -275,7 +278,6 @@ mobilityone-whatsapp-bot/
 | `INFOBIP_SECRET_KEY` | WA/Viber | HMAC-SHA256 tajna za webhook (X-Hub-Signature-256) |
 | `VIBER_SENDER` | Viber | registrirano IME Viber sendera; **neset = Viber kanal off** (poruke → DLQ `VIBER_NOT_CONFIGURED`) |
 | `VERIFY_WHATSAPP_SIGNATURE` | default true | HMAC verifikacija (prod je ne smije isključiti) |
-| `WHATSAPP_VERIFY_TOKEN` | opc. | GET verifikacija webhooka |
 | `AUTH_PREFLIGHT` (`=0` off) / `AUTH_PREFLIGHT_STRICT` (`=1` fail-closed) | default log-only | §13 |
 | `MOBILITY_REQUIRED_SCOPES` | opc. | space/comma lista scopeova koje token MORA nositi |
 | `BUSINESS_API_URL` | F1 | host `/actions/*`; **default = MOBILITY_API_URL** (config, ne pretpostavka) |
@@ -287,6 +289,54 @@ mobilityone-whatsapp-bot/
 | `ADMIN_TOKEN_1..N` + `ADMIN_TOKEN_N_USER` | admin | admin endpointi (gdpr-process, cache-invalidate, tenants) — više imenovanih tokena (audit zna TKO) |
 | `ADMIN_ALLOWED_IPS` / `ADMIN_RATE_LIMIT_PER_MINUTE` | admin | IP allowlist (CIDR podržan) + rate limit admin API-ja |
 | `OTEL_ENABLED` | default false | tracing no-op dok se ne uključi |
+
+**Uklonjeno 2026-07-04 (mrtve — čitao ih samo config, bez živog potrošača;
+test `test_dead_config_vars_stay_removed` čuva da se ne vrate):**
+`LLM_INPUT/OUTPUT_PRICE_PER_1K` + `DAILY_COST_BUDGET_USD` (cost tracking —
+admin_api obrisan) · `DRIFT_*` (drift detekcija nikad spojena) · `SENTRY_DSN`
+(nikad `sentry_sdk.init()`; vrati se TEK s inicijalizacijom) ·
+`WHATSAPP_VERIFY_TOKEN` (GET verifikacija je bezuvjetni "ok").
+
+### 4.1 Klasifikacija — što je STVARNO potrebno (ne gomilamo)
+
+```
+JEZGRA (bez ovoga se ne diže, 9):   DATABASE_URL · REDIS_URL · MOBILITY_API_URL
+  · MOBILITY_AUTH_URL · MOBILITY_CLIENT_ID · MOBILITY_CLIENT_SECRET
+  · MOBILITY_TENANT_ID · AZURE_OPENAI_ENDPOINT · AZURE_OPENAI_API_KEY (+APP_ENV)
+KANALI (čim kanal radi, 5):         INFOBIP_BASE_URL · INFOBIP_API_KEY
+  · INFOBIP_SENDER_NUMBER · INFOBIP_SECRET_KEY · VIBER_SENDER
+PROD SIGURNOST (3+):                GDPR_HASH_SALT · ADMIN_TOKEN_1..N(+_USER)
+  · ADMIN_ALLOWED_IPS  (VERIFY_WHATSAPP_SIGNATURE ostaje true)
+DEFAULTI — NE DIRAJ bez mjerenja:   DB_POOL_* · REDIS_MAX_CONNECTIONS
+  · AZURE_OPENAI_API_VERSION/DEPLOYMENT_NAME · V2_TELEMETRY* · AUTH_PREFLIGHT*
+  · ADMIN_RATE_LIMIT_PER_MINUTE · OTEL_ENABLED
+F1/BUDUĆE (tek uz /actions):        BUSINESS_API_URL · V2_USE_ACTIONS
+  · MOBILITY_REQUIRED_SCOPES · CONTRACT_* (samo CI/dev)
+K8S OPS (2):                        WORKER_HEARTBEAT_FILE · ANCHOR_CACHE_PATH(⚠ skela)
+OPCIONALNO (dual-user DB, prod):    BOT_/ADMIN_DATABASE_URL
+SKELA-VEZANO (umire s Fazom 4):     AZURE_OPENAI_EMBEDDING_DEPLOYMENT (do F2 RAG)
+  · ANCHOR_CACHE_PATH
+```
+
+### 4.2 Gdje i kako NABAVITI svaku bitnu vrijednost
+
+| Vrijednost | Gdje se nabavlja | Kako |
+|---|---|---|
+| `DATABASE_URL` (+BOT_/ADMIN_) | naš Postgres | sami definiramo: kreiraj DB + user(e); format `postgresql+asyncpg://user:pass@host:5432/db` |
+| `REDIS_URL` | naš Redis | sami (k8s/compose servis); format `redis://host:6379/0` |
+| `MOBILITY_API_URL` / `MOBILITY_AUTH_URL` | **M1 (Damir)** | host dev/prod instance; auth = isti host + `/sso/connect/token` |
+| `MOBILITY_CLIENT_ID` / `_SECRET` | **M1 (Damir)** | service account (client_credentials) koji IZDAJE njihova strana |
+| `MOBILITY_TENANT_ID` | **M1 (Damir)** | UUID dev tenanta — SAMO za probe/smoke (runtime tenant dolazi iz /Persons!) |
+| `AZURE_OPENAI_ENDPOINT` / `_API_KEY` | Azure Portal | Azure OpenAI resource → Keys & Endpoint (firma već ima resource) |
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | Azure OpenAI Studio | ime deploymenta koji SI kreirao (gpt-4o-mini); PIN verziju modela |
+| `INFOBIP_BASE_URL` / `_API_KEY` | Infobip portal | portal.infobip.com → API keys; base = tvoja subdomena `xxxxx.api.infobip.com` |
+| `INFOBIP_SENDER_NUMBER` | Infobip | WhatsApp broj koji ti je Infobip dodijelio/registrirao |
+| `INFOBIP_SECRET_KEY` | **TI ga izmisliš** | `openssl rand -hex 32` → ISTI string upišeš u Infobip webhook config I u env (shared secret za HMAC) |
+| `VIBER_SENDER` | Infobip (ops!) | ime sendera NAKON što Infobip odobri Viber registraciju (dani-tjedni — pokreni odmah) |
+| `GDPR_HASH_SALT` | **TI ga generiraš** | `openssl rand -hex 32` — JEDNOM, čuvaš zauvijek (rotacija = gubitak povezivosti hash-eva) |
+| `ADMIN_TOKEN_N` | **TI ga generiraš** | `openssl rand -hex 32` po OSOBI (token = identitet u auditu) |
+| `BUSINESS_API_URL` + scope imena | **M1 (Damir)** — sastanak | pitanja B1/B2 u PITANJA_ZA_SEFA docu |
+| TLS cert za webhook | cert-manager (k8s) | automatski Let's Encrypt kroz ingress — ništa ručno |
 
 ---
 
@@ -317,22 +367,38 @@ mobilityone-whatsapp-bot/
 | `gdpr:requests:{tenant}` / `handover:requests:{tenant}` | gdpr_audit | 90d/30d | audit tragovi |
 | `tenant_cfg:{tenant_id}` | F1 tenant_config | 300s | cache bot-side postavki (DB istina) |
 
-### 5.2 Postgres
+### 5.2 Postgres — STVARNA slika (audit 2026-07-04)
 
-```sql
-user_mappings      -- phone → person/tenant binding (živ; tenant_resolver)
--- F1 (alembic 004): BOT-SIDE OVERLAY, ne registry (izvor istine za tenante = M1!)
-CREATE TABLE tenant_settings (
-    tenant_id       TEXT PRIMARY KEY,          -- = M1 TenantId
-    name            TEXT,
-    bot_status      TEXT NOT NULL DEFAULT 'active',
-    settings        JSONB NOT NULL DEFAULT '{}',
-    actions_enabled JSONB NOT NULL DEFAULT '{}',  -- prazno = sve default-on
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
--- F2: tenant_documents (RAG upload) — id, tenant_id, filename, content, uploaded_at
+**Namjerni dizajn: baza je MALA.** Sve runtime stanje (pending, history,
+dedup, queue) živi u Redisu s TTL-ovima; M1 drži poslovne podatke; Postgres
+drži samo TRAJNA mapiranja i postavke — KB/MB reda veličine.
+
 ```
+DANAS (alembic 001-003):
+  user_mappings           ✅ ŽIVA — jedina koju bot koristi (tenant_resolver)
+     id UUID PK · phone_number UNIQUE · api_identity · display_name
+     · tenant_id · is_active · created/updated_at · (+consent polja iz 002)
+  conversations           ⚠ MRTVA — nitko ne piše (povijest je u Redisu,
+  messages                ⚠ MRTVA    v2_conv_history 30min TTL!)
+  tool_executions         ⚠ MRTVA — nitko ne piše (telemetrija je u Redisu)
+     → V1 ostavština; kandidat za DROP migraciju u Fazi 4 (uz eksplicitnu
+       potvrdu — možda ih Damir želi za buduće trajno arhiviranje razgovora)
+  consent polja (002)     ⚠ nekorištena u services/ — isti kandidat
+
+F1:  tenant_settings  (bot-side overlay; JSONB settings + actions_enabled)
+F2:  tenant_documents (RAG upload: id, tenant_id, filename, content, uploaded_at)
+
+USERI (dual-user least-privilege, opcionalno ali preporučeno za prod):
+  bot_user    → SELECT/INSERT/UPDATE na user_mappings (+tenant_settings u F1)
+  admin_user  → puni pristup + DDL (alembic migracije, admin API)
+```
+
+**Skaliranje baze — odluka: NE trebaju replike.** Podaci su sitni, promet ide
+na Redis/M1; bot radi ~1 DB lookup po NOVOM korisniku (poslije toga cache).
+Produkcija = managed Postgres (npr. Azure Database for PostgreSQL, najmanji
+tier) s **point-in-time restore backupom** — to je jedini DB-ops zahtjev.
+Connection pooling VEĆ postoji (SQLAlchemy pool 5+10 overflow; health prati
+iskorištenost; prag za PgBouncer: tek ako pool utilizacija trajno >80%).
 
 ---
 
@@ -895,6 +961,63 @@ Runbook: `kubectl apply -k k8s/` → migrate wait → `curl /webhook/whatsapp`�
 `rollout undo`; worker rollout = do ~60s buffera u streamu, bez gubitka.
 Pilot smije na 1 VM + docker-compose (~30-60€; Infobip retry ublažava restart
 gap); produkcija AKS (~150-250€) — ista slika, prelazak je runbook, ne prepis.
+
+### 20.1 SCALING ODLUKE — što DA, što NE (i zašto; ne gomilamo tehnike)
+
+| Tehnika | Odluka | Obrazloženje |
+|---|---|---|
+| **Load balancer** | ✅ IMAMO | k8s ingress-nginx pred api ×2 — webhook HA |
+| **Horizontalno API** | ✅ IMAMO | stateless api, HPA 2-4, maxUnavailable=0 |
+| **Queue-based load leveling** | ✅ SRŽ DIZAJNA | Redis stream apsorbira burst; latencija raste, gubitka nema |
+| **Caching** | ✅ SVUGDJE | Redis: identitet 30s · tenant 300s · OAuth token · 4xx prijevodi 1h · tenant_cfg 300s — svaki s TTL-om i invalidacijom |
+| **Connection pooling** | ✅ IMAMO ×3 | SQLAlchemy pool (5+10) · httpx AsyncClient reuse (TLS handshake 1×) · Redis pool (100) |
+| **Rate limiting** | ✅ IMAMO ×3 | per-IP na webhoooku (200/60s) · per-phone u engineu (m/h bucketi) · admin API (30/min) |
+| **Circuit breaker** | ✅ IMAMO | po M1 servisu; njihov outage ne ruši bota |
+| **Horizontalno WORKER** | ⏸ NE SADA (×1 by design) | per-sender redoslijed poruka; consumer grupa VEĆ podržava ×N — recept (per-sender lock → Redis) primijeniti na pragu: sustained >75-150 msg/min |
+| **DB replike** | ❌ NE | podaci KB/MB reda, ~1 lookup po novom korisniku (dalje cache); replike = trošak bez koristi. Backup=PITR, ne replika |
+| **Redis HA/cluster** | ⏸ NE ZA PILOT | AOF everysec + noeviction + brzi k8s restart; prag: >500 aktivnih korisnika → managed Redis |
+| **PgBouncer** | ⏸ NE | SQLAlchemy pool dovoljan; prag: pool utilizacija trajno >80% |
+| **Sharding** | ❌ NE | apsurd za ovaj volumen — YAGNI |
+| **CDN/edge** | ❌ NE | nema statičkog sadržaja |
+| **LLM skaliranje** | kvota, ne infra | Azure TPM/RPM kvota se diže zahtjevom; azure_rate_guard + retry već štite |
+
+**Bottleneck istina:** usko grlo NIJE naša infra nego LLM latencija (0.5-2s/
+poziv) i M1 API — zato je dizajn async s redom u sredini, a ne sync lanac.
+
+### 20.2 Infra skica s ×N oznakama (buduće stanje = današnje + pragovi)
+
+```
+                    Infobip / M365 / Web
+                          │ HTTPS
+              ┌───────────▼────────────┐
+              │ INGRESS-NGINX (LB, TLS) │            ← load balancer, cert-manager
+              └───────────┬────────────┘
+        ┌─────────────────┼─────────────────┐
+   ┌────▼────┐       ┌────▼────┐            │
+   │ api pod │  ×2-4 │ api pod │  (HPA)     │       ← stateless, rate-limit/IP
+   └────┬────┘       └────┬────┘            │
+        └────────┬────────┘                 │
+           ┌─────▼──────┐                   │
+           │   REDIS ×1 │ AOF+noeviction    │       ← queue+cache+state (SVE TTL)
+           │            │ [prag >500 korisn.│
+           └─────┬──────┘  → managed/HA]    │
+           ┌─────▼───────────────┐   ┌──────▼──────┐
+           │ worker ×1 (Recreate)│   │ mcp/server  │ (F-M365)
+           │ [prag >150 msg/min  │   └──────┬──────┘
+           │  → ×N + Redis lock] │          │
+           └──┬────────┬─────────┘          │
+      ┌───────▼──┐  ┌──▼───────────┐        │
+      │ POSTGRES │  │ AZURE OPENAI │        │
+      │ ×1 (PITR │  │ (kvota+PIN)  │        │
+      │  backup) │  └──────────────┘        │
+      └──────────┘                          │
+                 ┌──────────────────────────▼───┐
+                 │ M1 CLOUD: IdentityServer +    │
+                 │ /actions (F1) + Domain API    │
+                 └───────────────────────────────┘
+  Svaka kutija: što je ×N (api), što je ×1 s definiranim PRAGOM za rast
+  (worker/Redis), što je vanjska ovisnost (LLM kvota, M1 SLA).
+```
 
 ---
 
