@@ -254,13 +254,21 @@ mobilityone-whatsapp-bot/
 
 | Var | Obavezno | Značenje |
 |---|---|---|
-| `DATABASE_URL` | ✅ | Postgres (asyncpg) |
+| `DATABASE_URL` | ✅ | Postgres (asyncpg) — pydantic-required; = bot user u dual modelu |
+| `BOT_DATABASE_URL` / `ADMIN_DATABASE_URL` | opc. | **dual-user DB security model**: bot = ograničeni user, admin = puni pristup; oba fallback na DATABASE_URL |
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` / `DB_POOL_RECYCLE` | default 5/10/3600 | SQLAlchemy pool (health prati iskorištenost) |
 | `REDIS_URL` | ✅ | Redis (stream+queue+state) |
+| `REDIS_MAX_CONNECTIONS` | default 100 | Redis connection pool cap |
 | `MOBILITY_API_URL` | ✅ | M1 Domain API host |
 | `MOBILITY_AUTH_URL` | ✅ | IdentityServer token endpoint |
 | `MOBILITY_CLIENT_ID` / `MOBILITY_CLIENT_SECRET` | ✅ | OAuth client_credentials |
 | `MOBILITY_TENANT_ID` | ✅ | dev/default tenant (probe; NIKAD za user pozive — §1.3) |
 | `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_API_KEY` | ✅ | LLM (gpt-4o-mini deployment, PIN verziju) |
+| `AZURE_OPENAI_API_VERSION` / `AZURE_OPENAI_DEPLOYMENT_NAME` / `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | default 2024-08-01-preview / gpt-4o-mini / text-embedding-ada-002 | API verzija + deployment imena (chat + embeddings) |
+| `LLM_INPUT_PRICE_PER_1K` / `LLM_OUTPUT_PRICE_PER_1K` / `DAILY_COST_BUDGET_USD` | default | cost tracking + dnevni budžet alarm |
+| `DRIFT_BASELINE_DAYS` / `DRIFT_ANALYSIS_HOURS` / `DRIFT_MIN_SAMPLES` | default 7/6/50 | model-drift detekcija nad telemetrijom |
+| `GDPR_HASH_SALT` | ✅ prod | konzistentna PII pseudonimizacija kroz restarte — TAJNA; ⚠ rotacija mijenja SVE hash-eve pa se NE rotira rutinski (čuvati kao trajnu tajnu) |
+| `SENTRY_DSN` | opc. | error tracking |
 | `APP_ENV` | ✅ | `production` aktivira validatore (npr. zabrana isključenog HMAC-a) |
 | `INFOBIP_BASE_URL` / `INFOBIP_API_KEY` | WA/Viber | Infobip account (`App {key}` auth) |
 | `INFOBIP_SENDER_NUMBER` | WA | WhatsApp sender broj |
@@ -276,7 +284,8 @@ mobilityone-whatsapp-bot/
 | `CONTRACT_BASE_URL` / `CONTRACT_BEARER_TOKEN` / `CONTRACT_ALLOW_MUTATIONS` | CI/dev | live contract testovi (§17.3); POST fixturei traže eksplicitni `ALLOW_MUTATIONS=1` |
 | `ANCHOR_CACHE_PATH` | k8s | PVC lokacija anchor cachea |
 | `WORKER_HEARTBEAT_FILE` | k8s | liveness datoteka (worker nema HTTP port) |
-| `ADMIN_TOKEN_1` + `ADMIN_TOKEN_1_USER` | admin | admin endpointi (gdpr-process, cache-invalidate, tenants) |
+| `ADMIN_TOKEN_1..N` + `ADMIN_TOKEN_N_USER` | admin | admin endpointi (gdpr-process, cache-invalidate, tenants) — više imenovanih tokena (audit zna TKO) |
+| `ADMIN_ALLOWED_IPS` / `ADMIN_RATE_LIMIT_PER_MINUTE` | admin | IP allowlist (CIDR podržan) + rate limit admin API-ja |
 | `OTEL_ENABLED` | default false | tracing no-op dok se ne uključi |
 
 ---
