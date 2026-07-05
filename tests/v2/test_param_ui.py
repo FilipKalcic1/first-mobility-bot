@@ -2,8 +2,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from services.v2 import param_ui
+
+
+def _zagreb_today():
+    """param_ui.parse_datetime_hr računa 'danas' u Europe/Zagreb
+    (param_ui.py:335). Test mora koristiti istu zonu — inače naive
+    datetime.now() blizu UTC-ponoći daje dan razlike i test flakea."""
+    return datetime.now(ZoneInfo("Europe/Zagreb")).date()
 
 
 # --------------------------------------------------------------------------
@@ -300,8 +308,8 @@ def test_parse_datetime_hr_date_only_mode():
 
 def test_parse_datetime_hr_relative_words():
     """'sutra 9:00', 'danas 14:30', 'prekosutra 8'."""
-    from datetime import datetime, timedelta
-    today = datetime.now().date()
+    from datetime import timedelta
+    today = _zagreb_today()
     sutra = today + timedelta(days=1)
     prekosutra = today + timedelta(days=2)
 
@@ -322,8 +330,8 @@ def test_parse_datetime_hr_relative_words():
 
 
 def test_parse_datetime_hr_relative_without_time_uses_midnight():
-    from datetime import datetime, timedelta
-    sutra = datetime.now().date() + timedelta(days=1)
+    from datetime import timedelta
+    sutra = _zagreb_today() + timedelta(days=1)
     out = param_ui.parse_datetime_hr("sutra")
     assert out is not None
     assert out.startswith(sutra.isoformat())
