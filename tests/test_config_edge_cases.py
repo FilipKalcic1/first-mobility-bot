@@ -72,12 +72,60 @@ class TestConfigDefaults:
         from config import get_settings
 
         settings = get_settings()
-        for dead in ("LLM_INPUT_PRICE_PER_1K", "LLM_OUTPUT_PRICE_PER_1K",
-                     "DAILY_COST_BUDGET_USD", "DRIFT_BASELINE_DAYS",
-                     "DRIFT_ANALYSIS_HOURS", "DRIFT_MIN_SAMPLES",
-                     "SENTRY_DSN", "WHATSAPP_VERIFY_TOKEN"):
+        for dead in (
+            # runda 1 (cost/drift/sentry/verify-token)
+            "LLM_INPUT_PRICE_PER_1K", "LLM_OUTPUT_PRICE_PER_1K",
+            "DAILY_COST_BUDGET_USD", "DRIFT_BASELINE_DAYS",
+            "DRIFT_ANALYSIS_HOURS", "DRIFT_MIN_SAMPLES",
+            "SENTRY_DSN", "WHATSAPP_VERIFY_TOKEN",
+            # runda 2 (2026-07-04 — 19 config polja bez ijednog čitača + 3
+            # .env-only phantoma; verificirano grep-om)
+            "REDIS_MAX_CONNECTIONS", "REDIS_SENTINEL_ENABLED",
+            "REDIS_SENTINEL_HOSTS", "REDIS_SENTINEL_MASTER",
+            "REDIS_SENTINEL_PASSWORD", "AI_MAX_ITERATIONS", "AI_TEMPERATURE",
+            "AI_MAX_TOKENS", "EMBEDDING_BATCH_SIZE", "SIMILARITY_THRESHOLD",
+            "MAX_TOOLS_FOR_LLM", "CACHE_TTL_TOKEN", "CACHE_TTL_TOOLS",
+            "CACHE_TTL_CONVERSATION", "CONFLICT_LOCK_TTL_MINUTES",
+            "CONFLICT_SNAPSHOT_TTL_DAYS", "SANITY_CHECKER_ENABLED",
+            "BURST_MAX_MESSAGES", "BURST_IDLE_TIMEOUT",
+            # .env-only (nikad ni deklarirani kao Settings polja):
+            "MOBILITY_API_TOKEN", "MOBILITY_AUDIENCE", "AI_CONFIDENCE_THRESHOLD",
+        ):
             assert not hasattr(settings, dead), (
                 f"{dead} se vratio u Settings bez živog potrošača")
+
+    def test_live_config_vars_still_present(self):
+        """Kontrola: polja s DOKAZANIM potrošačem MORAJU ostati (da čišćenje
+        ne ode predaleko)."""
+        from config import get_settings
+
+        settings = get_settings()
+        for live in ("ADMIN_CORS_ORIGINS", "CACHE_TTL_USER", "CACHE_TTL_CONTEXT",
+                     "DEBUG", "GDPR_HASH_SALT", "MAX_CONCURRENT",
+                     "AZURE_LLM_MAX_CONCURRENT", "LOG_LEVEL"):
+            assert hasattr(settings, live), f"{live} nestao — ima živog potrošača!"
+
+    def test_hash_phone_is_salted(self, monkeypatch):
+        """GDPR (D1 2026-07-04): hash_phone mora saltati s GDPR_HASH_SALT —
+        inače je mali MSISDN prostor trivijalno rainbow-tableable. Prazan
+        salt = staro (nesaljeno) ponašanje radi backward-compata."""
+        from services.v2 import telemetry
+        from config import get_settings
+
+        get_settings.cache_clear()
+        monkeypatch.setenv("GDPR_HASH_SALT", "salt-A")
+        a = telemetry.hash_phone("385991234567")
+        get_settings.cache_clear()
+        monkeypatch.setenv("GDPR_HASH_SALT", "salt-B")
+        b = telemetry.hash_phone("385991234567")
+        get_settings.cache_clear()
+        monkeypatch.delenv("GDPR_HASH_SALT", raising=False)
+        unsalted = telemetry.hash_phone("385991234567")
+        get_settings.cache_clear()
+
+        assert a != b, "isti broj + različit salt mora dati različit hash"
+        assert a != unsalted and b != unsalted, "salt mora promijeniti izlaz"
+        assert telemetry.hash_phone("") == ""  # prazan ulaz → prazan
 
     def test_tenant_id_property(self):
         from config import get_settings

@@ -345,23 +345,17 @@ mobilityone-whatsapp-bot/
 | Var | Obavezno | Značenje |
 |---|---|---|
 | `DATABASE_URL` | ✅ | Postgres (asyncpg) — pydantic-required; = bot user u dual modelu |
-| `BOT_DATABASE_URL` / `ADMIN_DATABASE_URL` | opc. | **dual-user DB security model**: bot = ograničeni user, admin = puni pristup; oba fallback na DATABASE_URL |
+| `BOT_DATABASE_URL` / `ADMIN_DATABASE_URL` | opc. (pilot: NE) | dual-user split — ali app u praksi koristi 1 engine (BOT_URL); split živ SAMO za migracije (§4.4/§5.2). Fallback na DATABASE_URL |
 | `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` / `DB_POOL_RECYCLE` | default 5/10/3600 | SQLAlchemy pool (health prati iskorištenost) |
 | `REDIS_URL` | ✅ | Redis (stream+queue+state) |
-| `REDIS_MAX_CONNECTIONS` | default 100 | Redis connection pool cap |
 | `MOBILITY_API_URL` | ✅ | M1 Domain API host |
 | `MOBILITY_AUTH_URL` | ✅ | IdentityServer token endpoint |
 | `MOBILITY_CLIENT_ID` / `MOBILITY_CLIENT_SECRET` | ✅ | OAuth client_credentials |
 | `MOBILITY_TENANT_ID` | ✅ | dev/default tenant (probe; NIKAD za user pozive — §1.3) |
 | `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_API_KEY` | ✅ | LLM (gpt-4o-mini deployment, PIN verziju) |
-| `AZURE_OPENAI_API_VERSION` / `AZURE_OPENAI_DEPLOYMENT_NAME` | default u kodu | API verzija + ime TVOG chat deploymenta |
+| `AZURE_OPENAI_API_VERSION` / `AZURE_OPENAI_DEPLOYMENT_NAME` | default 2024-08-01-preview / gpt-4o-mini | API verzija + ime TVOG chat deploymenta (PIN verziju) |
 | `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | ⚠ skela/F2 | embeddingi: danas ih troši SAMO 950-skela (anchor/registry); u cilju tek F2 RAG |
-| `GDPR_HASH_SALT` | ✅ prod | konzistentna PII pseudonimizacija kroz restarte; generiraš JEDNOM (`openssl rand -hex 32`) i čuvaš ZAUVIJEK — **rotacija mijenja sve hash-eve, NE rotira se rutinski** |
-| `AZURE_OPENAI_API_VERSION` / `AZURE_OPENAI_DEPLOYMENT_NAME` / `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | default 2024-08-01-preview / gpt-4o-mini / text-embedding-ada-002 | API verzija + deployment imena (chat + embeddings) |
-| `LLM_INPUT_PRICE_PER_1K` / `LLM_OUTPUT_PRICE_PER_1K` / `DAILY_COST_BUDGET_USD` | default | cost tracking + dnevni budžet alarm |
-| `DRIFT_BASELINE_DAYS` / `DRIFT_ANALYSIS_HOURS` / `DRIFT_MIN_SAMPLES` | default 7/6/50 | model-drift detekcija nad telemetrijom |
-| `GDPR_HASH_SALT` | ✅ prod | konzistentna PII pseudonimizacija kroz restarte — TAJNA; ⚠ rotacija mijenja SVE hash-eve pa se NE rotira rutinski (čuvati kao trajnu tajnu) |
-| `SENTRY_DSN` | opc. | error tracking |
+| `GDPR_HASH_SALT` | ✅ prod (živ 2026-07-04) | **saltira** telemetrijski `hash_phone` (sprječava reverz broja iz logiranog hasha; `telemetry.py:132`). Generiraš JEDNOM (`openssl rand -hex 32`), čuvaš ZAUVIJEK — rotacija mijenja SVE hash-eve, NE rotira se rutinski |
 | `APP_ENV` | ✅ | `production` aktivira validatore (npr. zabrana isključenog HMAC-a) |
 | `INFOBIP_BASE_URL` / `INFOBIP_API_KEY` | WA/Viber | Infobip account (`App {key}` auth) |
 | `INFOBIP_SENDER_NUMBER` | WA | WhatsApp sender broj |
@@ -376,16 +370,13 @@ mobilityone-whatsapp-bot/
 | `CONTRACT_BASE_URL` / `CONTRACT_BEARER_TOKEN` / `CONTRACT_ALLOW_MUTATIONS` | CI/dev | live contract testovi (§17.3); POST fixturei traže eksplicitni `ALLOW_MUTATIONS=1` |
 | `ANCHOR_CACHE_PATH` | k8s | PVC lokacija anchor cachea |
 | `WORKER_HEARTBEAT_FILE` | k8s | liveness datoteka (worker nema HTTP port) |
-| `ADMIN_TOKEN_1..N` + `ADMIN_TOKEN_N_USER` | admin | admin endpointi (gdpr-process, cache-invalidate, tenants) — više imenovanih tokena (audit zna TKO) |
-| `ADMIN_ALLOWED_IPS` / `ADMIN_RATE_LIMIT_PER_MINUTE` | admin | IP allowlist (CIDR podržan) + rate limit admin API-ja |
+| `ADMIN_TOKEN_1..N` + `ADMIN_TOKEN_N_USER` | admin | admin endpointi (gdpr-process, cache-invalidate) — više imenovanih tokena (audit zna TKO); **JEDINI admin gate** (nema IP-filtera ni rate-limita — §4.4) |
+| `ADMIN_CORS_ORIGINS` | default | CORS origini admin ruta (`main.py:241`) |
 | `OTEL_ENABLED` | default false | tracing no-op dok se ne uključi |
 
-**Uklonjeno 2026-07-04 (mrtve — čitao ih samo config, bez živog potrošača;
-test `test_dead_config_vars_stay_removed` čuva da se ne vrate):**
-`LLM_INPUT/OUTPUT_PRICE_PER_1K` + `DAILY_COST_BUDGET_USD` (cost tracking —
-admin_api obrisan) · `DRIFT_*` (drift detekcija nikad spojena) · `SENTRY_DSN`
-(nikad `sentry_sdk.init()`; vrati se TEK s inicijalizacijom) ·
-`WHATSAPP_VERIFY_TOKEN` (GET verifikacija je bezuvjetni "ok").
+**Uklonjeno 2026-07-04 (mrtve — čitao ih samo config; test
+`test_dead_config_vars_stay_removed` čuva da se ne vrate) — vidi §4.4 za punu
+listu i zašto NISU featurei.**
 
 ### 4.1 Klasifikacija — što je STVARNO potrebno (ne gomilamo)
 
@@ -395,15 +386,15 @@ JEZGRA (bez ovoga se ne diže, 9):   DATABASE_URL · REDIS_URL · MOBILITY_API_U
   · MOBILITY_TENANT_ID · AZURE_OPENAI_ENDPOINT · AZURE_OPENAI_API_KEY (+APP_ENV)
 KANALI (čim kanal radi, 5):         INFOBIP_BASE_URL · INFOBIP_API_KEY
   · INFOBIP_SENDER_NUMBER · INFOBIP_SECRET_KEY · VIBER_SENDER
-PROD SIGURNOST (3+):                GDPR_HASH_SALT · ADMIN_TOKEN_1..N(+_USER)
-  · ADMIN_ALLOWED_IPS  (VERIFY_WHATSAPP_SIGNATURE ostaje true)
-DEFAULTI — NE DIRAJ bez mjerenja:   DB_POOL_* · REDIS_MAX_CONNECTIONS
-  · AZURE_OPENAI_API_VERSION/DEPLOYMENT_NAME · V2_TELEMETRY* · AUTH_PREFLIGHT*
-  · ADMIN_RATE_LIMIT_PER_MINUTE · OTEL_ENABLED
+PROD SIGURNOST:                     GDPR_HASH_SALT · ADMIN_TOKEN_1..N(+_USER)
+  (VERIFY_WHATSAPP_SIGNATURE ostaje true; admin je gatan SAMO tokenom — §4.4)
+DEFAULTI — NE DIRAJ bez mjerenja:   DB_POOL_* · AZURE_OPENAI_API_VERSION/
+  DEPLOYMENT_NAME · V2_TELEMETRY* · AUTH_PREFLIGHT* · ADMIN_CORS_ORIGINS · OTEL_ENABLED
 F1/BUDUĆE (tek uz /actions):        BUSINESS_API_URL · V2_USE_ACTIONS
   · MOBILITY_REQUIRED_SCOPES · CONTRACT_* (samo CI/dev)
 K8S OPS (2):                        WORKER_HEARTBEAT_FILE · ANCHOR_CACHE_PATH(⚠ skela)
-OPCIONALNO (dual-user DB, prod):    BOT_/ADMIN_DATABASE_URL
+OPCIONALNO (za pilot NEPOTREBNO):   BOT_/ADMIN_DATABASE_URL (dual-user split —
+  ali app u praksi koristi 1 engine; §4.4 + §5.2)
 SKELA-VEZANO (umire s Fazom 4):     AZURE_OPENAI_EMBEDDING_DEPLOYMENT (do F2 RAG)
   · ANCHOR_CACHE_PATH
 ```
@@ -457,27 +448,26 @@ VERIFY_WHATSAPP_SIGNATURE=false            # TODO(prod): true — inače config 
 # VIBER_SENDER=YourSenderName              # ← Infobip NAKON odobrenja Viber sendera (ops; neset = Viber off → DLQ)
 
 # ── PROD SIGURNOST ───────────────────────────────────────────────────────────
-GDPR_HASH_SALT=CHANGE_ME                   # ← TI: openssl rand -hex 32 — JEDNOM, čuvaš ZAUVIJEK (rotacija = svi hashevi mrtvi)
-ADMIN_TOKEN_1=CHANGE_ME                    # ← TI: openssl rand -hex 32 po OSOBI (= identitet u auditu)
+GDPR_HASH_SALT=CHANGE_ME                   # ← TI: openssl rand -hex 32 — JEDNOM, čuvaš ZAUVIJEK (rotacija = svi hashevi mrtvi). Saltira telemetrijski hash_phone.
+ADMIN_TOKEN_1=CHANGE_ME                    # ← TI: openssl rand -hex 32 po OSOBI (= identitet u auditu; JEDINI admin gate)
 ADMIN_TOKEN_1_USER=filip.kalcic
 # ADMIN_TOKEN_2=... / ADMIN_TOKEN_2_USER=damir.skrtic
-ADMIN_ALLOWED_IPS=10.0.0.0/8               # CIDR podržan; prazno = bez IP filtera
+# NAPOMENA: ADMIN_ALLOWED_IPS / ADMIN_RATE_LIMIT_PER_MINUTE NE POSTOJE u kodu
+#           (nema IP-filtera ni rate-limita admin API-ja — samo ADMIN_TOKEN). §4.4
 
 # ── DEFAULTI (ne diraj bez mjerenja; navedeni radi potpunosti) ───────────────
 DB_POOL_SIZE=5
 DB_MAX_OVERFLOW=10
 DB_POOL_RECYCLE=3600
-REDIS_MAX_CONNECTIONS=100
-ADMIN_RATE_LIMIT_PER_MINUTE=30
 LOG_LEVEL=INFO                             # prod: WARNING
 AUTH_PREFLIGHT=1                           # 0=off; AUTH_PREFLIGHT_STRICT=1 → fail-closed (§13)
 V2_TELEMETRY=1
 V2_TELEMETRY_BACKEND=stdout+redis
 
-# ── OPCIONALNO / PROD ────────────────────────────────────────────────────────
-# BOT_DATABASE_URL=...    # dual-user: bot = ograničeni DB user (fallback: DATABASE_URL)
-# ADMIN_DATABASE_URL=...  # dual-user: admin = puni pristup
-# WORKER_HEARTBEAT_FILE=/tmp/worker.beat   # k8s exec livenessProbe
+# ── OPCIONALNO / PROD (za pilot NEPOTREBNO) ──────────────────────────────────
+# BOT_DATABASE_URL=...    # dual-user split; ali app u praksi koristi 1 engine
+# ADMIN_DATABASE_URL=...  #   (split stvaran SAMO za Alembic migracije — §5.2/§4.4)
+# WORKER_HEARTBEAT_FILE=/tmp/worker.beat   # k8s exec livenessProbe (worker nema HTTP port)
 # ANCHOR_CACHE_PATH=/data/anchor_cache.json   # ⚠ SKELA (umire Faza 4)
 
 # ── F1 / BUDUĆE (tek kad /actions postoji — vidi PITANJA_ZA_SEFA) ────────────
@@ -491,6 +481,28 @@ V2_TELEMETRY_BACKEND=stdout+redis
 `VERIFY_WHATSAPP_SIGNATURE=true` (validator ga forsira) · `LOG_LEVEL=WARNING` ·
 svi `CHANGE_ME` popunjeni pravim secretima iz k8s Secreta (ne iz filea) ·
 `AUTH_PREFLIGHT_STRICT=1` na deploy gateu · rotirani SVI ngrok-era secreti (§22#16).
+
+### 4.4 DEKLARIRANO/DOKUMENTIRANO ALI MRTVO — NIJE feature (ne oslanjaj se)
+
+Graditelju: ako naiđeš na ovo u starom `.env` ili starim docs, to NISU
+mogućnosti sustava. Verificirano grep-om (0 živih potrošača), pročišćeno
+2026-07-04:
+
+- **`ADMIN_ALLOWED_IPS`, `ADMIN_RATE_LIMIT_PER_MINUTE`** — NE POSTOJE u kodu.
+  Admin endpointi su gatani **isključivo `ADMIN_TOKEN`-om** (`admin_auth.verify_admin_token`).
+  Nema IP-allowlista ni rate-limita admin API-ja. (Ako to želiš → to je NOVI
+  feature koji treba implementirati, ne konfigurirati.)
+- **`REDIS_MAX_CONNECTIONS`** — obrisan; pool cap je hardkodiran po procesu
+  (api/webhook=5, worker=10). Knob nije radio ništa.
+- **~19 config polja** obrisano (bez ijednog čitača): `REDIS_SENTINEL_*` (HA
+  failover nikad spojen), `AI_MAX_ITERATIONS/AI_TEMPERATURE/AI_MAX_TOKENS/
+  EMBEDDING_BATCH_SIZE/SIMILARITY_THRESHOLD/MAX_TOOLS_FOR_LLM`, `CACHE_TTL_TOKEN/
+  TOOLS/CONVERSATION` (ostaju živi `CACHE_TTL_USER/CONTEXT`), `CONFLICT_*`,
+  `SANITY_CHECKER_ENABLED`, `BURST_*`, `MOBILITY_API_TOKEN/AUDIENCE`
+  (token_manager hardkodira `audience="none"`). Test-čuvar:
+  `test_dead_config_vars_stay_removed`.
+- **`GDPR_HASH_SALT`** — bio deklariran ali NEprimijenjen (hash je bio
+  nesaljen); od 2026-07-04 **spojen** u `telemetry.hash_phone` → sada JE živ.
 
 ---
 
@@ -542,9 +554,18 @@ DANAS (alembic 001-003):
 F1:  tenant_settings  (bot-side overlay; JSONB settings + actions_enabled)
 F2:  tenant_documents (RAG upload: id, tenant_id, filename, content, uploaded_at)
 
-USERI (dual-user least-privilege, opcionalno ali preporučeno za prod):
-  bot_user    → SELECT/INSERT/UPDATE na user_mappings (+tenant_settings u F1)
-  admin_user  → puni pristup + DDL (alembic migracije, admin API)
+USERI (dual-user — ISTINA nakon audita 2026-07-04):
+  Split je STVARAN SAMO za Alembic migracije: migration container postavlja
+  ADMIN_DATABASE_URL=admin_user (docker-compose migration + alembic/env.py) i
+  migracije stvarno rade kao admin_user.
+  APLIKACIJA (api+worker) koristi JEDAN engine (database.py:106), UVIJEK
+  BOT_DATABASE_URL — jer SERVICE_ROLE nigdje nije "admin", admin_api.py je
+  obrisan, a admin HTTP endpointi žive u BOT api procesu (gatani ADMIN_TOKEN-om,
+  NE DB rolom). Tablice koje bi split štitio (audit_logs, hallucination_reports)
+  nitko živ ne piše → GRANT split je danas moot.
+  ⇒ Za pilot: postavi SAMO DATABASE_URL; BOT_/ADMIN_ ne trebaš. Ako želiš
+    stvarnu least-privilege izolaciju kasnije → to je NOVI posao (provisioniraj
+    bot_user/admin_user u Postgresu + oživi audit-write), ne samo env varijable.
 ```
 
 **Skaliranje baze — odluka: NE trebaju replike.** Podaci su sitni, promet ide
