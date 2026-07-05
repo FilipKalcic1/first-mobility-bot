@@ -1,18 +1,29 @@
 # MASTER BUILD PROMPT — MobilityOne Fleet AI Bot
 
-> **Uputa graditelju (AI ili programeru):** Ti si senior inženjer. Iz OVOG JEDNOG
-> dokumenta izgradi kompletan, produkcijski sustav opisan ispod. Dokument je
-> samostojeći: sadrži misiju, invarijante, arhitekturu, strukturu repoa, sve
-> ugovore (config/state/API), flowove, kod-primjere, testni i deploy plan.
-> Redoslijed gradnje je u §23. Definicija "gotovo" je u §21. Ako nešto nije
-> ovdje specificirano, primijeni konzervativni default i ZAPIŠI odluku.
+> **⛔ OVO JE TVOJ SYSTEM PROMPT, GRADITELJU (AI ili programeru).** Ti si senior
+> inženjer. Iz OVOG JEDNOG dokumenta izgradi kompletan, produkcijski sustav.
+> Dokument je samostojeći: misija, invarijante, kritična znanja (mine!),
+> arhitektura, struktura repoa, svi ugovori (config/state/API), flowovi,
+> kod-primjeri, testni i deploy plan.
 >
-> **Verzija:** 2026-07-04 **v1.1** (revizija po pressure-testu: ciljno stanje
-> normativno — §0.5; skela karantenizirana — §9.2/§22.5; potpunost per-akcija —
-> §21.2) · Konsolidacija 5 dokumenata (TEHNIČKA SPECIFIKACIJA,
-> PRESSURE POINTS, PLAN KONVERGENCIJA, USPOREDBA ARHITEKTURA, M1 ADDENDUM) +
-> **stvarno stanje koda** (suite: 1754 passed / 0 failed, coverage 87%).
-> Gdje se spec i implementacija razlikuju, OVAJ dokument nosi istinu.
+> **PROTOKOL (obavezan):**
+> 1. Pročitaj redom: §0 → §0.5 (CILJ) → §1 (invarijante) → §1.5 (mine) →
+>    §23.1 (odaberi build path po stanju svijeta) — TEK ONDA gradi.
+> 2. Nakon SVAKOG koraka: testovi tog koraka zeleni + samoprovjera §25.6.
+> 3. Nešto nije specificirano? Konzervativni default + ZAPIŠI odluku u
+>    DECISIONS.md. Nešto proturječi? §0.5/§1/§1.5 pobjeđuju sve ostalo.
+> 4. NIKAD ne isporuči korak koji krši ijedan redak §1 ili ponavlja minu §1.5.
+> 5. Gotovo = §21.2, ne tvoj osjećaj. Samoocjena <10/10 → nastavi raditi.
+>
+> **Verzija:** 2026-07-04 **v2.0** — "nepogrešiv build spec": +ciljana
+> arhitektura box-dijagram (§0.5), +KRITIČNA ZNANJA/mine (§1.5), +copy-paste
+> `.env` template (§4.3), +samoprovjera graditelja (§25.6), +graditeljski
+> PROTOKOL (header). Ranije: v1.1 (ciljno stanje normativno §0.5, skela
+> karantenizirana §9.2/§22.5, potpunost per-akcija §21.2). Konsolidacija 5
+> dokumenata (TEHNIČKA SPECIFIKACIJA, PRESSURE POINTS, PLAN KONVERGENCIJA,
+> USPOREDBA ARHITEKTURA, M1 ADDENDUM) + **stvarno stanje koda** (suite:
+> 1754 passed / 0 failed, coverage 87%). Gdje se spec i implementacija
+> razlikuju, OVAJ dokument nosi istinu.
 
 ---
 
@@ -95,8 +106,57 @@ poruka (WA / Viber / Copilot / Web)
 [Copilot put: mcp/server.py izlaže ISTE akcije; Copilot je mozak — §15.3]
 ```
 
-**Definicija "stigli smo":** ovo stablo + ovaj flow + §21.2 potpunost po akciji
-+ §22 registar bez 🔴. Sve što je u §3 a nije ovdje = višak s planom smrti (§22.5).
+### CILJANA ARHITEKTURA — box-dijagram (end-state; svaka kutija = 1 odgovornost)
+```
+  ┌─ WhatsApp ─┐ ┌─ Viber ─┐ ┌─ M365 Copilot ─┐ ┌─ Web ─┐   VANJSKI KANALI
+  └─────┬──────┘ └────┬────┘ └───────┬────────┘ └───┬───┘
+        │ HTTPS       │ HTTPS        │ MCP           │ HTTPS/sync
+   ┌────▼─────────────▼────┐    ┌────▼─────────┐ ┌──▼──────────┐
+   │  INFOBIP CLOUD        │    │ mcp/server.py│ │ main.py     │
+   │  (WA + Viber kanali)  │    │ (Copilot je  │ │ /chat fasada│
+   └───────────┬───────────┘    │  MOZAK; mi   │ │ (isti engine│
+               │ webhook         │  dajemo alate)│ │  interno)   │
+   ┌───────────▼──────────────┐  └──────┬───────┘ └──────┬──────┘
+   │ INGRESS-NGINX (LB + TLS) │◀── cert-manager           │
+   └───────────┬──────────────┘                           │
+   ┌───────────▼──────────────┐  webhook_simple.py         │
+   │ bot-api  ×2  (HPA 2-4)   │  HMAC → dedup → +channel   │
+   │ stateless, rate-limit/IP │  → XADD                    │
+   └───────────┬──────────────┘                            │
+   ┌───────────▼──────────────┐  queue + cache + state     │
+   │ REDIS  ×1 (AOF,noevict)  │  (SVE s TTL — §5.1)        │
+   └───────────┬──────────────┘                            │
+   ┌───────────▼───────────────────────────────────────────▼──┐
+   │ bot-worker ×1  —  V2Engine (TANKI BOT)                    │
+   │  [boot] auth_preflight (scope introspection + route probe)│
+   │  rate_limiter → pii_scrubber → input_sanitizer            │  SIGURNOST
+   │  identity.resolve(phone) → person_id + TenantId (STRICT)  │  IDENTITET
+   │  crisis_detector · special_intents(GDPR)                  │  ETIKA/PRAVO
+   │  pending nastavci (params / confirm / clarify)            │  STANJE
+   │  llm_router: 30 akcija DIREKTNO → {action|clarify|answer} │  RAZUM (LLM)
+   │  action_validator (anti-halucinacija)                     │  VALIDACIJA
+   │  param coerce · fali required? pitaj · codebook→backend   │  PARAMETRI
+   │  inject person/tenant · [write] mutation_gate "Da/Ne"     │  POTVRDA
+   │  executor ─┐                                              │
+   │  formatter(HR) ← ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐         │  FORMAT
+   └────────────┼─────────────────────────────────────┼───────┘
+   ┌────────────┼───────────┐   ┌──────────────┐      │
+   │ POSTGRES ×1│           │   │ AZURE OPENAI │      │ POST /actions/<name>
+   │ user_mappings          │   │ gpt-4o-mini  │      │ Bearer+x-tenant
+   │ tenant_settings        │   │ (kvota+PIN)  │      │ +Idempotency-Key
+   │ (PITR backup, NE replika)  └──────────────┘      │
+   └────────────────────────┘                         │
+   ┌───────────────────────────────────────────────────▼──────────┐
+   │ M1 CLOUD:  IdentityServer (OAuth) ·  BUSINESS API /actions/*  │
+   │            ·  DOMAIN API (950 granularnih — bot ih NE zove)   │
+   └──────────────────────────────────────────────────────────────┘
+  ×N pravila: api=HPA ×2-4 · worker=×1 (prag >150 msg/min → Redis lock)
+  · Redis=×1 (prag >500 korisnika → managed HA) · Postgres=×1 (backup, ne replika)
+```
+
+**Definicija "stigli smo":** ovo stablo + ovaj flow + ova arhitektura + §21.2
+potpunost po akciji + §22 registar bez 🔴. Sve što je u §3 a nije ovdje = višak
+s planom smrti (§22.5).
 
 ---
 
@@ -119,7 +179,37 @@ poruka (WA / Viber / Copilot / Web)
 
 ---
 
+## §1.5 KRITIČNA ZNANJA — MINE (simptom → uzrok → fix)
+
+**Svaka je STVARNO eksplodirala ili bi eksplodirala u ovom kodu. Graditelju:
+ako ponoviš ijednu, build NIJE nepogrešiv. Sve su pinane testom (kolona dokaz).**
+
+| # | Mina | Simptom u produkciji | Korijenski uzrok | OBAVEZNI fix | Dokaz (test) |
+|---|---|---|---|---|---|
+| M1 | **Error-code klasifikacija** | trajne greške (mrtav API key, 400/422) se retryaju 3× umjesto odmah u DLQ; 429 ignorira Retry-After | worker uspoređivao `error_code` s KRATKIM literalima (`"INVALID_PHONE"`), a servis vraća `ErrorCode` str-enum VRIJEDNOSTI (`"VALIDATION_PHONE_INVALID"`) | `_PERMANENT_SEND_ERRORS` = superset koji sadrži `ErrorCode.*.value` (§7.3); rate-limit grana prima `ErrorCode.RATE_LIMITED.value` | test_worker_edge_fixes (enum-member testovi) |
+| M2 | **Viber recipient hook** | ISPORUČENA Viber poruka se šalje PONOVNO (duplikati) | success-log čitao `payload["to"]`, a Viber `messages[]` payload nema top-level `to` → KeyError NAKON `_messages_sent+=1`, progutan u retry `except` | recipient čitanje je HOOK `_payload_recipient()` koji ViberService overridea (§15.2) | test_viber_service (success-path regresija) |
+| M3 | **Preflight `verified`** | mrtvi kredencijali PROĐU strict gate (bot se digne bez ovlasti) | dead creds daju status 0/-1/transport-error, NE 401; stari gate je gledao samo `not ok` | `PreflightReport.verified` = token dohvaćen BEZ greške I bar jedan PRAVI HTTP odgovor (≥200); strict: `not ok OR not verified` (§13) | test_auth_preflight (verified testovi) |
+| M4 | **Per-channel split prag** | Viber odgovor 1000-4000 znakova stigne TIHO ODREZAN | jedan globalni split prag (4000) > Viber tvrdi limit (1000) → servis truncira | `_CHANNEL_SPLIT_LIMITS = {"whatsapp":4000,"viber":960}` (§7.4) | test_worker_edge_fixes (split prag) |
+| M5 | **GDPR bypass_cache** | stale cache AUTORIZIRA brisanje tuđih podataka | tenant resolve za GDPR čitao keširanu vrijednost | `resolve_tenant_for_phone(phone, bypass_cache=True)` u gdpr-process putu (§6, §19) | test_gdpr_process_endpoint |
+| M6 | **Tenant strict-binding** | korisnik vidi TUĐE podatke / poziv bez tenanta | fallback na env-default TenantId kad /Persons ne vrati TenantId | bez TenantId → korisnik ODBIJEN (enrollment poruka); tenant NIKAD iz env-a ni teksta (§16.0, INV-3) | identity testovi |
+| M7 | **Envelope guessing** | "imaš N putovanja" krivo/prazno; ekstrakcija promaši redove | M1 list-envelope nije uniforman — bot pogađa 7 ključeva (`Data/Result/Items/value`…) i ne zna gdje je `total` | dok M1 ne potvrdi ugovor (§17.2#1): envelope-aware `_prune` + tolerantan fallback; NE tvrditi broj koji ne znaš | formatter testovi |
+| M8 | **Naive datetime TZ** | rezervacija "sutra 9h" završi u 10/11h (±1-2h) — TIHA korupcija | naive ISO poslan bez offseta, backend TZ nepoznat | ugovoriti (§17.1#8): Europe/Zagreb ILI offset format; do potvrde slati Europe/Zagreb i ZAPISATI pretpostavku | — (vanjski ugovor) |
+| M9 | **Idempotency-Key** | mrežni timeout NAKON upisa + retry = DUPLA rezervacija/km | backend ne deduplicira po headeru koji bot šalje | `Idempotency-Key` (UUID stabilan kroz retry) na SVAKU mutaciju + tražiti backend dedup ≥10min (§17.1#4); probe skripta postoji | executor/gateway testovi |
+| M10 | **ACK-tek-nakon-enqueue** | pod crash usred obrade = korisnikov odgovor ZAUVIJEK izgubljen | rani `XACK` makne poruku iz streama prije nego je odgovor siguran | `ack_ok` TEK nakon uspješnog outbound enqueua/DLQ; enqueue fail → poruka OSTAJE pending (restart reclaim) (§7.1) | test_worker_edge_fixes (AUD-3) |
+| M11 | **PII prije LLM-a** | OIB/IBAN procuri u Azure/logove (GDPR proboj) | scrub stavljen POSLIJE LLM poziva ili samo na izlazu | `pii_scrubber` PRIJE ijednog LLM poziva (INV-2, korak §8.9) + PIIScrubFilter na logging | pii testovi |
+| M12 | **actions.json boot** | tiho krivo ponašanje s pola-učitanim katalogom | malformiran/prazan katalog toleriran na bootu | fail-fast: malformiran file / prazna `actions` / akcija bez `ai.description` → `RuntimeError`, pod se NE digne (§11.4) | test_action_registry (F1) |
+| M13 | **filter/useandfor suppress** | LLM izmišlja `Filter` vrijednosti → 422 / krivi rezultati | tehnički query-param izložen LLM-u kao da ga smije puniti | `tool_schema_builder`/`action_registry` SUPPRESSA `filter`/`useandfor` iz LLM sheme (§9) | tool_schema testovi |
+| M14 | **Non-text tek NAKON locka** | Infobip retry slike → dupli "samo tekst" odgovor | non-text refusal poslan PRIJE msg_locka | non-text grana IZA `msg_lock` NX; enqueue fail → release lock, NE ackaj (§7.1) | test_webhook/worker |
+
+> **Pravilo za graditelja:** prije nego zatvoriš modul koji dira slanje, auth,
+> tenant, PII, datetime ili katalog — pročitaj pripadnu minu i dodaj njen test.
+
+---
+
 ## §2 ARHITEKTURA — jedna slika (stvarno stanje + ciljni sloj)
+
+> Čist END-STATE dijagram je u §0.5 (ciljana arhitektura). Ova slika prikazuje
+> DANAŠNJE stanje sa svim slojevima uključujući prijelaznu skelu (§9.2/§22.5).
 
 ```
 ════════════════════════ VANJSKI SVIJET ═══════════════════════════════════
@@ -337,6 +427,70 @@ SKELA-VEZANO (umire s Fazom 4):     AZURE_OPENAI_EMBEDDING_DEPLOYMENT (do F2 RAG
 | `ADMIN_TOKEN_N` | **TI ga generiraš** | `openssl rand -hex 32` po OSOBI (token = identitet u auditu) |
 | `BUSINESS_API_URL` + scope imena | **M1 (Damir)** — sastanak | pitanja B1/B2 u PITANJA_ZA_SEFA docu |
 | TLS cert za webhook | cert-manager (k8s) | automatski Let's Encrypt kroz ingress — ništa ručno |
+
+### 4.3 COPY-PASTE `.env` TEMPLATE (kopiraj → popuni → NIKAD ne commitaj)
+
+> Ovo je TOČAN skup koji `config.py` čita (nakon higijene 2026-07-04). Placeholderi
+> su sigurni (nisu pravi secreti). `openssl rand -hex 32` gdje piše. `# ← ` = izvor.
+
+```bash
+# ── JEZGRA (bez ovih se bot NE diže) ─────────────────────────────────────────
+APP_ENV=development                        # development | staging | production
+DATABASE_URL=postgresql+asyncpg://bot_user:CHANGE_ME@postgres:5432/mobility_db  # ← naš Postgres
+REDIS_URL=redis://redis:6379/0             # ← naš Redis (compose: host=redis; local: localhost)
+MOBILITY_API_URL=https://dev-xx.mobilityone.io/                 # ← M1/Damir
+MOBILITY_AUTH_URL=https://dev-xx.mobilityone.io/sso/connect/token   # ← M1/Damir
+MOBILITY_CLIENT_ID=CHANGE_ME               # ← M1/Damir (service account)
+MOBILITY_CLIENT_SECRET=CHANGE_ME           # ← M1/Damir
+MOBILITY_TENANT_ID=00000000-0000-0000-0000-000000000000  # ← M1/Damir (SAMO probe/smoke; runtime tenant iz /Persons!)
+AZURE_OPENAI_ENDPOINT=https://your-res.openai.azure.com/   # ← Azure Portal → Keys & Endpoint
+AZURE_OPENAI_API_KEY=CHANGE_ME             # ← Azure Portal
+AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o-mini   # ← Azure OpenAI Studio (PIN verziju)
+AZURE_OPENAI_API_VERSION=2024-08-01-preview
+
+# ── KANALI (Infobip) ─────────────────────────────────────────────────────────
+INFOBIP_BASE_URL=xxxxx.api.infobip.com     # ← Infobip portal (tvoja subdomena)
+INFOBIP_API_KEY=CHANGE_ME                  # ← Infobip portal → API keys
+INFOBIP_SENDER_NUMBER=385xxxxxxxxx         # ← Infobip (WhatsApp broj)
+INFOBIP_SECRET_KEY=CHANGE_ME               # ← TI: openssl rand -hex 32; ISTI string i u Infobip webhook config (HMAC shared secret)
+VERIFY_WHATSAPP_SIGNATURE=false            # TODO(prod): true — inače config validator ODBIJA prod start
+# VIBER_SENDER=YourSenderName              # ← Infobip NAKON odobrenja Viber sendera (ops; neset = Viber off → DLQ)
+
+# ── PROD SIGURNOST ───────────────────────────────────────────────────────────
+GDPR_HASH_SALT=CHANGE_ME                   # ← TI: openssl rand -hex 32 — JEDNOM, čuvaš ZAUVIJEK (rotacija = svi hashevi mrtvi)
+ADMIN_TOKEN_1=CHANGE_ME                    # ← TI: openssl rand -hex 32 po OSOBI (= identitet u auditu)
+ADMIN_TOKEN_1_USER=filip.kalcic
+# ADMIN_TOKEN_2=... / ADMIN_TOKEN_2_USER=damir.skrtic
+ADMIN_ALLOWED_IPS=10.0.0.0/8               # CIDR podržan; prazno = bez IP filtera
+
+# ── DEFAULTI (ne diraj bez mjerenja; navedeni radi potpunosti) ───────────────
+DB_POOL_SIZE=5
+DB_MAX_OVERFLOW=10
+DB_POOL_RECYCLE=3600
+REDIS_MAX_CONNECTIONS=100
+ADMIN_RATE_LIMIT_PER_MINUTE=30
+LOG_LEVEL=INFO                             # prod: WARNING
+AUTH_PREFLIGHT=1                           # 0=off; AUTH_PREFLIGHT_STRICT=1 → fail-closed (§13)
+V2_TELEMETRY=1
+V2_TELEMETRY_BACKEND=stdout+redis
+
+# ── OPCIONALNO / PROD ────────────────────────────────────────────────────────
+# BOT_DATABASE_URL=...    # dual-user: bot = ograničeni DB user (fallback: DATABASE_URL)
+# ADMIN_DATABASE_URL=...  # dual-user: admin = puni pristup
+# WORKER_HEARTBEAT_FILE=/tmp/worker.beat   # k8s exec livenessProbe
+# ANCHOR_CACHE_PATH=/data/anchor_cache.json   # ⚠ SKELA (umire Faza 4)
+
+# ── F1 / BUDUĆE (tek kad /actions postoji — vidi PITANJA_ZA_SEFA) ────────────
+# BUSINESS_API_URL=https://.../            # gdje /actions živi (default: MOBILITY_API_URL)
+# V2_USE_ACTIONS=0                         # 1 = action-mode iza flaga (kill-switch=0)
+# MOBILITY_REQUIRED_SCOPES=fleet.read fleet.write   # preflight ih provjerava
+# CONTRACT_BASE_URL=... CONTRACT_BEARER_TOKEN=... CONTRACT_ALLOW_MUTATIONS=0  # samo CI/dev
+```
+
+**Dev → prod razlike (obavezno prije go-livea):** `APP_ENV=production` ·
+`VERIFY_WHATSAPP_SIGNATURE=true` (validator ga forsira) · `LOG_LEVEL=WARNING` ·
+svi `CHANGE_ME` popunjeni pravim secretima iz k8s Secreta (ne iz filea) ·
+`AUTH_PREFLIGHT_STRICT=1` na deploy gateu · rotirani SVI ngrok-era secreti (§22#16).
 
 ---
 
@@ -1210,3 +1364,49 @@ NIKAD ne brisati (bez obzira na fazu): crisis_detector · pii_scrubber ·
    i zapiši pretpostavku.
 5. Definicija gotovog = §21.2. Samoocjena: ako IJEDNA stavka §1 ili §21 ne
    stoji, sustav NIJE gotov — nastavi dok ne stoji.
+
+### §25.6 SAMOPROVJERA GRADITELJA (obavezna rubrika)
+
+**Pokreni NAKON svakog koraka §23.1 i PRIJE nego proglasiš "gotovo". Svako "NE"
+= STOP i popravi; ne nastavljaj s crvenim odgovorom.**
+
+```
+[ ] Odabrao sam build path (PATH T ako /actions postoji; inače PATH P uz potvrdu)?
+[ ] Suite tog koraka je ZELENA (ne "napisat ću testove kasnije")?
+[ ] test_architecture.py manifest ažuriran ako sam dodao/maknuo v2 modul?
+
+── INVARIJANTE (§1) — svaka mora vrijediti za kod koji sam upravo napisao ──
+[ ] Nijedan write se ne izvršava bez Da/Ne potvrde (INV-1)?
+[ ] PII scrub je PRIJE ijednog LLM poziva i prije logova (INV-2)?
+[ ] Nijedan API poziv bez TenantId iz /Persons; nigdje env-default tenant (INV-3)?
+[ ] Crisis/GDPR terminalni putevi netaknuti (INV-4/5)?
+[ ] Svaki novi izlaz vodi u poruku ILI DLQ+alarm; dodan redak u §21.3 (INV-6)?
+[ ] Idempotencija 3 razine + Idempotency-Key na mutacijama (INV-7)?
+[ ] Redoslijed poruka istog usera očuvan (INV-8)?
+[ ] Fail-closed rubovi (HMAC 401; preflight ok AND verified) (INV-10)?
+[ ] AI ne vidi interne parametre (inject/backend, ne ai.parameters) (INV-11)?
+
+── MINE (§1.5) — jesam li dirao slanje/auth/tenant/PII/datetime/katalog? ──
+[ ] Ako slanje: error-code je ErrorCode.value ne literal (M1); recipient je hook (M2)?
+[ ] Ako auth: strict traži verified, ne samo ok (M3)?
+[ ] Ako kanal: split prag je per-channel (M4)?
+[ ] Ako GDPR: resolve ide bypass_cache=True (M5)?
+[ ] Ako datetime: TZ pretpostavka zapisana + ugovorena (M8)?
+[ ] Ako katalog: boot fail-fast na malformiran actions.json (M12)?
+[ ] Ako LLM shema: filter/useandfor suppressani (M13)?
+
+── HIGIJENA ──
+[ ] Nisam dodao config var bez živog potrošača (test_dead_config_vars)?
+[ ] Nisam ugradio ništa iz §22.5 kao da je cilj (skela ≠ feature)?
+[ ] Vanjski ugovor nepotvrđen → gradim tolerantno + zapisao pretpostavku u DECISIONS.md?
+[ ] ruff čist?
+
+── PRIJE "GOTOVO" (cijeli sustav) ──
+[ ] SVIH ~30 akcija ima 6 kvačica iz §21.2 (schema→fixture→live→smoke→e2e→bench)?
+[ ] Agregat benchmark ≥ 90/97/0 na oba seeda?
+[ ] Showstopper registar (§22) bez ijednog 🔴?
+[ ] verify_production_readiness.py PASS uz live kredencijale?
+[ ] Dev→prod razlike iz §4.3 primijenjene (HMAC, APP_ENV, secreti, strict preflight)?
+```
+
+**Ako je i jedan red iznad crven, tvoja samoocjena NIJE 10/10 — nastavi raditi.**
