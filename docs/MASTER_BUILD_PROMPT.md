@@ -1,0 +1,674 @@
+# MASTER BUILD PROMPT — MobilityONE Conversation Engine (ciljni sustav)
+
+> **⛔ OVO JE TVOJ SYSTEM PROMPT, GRADITELJU (AI ili programer).** Iz OVOG JEDNOG
+> dokumenta izgradi kompletan, produkcijski **Conversation Engine** za
+> MobilityONE. Dokument je samostojeći: misija, invarijante, kritična znanja
+> (mine!), ciljana arhitektura, struktura, svi ugovori (config / SQL shema /
+> API), flowovi, kod-primjeri, testni i deploy plan.
+>
+> **PROTOKOL (obavezan):**
+> 1. Pročitaj redom: §0 → §0.5 (CILJANA ARHITEKTURA) → §1 (invarijante) →
+>    §1.5 (mine) → §1.6 (build-integrity) → §4.5 (config disciplina) — pa gradi.
+> 2. Nakon SVAKOG koraka: testovi tog koraka zeleni + samoprovjera §25.
+> 3. Nešto nije specificirano? Konzervativni default + ZAPIŠI odluku u
+>    DECISIONS.md. Nešto proturječi? §0.5 / §1 / §1.5 pobjeđuju sve ostalo.
+> 4. NIKAD ne isporuči korak koji krši ijedan redak §1, ponavlja minu §1.5, ili
+>    pada na build-integrity gateu §1.6 / §4.5.
+> 5. Gotovo = §21, ne tvoj osjećaj. Samoocjena <10/10 → nastavi raditi.
+>
+> **Verzija:** v3.0 (2026-07) — ciljna arhitektura po reviewu vlasnika:
+> **jedan `mobilityone-ai` servis na postojećem AKS-u, SQL `ai` schema u
+> postojećoj bazi, BEZ Redisa / zasebnog workera / PostgreSQL / KEDA** — ali sav
+> mozak, mine i ugovori iz prethodnih verzija PREŽIVLJAVAJU, samo su re-homani
+> na jednostavniju infrastrukturu. Radikalno pojednostavljenje; kompleksnost se
+> dodaje TEK kad stvarno ima smisla.
+
+---
+
+## §0 MISIJA
+
+Korisnik (vozač flote) pošalje poruku prirodnim jezikom kroz bilo koji kanal
+(WhatsApp, Teams, Web Chat, M365 Copilot): *"pukla mi je guma na ZG-1234-AB"*,
+*"rezerviraj auto sutra 9-15"*, *"pokaži moja zadnja putovanja"*. Sustav mora:
+
+1. **prepoznati namjeru** (1 od ~30 poslovnih akcija),
+2. **pozvati TOČNO pravi MobilityONE API** (param punjenje, šifrarnici,
+   ekstrakcija iz responsa — sve točno),
+3. **odgovoriti na hrvatskom**, sažeto i utemeljeno SAMO na podacima iz API-ja.
+
+**Podjela odgovornosti (pravilo koje sve oblikuje):**
+```
+ADAPTERI          = pretvaraju kanal-specifičan format ↔ interni model
+CONVERSATION ENG. = jezik + sigurnost + JEDNA čista akcija po turnu  (mozak)
+MOBILITYONE API   = poslovna pravila + podaci (Fleet backend)
+```
+
+**Načelo #1 (od vlasnikova reviewa):** ovo NIJE "WhatsApp bot". Ovo je
+**Conversation Engine**; kanali su samo adapteri. Svi adapteri zovu isti
+`ConversationService`. To spašava mjesece refaktoringa kad dođu Teams/Copilot/Web.
+
+---
+
+## §0.5 CILJANA ARHITEKTURA (NORMATIVNA)
+
+```
+   WhatsApp   Teams   Web Chat   M365 Copilot   (future channels)
+       │        │         │            │
+       ▼        ▼         ▼            ▼
+   ┌───────────────────────────────────────────────┐
+   │  mobilityone-ai  (jedan servis, postojeći AKS) │
+   │  ingress: /api/ai/*                            │
+   │                                                │
+   │  ┌─ ADAPTERI (kanal ↔ interni model) ────────┐ │
+   │  │ Infobip · Teams · Copilot · WebChat        │ │
+   │  └───────────────────┬────────────────────────┘ │
+   │            upiši u ai.Message → vrati 200        │
+   │  ┌───────────────────▼────────────────────────┐ │
+   │  │ OUTBOX PETLJA (background, isti proces)     │ │
+   │  │   vadi ai.Message(status=received)          │ │
+   │  └───────────────────┬────────────────────────┘ │
+   │  ┌───────────────────▼────────────────────────┐ │
+   │  │ ConversationService  (MOZAK)                │ │
+   │  │  safety → identitet → routing(LLM) →        │ │
+   │  │  validacija → params → Da/Ne → izvršenje →  │ │
+   │  │  formatter(HR)                              │ │
+   │  └──────┬───────────────────────┬──────────────┘ │
+   └─────────┼───────────────────────┼────────────────┘
+             │                       │
+        Azure OpenAI          MobilityONE API
+      (odluka + format)     (Bearer + x-tenant + Idempotency-Key)
+             │                       │
+   ┌─────────▼───────────────────────▼────────────────┐
+   │  SQL SERVER (postojeća baza)                      │
+   │    dbo.*          (Fleet — Boris/core tim)        │
+   │    ai.*           (NAŠA schema — §5)              │
+   └───────────────────────────────────────────────────┘
+
+   Postojeći AKS dijeli:  Key Vault · Managed Identity · App Insights
+                          isti ingress · isti CI/CD · isti monitoring
+```
+
+**Deployment topologija (na postojećem AKS-u):**
+```
+mobilityone-api        (Fleet core — postoji)
+mobilityone-forms      (postoji)
+identityserver         (OAuth — postoji)
+mobilityone-ai   ⟵ NOVO (naš servis; Boris skele deployment, standardno)
+     │
+SQL Server:  dbo.*  +  ai.*   (jedna baza, dvije scheme)
+Azure OpenAI · Key Vault · App Insights
+```
+
+**Zašto zaseban `mobilityone-ai` deployment a ne u postojećem API-ju:** AI kod
+će vrlo brzo postati drugačiji od core Fleet logike — zaseban lifecycle, zaseban
+scaling, zaseban CI. ALI dijeli sve ostalo (baza, ingress, monitoring, CI/CD).
+
+**URL struktura:**
+```
+/api/ai/webhooks/infobip     ← WhatsApp/Viber inbound
+/api/ai/webhooks/teams       ← Teams inbound
+/api/ai/chat                 ← Web Chat (sync)
+/api/ai/admin                ← admin (token-gated)
+/api/ai/copilot   (kasnije)  ← M365 Copilot
+/api/ai/mcp       (kasnije)  ← MCP server
+```
+Dodavanje kanala = novi adapter + nova ruta, BEZ promjene osnovne arhitekture.
+
+**Što NAMJERNO NEMA** (nije opravdano za ovu veličinu; dodaje se tek kad ima
+smisla): PostgreSQL · Redis · KEDA · zaseban worker-deployment · zaseban
+admin-api servis · drugi AKS · AGIC. Trajnost/red/idempotencija koje je Redis
+nekad davao **žive u SQL-u** (outbox, §5) — funkcija se seli, ne briše (§1.5 M10).
+
+---
+
+## §1 NEPOVREDIVI INVARIJANTI (krše li se — build je neispravan)
+
+| # | Invarijanta | Mehanizam (v3.0) |
+|---|---|---|
+| 1 | **Nijedna mutacija bez eksplicitne potvrde korisnika** (Da/Ne) — LLM *bira* akciju, nikad ne *izvršava* write sam | mutation_gate; echo parametara prije slanja |
+| 2 | **PII se scrubba PRIJE ijednog LLM poziva** (OIB/IBAN/telefon → [REDACTED]) i prije logova | pii_scrubber; PII filter na App Insights/logging |
+| 3 | **Tenant strict-binding**: identitet iz kanala → person_id + TenantId iz MobilityONE; bez TenantId NEMA API poziva; tenant NIKAD iz env-defaulta ni teksta | identity.resolve; x-tenant header |
+| 4 | **Krizni signal (suicid) → hotline poruka** (Plavi telefon 116 123), terminal, prije routinga | crisis_detector |
+| 5 | **GDPR intenti** (brisanje/izvoz) → audit zapis (`ai.Feedback`/audit) + definiran postupak | special_intents + audit |
+| 6 | **Korisnik UVIJEK dobije odgovor ILI poruka završi kao `ai.Message.status=failed` + alarm** — nikad tiha smrt (§21) | outbox status + App Insights alert |
+| 7 | **Idempotencija**: dedup inbound (unique constraint) + `Idempotency-Key` na MobilityONE mutacije + outbound "poslano" status | §5 SQL ograničenja |
+| 8 | **Redoslijed poruka istog korisnika** se čuva | outbox obrađuje po `created_at` per user + claim |
+| 9 | **Prompt-injection obrana** na ulazu (input_sanitizer) i na izlazu iz API podataka (output_sanitizer) | postoji |
+| 10 | **Fail-closed rubovi**: HMAC bez tajne/potpisa → 401; auth strict gate traži POZITIVNU verifikaciju (§13) | webhook adapter, auth_preflight |
+| 11 | **AI ne vidi interne parametre** (person_id, tenant_id = inject; šifre = backend/resolver) — AI puni SAMO što korisnik izgovori | actions.json granica §11 |
+| 12 | **Svaki novi izlazni put iz koda = novi redak u §21 + test** | CI pravilo |
+
+---
+
+## §1.5 KRITIČNA ZNANJA — MINE (simptom → uzrok → fix)
+
+**Svaka je STVARNO eksplodirala ili bi eksplodirala. Ponoviš li ijednu, build
+NIJE nepogrešiv. (Naslijeđeno iz žive implementacije; M10/M14 re-homani s Redisa
+na SQL.)**
+
+| # | Mina | Simptom | Uzrok | OBAVEZNI fix |
+|---|---|---|---|---|
+| M1 | **Error-code klasifikacija** | trajne greške (mrtav token, 400/422) se retryaju umjesto odustaju; 429 ignorira Retry-After | usporedba `error_code` s KRATKIM literalom umjesto pravom `ErrorCode` VRIJEDNOSTI (`"VALIDATION_PHONE_INVALID"`) | permanent skup sadrži `ErrorCode.*.value`; rate-limit grana prima pravu vrijednost |
+| M2 | **Adapter recipient hook** | isporučena poruka se šalje PONOVNO (duplikati) | success-log/parse čita polje kojeg kanal-specifičan payload nema (Viber `messages[]` nema top-level `to`) → KeyError NAKON slanja, progutan | recipient/parse je HOOK po adapteru, ne pretpostavka jednog oblika |
+| M3 | **Auth preflight `verified`** | mrtvi kredencijali PROĐU startup | dead creds daju status 0/transport-error, NE 401 | strict gate traži POZITIVAN dokaz: token dohvaćen + bar jedan pravi HTTP odgovor (≥200) — §13 |
+| M4 | **Per-channel duljina** | odgovor stigne TIHO ODREZAN | jedan globalni prag > kanalov limit | limit po adapteru (WhatsApp 4096, Viber 1000, Teams/Web drugo) |
+| M5 | **GDPR svježe čitanje** | stale stanje AUTORIZIRA brisanje | GDPR put čitao keširano/staro | GDPR resolve/binding čita SVJEŽE iz izvora, ne iz session cachea |
+| M6 | **Tenant strict-binding** | korisnik vidi TUĐE podatke | fallback na env-default tenant kad izvor ne vrati TenantId | bez TenantId → korisnik ODBIJEN; NIKAD env/tekst (INV-3) |
+| M7 | **Envelope guessing** | "imaš N stavki" krivo/prazno | MobilityONE list-envelope nije uniforman (pogađa `Data/Result/Items/value`…) i ne zna gdje je `total` | dok backend ne potvrdi ugovor (§17): envelope-aware parse + NE tvrdi broj koji ne znaš |
+| M8 | **Naive datetime TZ** | rezervacija ±1-2h (tiha korupcija) | naive ISO bez offseta, backend TZ nepoznat; parser računa u Europe/Zagreb a test/kod negdje u UTC | ugovoriti TZ (§17); interno UVIJEK Europe/Zagreb i zapisati; testovi u istoj zoni kao parser |
+| M9 | **Idempotency-Key** | timeout NAKON upisa + retry = DUPLA mutacija | backend ne deduplicira po headeru | `Idempotency-Key` (UUID stabilan kroz retry) na SVAKU mutaciju; tražiti backend dedup ≥10min (§17) |
+| M10 | **Outbox "gotovo tek nakon slanja"** (bivši ACK-nakon-enqueue) | pod restart usred obrade = odgovor izgubljen | poruka označena `answered` PRIJE nego je odgovor stvarno poslan | `ai.Message.status`: `processing`→`answered` TEK nakon uspješnog outbound; na startu re-obradi zaglavljene `processing` |
+| M11 | **PII prije LLM-a** | OIB/IBAN procuri u Azure/logove | scrub POSLIJE LLM-a ili samo na izlazu | `pii_scrubber` PRIJE ijednog LLM poziva (INV-2) |
+| M12 | **actions.json boot** | tiho krivo s pola-učitanim katalogom | malformiran katalog toleriran | fail-fast: malformiran/prazan → servis se NE digne (§11) |
+| M13 | **filter/useandfor suppress** | LLM izmišlja `Filter` → 422 | tehnički query-param izložen LLM-u | suppress iz LLM sheme (§9) |
+| M14 | **Dedup PRIJE obrade** (bivši non-text-nakon-locka) | Infobip retry → dupli odgovor | dedup se radio prekasno | unique constraint na `ai.Message(channel, provider_message_id)` — duplikat odbijen na upisu, prije obrade |
+
+> **Pravilo:** prije nego zatvoriš dio koji dira slanje, auth, tenant, PII,
+> datetime, katalog ili outbox — pročitaj pripadnu minu i dodaj njen test.
+
+---
+
+## §1.6 BUILD-INTEGRITY PRAVILA — protiv NEPOTPUNOG / VIŠKA / SLOMLJENOG builda
+
+Svako ima GATE (mehanizam koji hvata kršenje). Kršenje IJEDNOG = build NIJE gotov.
+
+**A) ANTI-NEPOTPUN**
+- BI-1: Sposobnost je "gotova" SAMO uz END-TO-END dokaz (poruka uđe → točan odgovor izađe), NIKAD "modul postoji". Gate: e2e test po sposobnosti.
+- BI-2: Svaki dio stanja koji se ZAPIŠE ima i ČITAČA (pending params/mutation/clarify u `ai.UserSession`). Gate: grep/test da svaki write ima read.
+- BI-3: Svaka akcija u `actions.json` ima: izvršni put + `inject` + (ako mutation) confirm. Gate: test da executor rutira bez greške; mutation bez confirma = fail.
+- BI-4: Svaki podatak koji sloj PROIZVEDE ima POTROŠAČA (channel→adapter, tenant→x-tenant, `total`→formatter). Gate: šav-test.
+- BI-5: Svaki modul napisan da se pozove NA STARTU MORA biti pozvan (auth_preflight; outbox loop se STARTA). Gate: startup test.
+
+**B) ANTI-VIŠAK**
+- BI-6: Svaki config field ima čitača IZVAN config-a, preko `settings`. Gate: dead-config test.
+- BI-7: Svaki modul ima test; svaki test ima modul. Gate: enforced manifest test.
+- BI-8: Svaka `ai.*` tablica ima ŽIVOG pisca. Gate: grep-test model→writer.
+- BI-9: NIJEDAN artefakt iz "izbačeno" liste (Redis klijent, zaseban worker, k8s Redis/Postgres manifesti, KEDA). Gate: grep da ne postoje.
+
+**C) ANTI-SLOMLJEN-FLOW**
+- BI-10: Svaki `ai.Message`/`ai.UserSession` zapis ima definiran skup polja (§5) + čitač s DEFAULTOM. Gate: kontraktni test.
+- BI-11: `ErrorCode` se klasificira po VRIJEDNOSTI ne literalu (M1). Gate: test s pravim vrijednostima.
+- BI-12: Adapter je JEDINO mjesto koje zna kanal-specifičan format; ConversationService je channel-agnostičan. Gate: grep da engine ne importa Infobip/Teams SDK.
+- BI-13: Svaki ŠAV ima test: adapter→ai.Message · outbox→engine · engine→MobilityONE(auth) · engine→adapter(send). Gate: e2e/kontraktni test.
+- BI-14: Nijedan izlaz ne "propušta šutke" — vodi u odgovor ILI `status=failed`+alarm, i ima redak u §21. Gate: garancija-odgovora tablica raste sa svakim izlazom.
+
+---
+
+## §2 CONVERSATIONSERVICE + ADAPTERI
+
+**Ključni dizajn: mozak ne zna koji je kanal.** Adapter pretvara kanal-specifičan
+inbound u interni `InboundMessage`, i interni `OutboundReply` natrag u
+kanal-specifičan format.
+
+```python
+# interni model — jedini jezik koji ConversationService razumije
+@dataclass
+class InboundMessage:
+    channel: str            # "whatsapp" | "viber" | "teams" | "web" | "copilot"
+    sender: str             # kanal-specifičan ID (telefon / AAD id / session id)
+    text: str
+    provider_message_id: str
+    raw: dict               # original payload (za debug/audit)
+
+@dataclass
+class OutboundReply:
+    channel: str
+    recipient: str
+    text: str
+    idempotency_key: str
+
+class ChannelAdapter(Protocol):
+    def parse_inbound(self, raw: dict) -> list[InboundMessage]: ...
+    async def send(self, reply: OutboundReply) -> SendResult: ...
+    def verify_signature(self, body: bytes, headers: dict) -> bool: ...
+    MAX_LEN: int            # kanalov limit (M4)
+
+class ConversationService:            # MOZAK — channel-agnostičan (§8)
+    async def process(self, msg: InboundMessage) -> OutboundReply | None: ...
+```
+
+Adapteri (`adapters/infobip.py`, `teams.py`, `webchat.py`, `copilot.py`) su
+JEDINO mjesto s kanal-specifičnim znanjem. Dodavanje kanala = novi adapter koji
+implementira `ChannelAdapter`, i nova ruta `/api/ai/webhooks/<kanal>`.
+
+---
+
+## §3 STRUKTURA REPOA (jedan servis)
+
+```
+mobilityone-ai/
+├── config.py                       # pydantic Settings (env §4; secreti iz Key Vault)
+├── main.py                         # FastAPI app: /api/ai/* rute + startup (outbox loop, preflight)
+├── db/
+│   ├── schema.sql                  # ai.* DDL (§5) — ILI EF migracija (Borisov standard)
+│   └── repository.py               # ai.Message / ai.UserSession / ai.ToolCallLog pristup
+├── adapters/
+│   ├── base.py                     # ChannelAdapter Protocol + InboundMessage/OutboundReply
+│   ├── infobip.py                  # WhatsApp + Viber (HMAC, parse, send; M2/M4)
+│   ├── teams.py · webchat.py · copilot.py
+├── outbox/
+│   └── loop.py                     # background: vadi ai.Message(received) → process → send (§7)
+├── engine/                         # MOZAK (ConversationService) — channel-agnostičan
+│   ├── conversation_service.py     # orkestrira slojeve (§8)
+│   ├── safety/  rate_limiter.py · pii_scrubber.py · input_sanitizer.py · output_sanitizer.py · crisis_detector.py
+│   ├── identity.py · special_intents.py
+│   ├── routing/ llm_router.py · action_registry.py · action_validator.py
+│   ├── params/  param_ui.py · type_resolver.py     (stanje u ai.UserSession)
+│   ├── mutation_gate.py
+│   ├── executor.py                 # poziv MobilityONE API-ja (§12)
+│   ├── formatter.py                # JSON → hrvatski (§14)
+│   └── api_error_translator.py
+├── mobilityone/
+│   ├── api_gateway.py              # HTTP + auth + x-tenant + Idempotency-Key + circuit breaker
+│   ├── token_manager.py            # OAuth (Managed Identity ILI client_credentials)
+│   └── auth_preflight.py           # scope introspection + route probe (§13)
+├── config/actions.json             # ~30 akcija (§11)
+└── tests/                          # po modulu + e2e razgovori + contract fixturei
+```
+
+---
+
+## §4 KONFIGURACIJA (env; secreti iz Key Vaulta)
+
+| Var | Obavezno | Značenje |
+|---|---|---|
+| `SQL_CONNECTION_STRING` | ✅ | postojeća baza (schema `ai`); iz Key Vaulta |
+| `MOBILITYONE_API_URL` | ✅ | Fleet API host (`dev-k1…io`) |
+| `MOBILITYONE_AUTH_URL` / `CLIENT_ID` / `CLIENT_SECRET` | ✅¹ | OAuth (¹ ili Managed Identity — §12) |
+| `AZURE_OPENAI_ENDPOINT` / `_API_KEY`² | ✅ | LLM (² preferirano Managed Identity umjesto keya) |
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | ✅ | ime chat deploymenta (PIN verziju) |
+| `INFOBIP_BASE_URL` / `_API_KEY` / `_SECRET_KEY` | WA/Viber | Infobip account + HMAC tajna |
+| `INFOBIP_SENDER_NUMBER` | WA | WhatsApp sender broj |
+| `VIBER_SENDER` | Viber | registrirano IME sendera (ne broj); neset = Viber off |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | ✅ prod | App Insights (telemetrija + alarmi) |
+| `AUTH_PREFLIGHT` / `_STRICT` | default log-only | §13 |
+| `MOBILITY_REQUIRED_SCOPES` | opc. | scopeovi koje token MORA nositi |
+| `ADMIN_TOKEN_1..N` + `_USER` | admin | admin rute (jedini gate) |
+| `APP_ENV` | ✅ | `production` aktivira validatore (npr. HMAC obavezan) |
+
+**Sve tajne iz Key Vaulta preko Managed Identity — NIKAD u kodu ni gitu (§4.5).**
+
+### 4.5 CONFIG DISCIPLINA (no-hardcoding — precizno, NIJE "sve u env")
+| Vrsta | Ide u | Nikad |
+|---|---|---|
+| Tajne (keys, secreti, connection string, HMAC salt) | **Key Vault / env** | kod, git, placeholder-only u `.env.example` |
+| Hostovi / URL / per-OKOLINA vrijednosti | **env** (`settings`) | hardkodirano |
+| Ponašanje / algoritamske konstante (timeouti, pragovi) | **kod** | env (osim ako treba per-deploy tuning) |
+| Nova config var | env **samo uz živog čitača** | "za svaki slučaj" (mrtav knob) |
+
+Gate: secret-scan u CI; grep-lint na hardkodirane hostove/URL-ove; dead-config
+test; svaki env potrošač preko `settings` (ne raštrkani `os.environ`).
+
+---
+
+## §5 SQL `ai` SCHEMA + OUTBOX (srce trajnosti — zamjena za Redis)
+
+**Prednost sheme u postojećoj bazi:** postojeći backupi, maintenance, monitoring,
+zero DBA posla.
+
+```sql
+-- ai.Message = DURABLE INBOX+OUTBOX (zamjena za Redis stream + outbound queue)
+CREATE TABLE ai.Message (
+    Id                  BIGINT IDENTITY PRIMARY KEY,
+    ConversationId      BIGINT NULL REFERENCES ai.Conversation(Id),
+    Channel             NVARCHAR(20)  NOT NULL,     -- whatsapp/viber/teams/web
+    Direction           NVARCHAR(10)  NOT NULL,     -- inbound / outbound
+    ProviderMessageId   NVARCHAR(128) NULL,
+    Sender              NVARCHAR(128) NULL,
+    Recipient           NVARCHAR(128) NULL,
+    Text                NVARCHAR(MAX) NULL,
+    Status              NVARCHAR(20)  NOT NULL,      -- received→processing→answered / failed
+    Error               NVARCHAR(MAX) NULL,
+    IdempotencyKey      NVARCHAR(128) NULL,
+    TenantId            NVARCHAR(64)  NULL,
+    CreatedAt           DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    ProcessedAt         DATETIME2     NULL,
+    CONSTRAINT UQ_inbound_dedup UNIQUE (Channel, ProviderMessageId)  -- M14 dedup
+);
+CREATE INDEX IX_Message_pending ON ai.Message(Status, CreatedAt) WHERE Direction='inbound';
+
+CREATE TABLE ai.Conversation ( Id BIGINT IDENTITY PK, Channel NVARCHAR(20),
+    Sender NVARCHAR(128), TenantId NVARCHAR(64), StartedAt DATETIME2, LastActivityAt DATETIME2 );
+
+-- ai.UserSession = STANJE RAZGOVORA (zamjena za Redis pending_* + conv_history)
+CREATE TABLE ai.UserSession (
+    Sender      NVARCHAR(128) PRIMARY KEY,
+    TenantId    NVARCHAR(64),
+    State       NVARCHAR(MAX),      -- JSON: {pending_params|pending_mutation|pending_clarify, history[-5:]}
+    ExpiresAt   DATETIME2,          -- lazy cleanup (zamjena za Redis TTL)
+    UpdatedAt   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE ai.ToolCallLog (    -- telemetrija + audit (zamjena za routing:accuracy_log)
+    Id BIGINT IDENTITY PK, Sender NVARCHAR(128), TenantId NVARCHAR(64),
+    Action NVARCHAR(64), Params NVARCHAR(MAX), Result NVARCHAR(20),
+    LatencyMs INT, CreatedAt DATETIME2 DEFAULT SYSUTCDATETIME() );
+
+CREATE TABLE ai.Feedback (       -- "nije točno" korekcije (bivši hallucination_reports, sad ŽIV)
+    Id BIGINT IDENTITY PK, MessageId BIGINT, WrongAction NVARCHAR(64),
+    CorrectAction NVARCHAR(64), Note NVARCHAR(MAX), CreatedAt DATETIME2 DEFAULT SYSUTCDATETIME() );
+
+CREATE TABLE ai.Channel (        -- registar kanala (sender→config)
+    Channel NVARCHAR(20) PRIMARY KEY, Enabled BIT, Config NVARCHAR(MAX) );
+```
+
+### Mapiranje: što je Redis radio → gdje ide sad
+| Redis | v3.0 (SQL / in-memory) |
+|---|---|
+| stream (red) | `ai.Message.Status` (received→processing→answered) |
+| dedup `wh_dedup` | `UQ_inbound_dedup` unique constraint (M14) |
+| idempotencija slanja `sent:` | `ai.Message` outbound + `IdempotencyKey` unique |
+| pending_* + conv_history | `ai.UserSession.State` (JSON) + `ExpiresAt` |
+| redoslijed po korisniku | outbox: obradi po `CreatedAt` per Sender + claim |
+| rate-limit / circuit-breaker | **in-memory** (ok za 1 pod; skalira li se → per-pod) |
+| telemetrija | `ai.ToolCallLog` |
+| DLQ + garancija | `Status=failed` + `Error` + App Insights alarm |
+
+**Čišćenje isteklih sesija** (zamjena za Redis auto-TTL): lazy (`WHERE ExpiresAt >
+NOW()` na čitanju) + periodični `DELETE` job (scheduled task ili App Insights-triggered).
+
+---
+
+## §6 ULAZNI RUB — webhook adapteri
+
+```python
+# main.py — jedna ruta po kanalu, isti obrazac
+@app.post("/api/ai/webhooks/infobip")
+async def infobip_webhook(request: Request):
+    raw = await request.body()
+    if not adapters["infobip"].verify_signature(raw, request.headers):   # HMAC, fail-closed (INV-10)
+        raise HTTPException(401)
+    for msg in adapters["infobip"].parse_inbound(json.loads(raw)):        # → InboundMessage[]
+        await repo.insert_inbound(msg)   # UPSERT s UQ dedup (M14); duplikat = no-op
+    return {"status": "queued"}          # brz 200 — obrada ide async (§7)
+```
+HMAC, dedup, i parse žive u adapteru. Infobip očekuje brz `200`; odgovor se šalje
+ZASEBNO (§7) — zato je async decoupling OBAVEZAN čak i u jednom servisu.
+
+---
+
+## §7 OUTBOX PETLJA (async obrada bez Redisa/workera)
+
+```python
+# outbox/loop.py — background task startan iz main.py lifespan
+async def outbox_loop(repo, engine, adapters, shutdown):
+    while not shutdown.is_set():
+        msg = await repo.claim_next_inbound()          # UPDATE TOP(1) ... SET Status='processing'
+        if msg is None:                                #   ORDER BY CreatedAt  (redoslijed, INV-8)
+            await asyncio.sleep(0.5); continue          #   OUTPUT claimed row  (atomičan claim)
+        try:
+            reply = await engine.process(msg)           # MOZAK (§8), budžet 90s
+            if reply:
+                res = await adapters[reply.channel].send(reply)   # tek SAD šalji
+                await repo.mark_answered(msg, reply, res)         # M10: answered TEK nakon slanja
+            else:
+                await repo.mark_answered(msg, None, None)
+        except Exception as e:
+            await repo.mark_failed(msg, e)              # Status=failed + Error → App Insights alarm
+            log_exception("engine_error", e)
+# STARTUP RECOVERY: na bootu resetiraj Status='processing'→'received' (zaglavljeni od restarta)
+```
+- **Trajnost:** poruka je u `ai.Message` prije `200` — restart je ne gubi.
+- **Idempotencija:** `answered` tek nakon uspješnog slanja (M10); dedup na upisu (M14).
+- **Redoslijed:** claim po `CreatedAt` per Sender.
+- **Garancija odgovora:** svaka poruka završi `answered` ILI `failed`+alarm (INV-6, §21).
+
+---
+
+## §8 CONVERSATIONSERVICE — master tok (MOZAK; channel-agnostičan)
+
+```
+engine.process(InboundMessage) — budžet 90s (timeout → HR poruka + status)
+━ SAFETY ━ rate_limiter (in-mem) · pii_scrubber (PRIJE LLM-a!) · input_sanitizer
+           · crisis_detector (suicid→hotline, terminal)
+━ IDENTITET ━ identity.resolve(channel, sender) → person_id + TenantId
+           (STRICT: bez TenantId → enrollment poruka, terminal; §16)
+           · special_intents (GDPR/welcome/handover, terminal)
+━ STANJE ━ pending nastavci iz ai.UserSession (params / Da-Ne / izbor 1-2-3)
+━ ODLUKA ━ llm_router: 30 akcija direktno → {action | clarify | answer}
+           (Azure retry ×3; total fail → siguran HR fallback)
+━ PARAMS ━ action_validator (anti-halucinacija) · coercion (HR datumi→ISO, Europe/Zagreb)
+           · fali required → pitaj + zapamti u ai.UserSession · codebook → backend/type_resolver
+           · inject person_id/tenant_id (AI ih NE generira)
+━ WRITE ━ policy.mutation → echo parametara + "Potvrđuješ? (Da/Ne)" → ai.UserSession
+           · "Da" → exec (anti-replay: claim/status) · "Ne" → clear
+━ EXEC ━ executor → MobilityONE API (Bearer + x-tenant + Idempotency-Key; §12)
+           2xx→dalje · 4xx→api_error_translator→HR · 5xx/timeout→generička HR, pending ostaje
+━ IZLAZ ━ formatter → HR (grounding, izlazni PII scrub, točan `total`)
+           · append u ai.UserSession.history (zadnjih 5) · ai.ToolCallLog zapis
+           · return OutboundReply → outbox šalje preko adaptera
+```
+
+---
+
+## §9 ROUTING — ~30 akcija direktno u LLM
+```
+tekst + history[-3:] + identity sažetak
+→ gpt-4o-mini tool-call nad SVIH ~30 shema iz actions.json (stanu u prompt)
+→ { kind: action | clarify | answer, action?, params?, text? }
+→ nesigurno → TOP-3 clarify (1/2/3; "nije točno" → reoffer + ai.Feedback zapis)
+```
+Točnost nosi KVALITETA OPISA u actions.json (description + use_when + examples),
+ne retrieval mašinerija. `action_validator` = anti-halucinacija (nepoznata
+akcija/polje/tip → clarify). `filter`/`useandfor` suppressani iz sheme (M13).
+
+---
+
+## §10 PARAM LIFECYCLE (8 stanica)
+```
+① LLM EKSTRAKCIJA (opisi+examples kritični) → ② VALIDACIJA (akcija/polja/tip→clarify)
+→ ③ COERCION ("sutra 9h"→ISO, Europe/Zagreb; M8) → ④ MISSING-REQUIRED LOOP
+   (pitaj → zapamti u ai.UserSession → sljedeće polje; "odustani"→abort)
+→ ⑤ CODEBOOK (backend mapira semantiku; type_resolver fallback)
+→ ⑥ IDENTITY INJECT (person/tenant — AI ne puni) → ⑦ ECHO u confirm poruci
+→ ⑧ SLANJE + backend validacija (strukturiran 4xx → HR)
+```
+Nijedna stanica ne "propušta šutke"; ništa se ne šalje bez ⑦ (echo + Da).
+
+---
+
+## §11 ACTIONS.JSON — glavni ugovor (jedino što AI "vidi")
+```jsonc
+{ "name": "report_incident",
+  "ai": { "description": "Prijava kvara/štete/nezgode na vozilu.",
+    "use_when": ["pukla mi je guma","auto ne pali","imao sam nezgodu"],
+    "parameters": {                          // SAMO što korisnik izgovori
+      "registration_plate": {"type":"string","required":true,
+        "description":"Registracija vozila.","examples":["ZG-1234-AB"]},
+      "description": {"type":"string","required":true,
+        "description":"Opis kvara korisnikovim riječima.","examples":["pukla guma"]},
+      "incident_type": {"type":"string","required":false,"codebook":"CaseType",
+        "description":"Vrsta; ako korisnik ne kaže, backend default.","examples":["kvar","šteta"]}
+    }},
+  "execution": { "method":"POST", "action":"/actions/report-incident" },  // ili granularna ruta
+  "policy": { "mutation":true, "inject":["person_id","tenant_id"] } }
+```
+Boot fail-fast (malformiran → servis se NE digne, M12). Reload bez deploya
+(`/api/ai/admin` cache-invalidate). Novi param uvijek `required:false` (aditivno).
+
+**Tri vrste parametara:** korisnik izgovori → `ai.parameters`; iz identiteta →
+`policy.inject`; interni kod/default → backend (AI ne dira).
+
+---
+
+## §12 EXECUTOR + MOBILITYONE API (auth)
+- **Async** poziv preko `api_gateway.call`; NIKAD sync.
+- Auth: **Managed Identity** (preferirano na AKS-u) ILI OAuth `client_credentials`
+  (`token_manager`, cache). Header: `Authorization: Bearer` (401→refresh),
+  `x-tenant: {TenantId}`, `Idempotency-Key` (UUID) na SVAKU mutaciju (M9).
+- Circuit breaker po servisu; budžet 15s. List-serializacija query paramova
+  (`Filter` joina `" and "`). 4xx→`api_error_translator` (HR); 5xx→generička+pending ostaje.
+- **Auth = jedini razlog da uopće imamo token** — služi isključivo za CRUD pozive
+  prema MobilityONE-u.
+
+---
+
+## §13 AUTH PREFLIGHT (garancija — startup, ne produkcijski 403)
+- Sloj 1 introspection: dekodiraj VLASTITI JWT → `granted_scopes` vs `MOBILITY_REQUIRED_SCOPES`.
+- Sloj 2 probe: benign GET (`/Persons?Rows=1`) → 401/403 = auth problem.
+- `verified` = token dohvaćen BEZ greške I bar jedan pravi HTTP odgovor (≥200);
+  mrtvi kredencijali daju status 0, NE 401 (M3). Strict (`AUTH_PREFLIGHT_STRICT=1`):
+  odbij start ako `not ok OR not verified`. Pokreće se na startupu servisa.
+
+---
+
+## §14 FORMATTER (JSON → hrvatski)
+Grounding (samo podaci iz JSON-a) · izlazni PII scrub · liste s točnim `total`
+("imaš 27, prikazujem 10") · envelope-aware (M7) · odgovor <500 tokena · HR datumi.
+
+---
+
+## §15 KANALI (adapteri)
+- **WhatsApp/Viber (Infobip):** jedan adapter; WhatsApp `from`=broj
+  (`INFOBIP_SENDER_NUMBER`), Viber `sender`=IME (`VIBER_SENDER`); `messages[]`
+  payload za Viber (M2); split po `MAX_LEN` (M4). HMAC isti za oba.
+- **Teams:** Bot Framework/Graph adapter; identitet preko AAD.
+- **M365 Copilot (kasnije):** MCP server (`/api/ai/mcp`) izlaže ISTE akcije;
+  Copilot je mozak, mi dajemo alate; identitet preko emaila (`/Persons?Filter=Email`).
+- **Web Chat:** sync `/api/ai/chat` — isti `ConversationService`, bez outboxa
+  (sync request/response jer nema webhook-fast-200 ograničenja).
+
+---
+
+## §16 TENANT (kako se STVARNO dobiva — verificirano u kodu)
+```
+POZNAT sender → ai.UserSession/ai.Conversation ima TenantId (cache prethodnog lookupa)
+NEPOZNAT     → GET /Persons?Filter=Phone(=){broj}  (x-tenant = env default tenant, pilot=1 tenant)
+             → osoba ima polje TenantId  ← TO je pravi tenant (identity.py: strict binding)
+             → spremi za idući put
+```
+- Tenant dolazi iz `/Persons` ODGOVORA (polje `TenantId`), **NE iz tokena.**
+- ⚠ OTVORENO ZA SKALIRANJE: s puno tenanta, "po telefonu naći tenant" traži
+  pretragu po tenantima (ili backend lookup po broju) — cross-tenant je
+  neriješen bottleneck, pitanje za Damira (§17/§24). Za pilot (1 tenant) — OK.
+
+---
+
+## §17 MOBILITYONE API — ugovori (za backend tim)
+| # | Zahtjev | Zašto |
+|---|---|---|
+| 1 | strukturiran error `{error_code, field?, message}` za SVE 4xx | deterministički HR prijevod |
+| 2 | **honoriranje `Idempotency-Key`** (dedup ≥10min) | timeout+retry = dupla mutacija bez toga (M9) |
+| 3 | liste vraćaju `{items, total}` + max page | "imaš 27, prikazujem 10" (M7) |
+| 4 | rate-limiti (429 + `Retry-After`) | backoff kalibriran naslijepo |
+| 5 | **OAuth scope za sve rute** (pisana potvrda) | živo dokazan 403 failure |
+| 6 | timezone semantika naive datetimea (Europe/Zagreb ili offset) | ±1-2h tiha korupcija (M8) |
+| 7 | envelope ključ liste + gdje je `total` | danas pogađamo 7 varijanti |
+| 8 | kanonski format telefona u /Persons + **cross-tenant lookup po broju** | identitet je nulti korak; §16 skaliranje |
+
+---
+
+## §18 SCENARIJI (sequence sažeci)
+```
+S1 READ: "moja putovanja" → list_trips → GET → {items,total:27} → "Zadnjih 10 od 27…"
+S2 WRITE+Da/Ne: report_incident → echo+confirm → "Da" → POST → INC-5521 → HR potvrda
+S3 MISSING PARAM: book_vehicle bez date_to → "Do kada?" → nastavi (ai.UserSession)
+S4 ŠIFRARNIK: match=None → "Kvar, Šteta ili Nezgoda?"
+S5 NEPOZNAT: enrollment poruka; nijedan API poziv bez tenanta
+S6 SAFETY: rate-limit · injection · crisis hotline · GDPR audit
+S7 BACKEND GREŠKA: 409 → HR "nema slobodnih vozila…"; 5xx → circuit breaker + pending ostaje
+S8 RESTART usred obrade: ai.Message ostaje 'processing' → na bootu re-obrađen (M10)
+S9 DUPLI webhook: UQ_inbound_dedup odbije na upisu (M14) — jedna obrada
+S10 TEAMS/COPILOT/WEB: isti mozak, drugi adapter
+```
+
+---
+
+## §19 SIGURNOST / GDPR
+Secreti u **Key Vaultu** preko **Managed Identity** (ne u kodu/gitu) · HMAC
+fail-closed · PII scrub pre-LLM + na logovima · input/output sanitizer · tenant
+strict-binding · admin token gate · GDPR: erasure + audit (`ai.Feedback`/audit
+tablica) · PII pseudonimizacija saltana. **App Insights** za monitoring + alarme
+(DLQ-ekvivalent: `ai.Message.Status=failed` → alert rule).
+
+---
+
+## §20 DEPLOY (postojeći AKS)
+```
+mobilityone-ai:  1 deployment (Boris skele — standardno), ingress /api/ai/*
+  · dijeli: SQL Server (schema ai) · Key Vault · Managed Identity · App Insights · CI/CD
+  · liveness/readiness: /api/ai/health, /api/ai/ready (HTTP — servis IMA port)
+  · outbox loop startan u lifespan; na bootu recovery 'processing'→'received'
+NEMA: Redis · zaseban worker · KEDA · Postgres · drugi AKS · AGIC (izbačeno namjerno)
+Skaliranje: 1 pod dovoljan za ~120 vozača. Na 2+ poda: rate-limit postaje per-pod
+  (sitnica), outbox claim ostaje atomičan (SQL UPDATE), redoslijed očuvan.
+```
+
+---
+
+## §21 ACCEPTANCE + GARANCIJA ODGOVORA
+**Akcija POSTOJI tek sa svih 6:** actions.json entry (two-level opisi) · offline
+contract fixture · live contract PASS · smoke na dev API · e2e razgovorni test ·
+uključena u benchmark. **Sustav GOTOV:** svih ~30 akcija × 6 + agregat
+**90/97/0** (top-1/top-3/halucinacije) na dual-seed + 2 tjedna pilota + showstopper
+bez 🔴 + auth preflight `ok AND verified` uz live kredencijale.
+
+**Garancija "uvijek odgovor" (INV-6) — svaka poruka završi u JEDNOM od:**
+`ai.Message.Status=answered` (poslano) ILI `=failed` + `Error` + App Insights
+alarm. Restart-safe (M10), dedup (M14), redoslijed (INV-8). Honest bound: finalna
+DOSTAVA je na Infobip/Teams/Web platformi. **Svaki novi izlaz = novi redak ovdje + test.**
+
+---
+
+## §22 SHOWSTOPPER REGISTAR
+| # | Rizik | Mitigacija | Status |
+|---|---|---|---|
+| 1 | Boris još nije skelirao `mobilityone-ai` servis | standardni AKS deployment; naša odgovornost = kod | 🟡 čeka |
+| 2 | `ai` schema DDL nije potvrđen | §5 prijedlog → potvrda s Damirom/Borisom (EF vs raw SQL) | 🟡 |
+| 3 | OAuth scope / Managed Identity prava za API | auth_preflight + pisana potvrda (§17#5) | 🟡 |
+| 4 | Cross-tenant lookup po broju (skaliranje) | §16/§17#8 — pitanje za Damira; pilot=1 tenant OK | 🟡 |
+| 5 | Viber sender registracija (Infobip) | ops akcija (dani-tjedni); kod spreman | 🟡 |
+| 6 | Timezone / Idempotency / envelope (§17) | ugovori s backendom | 🟡 |
+| 7 | Infobip SPOF | adapter sloj čini providera zamjenjivim | 🟢 |
+| 8 | LLM model drift | PIN verzija + benchmark gate | 🟢 |
+| 9 | 1 pod SPOF | AKS restart brz; ai.Message trajan → nema gubitka; prag → 2 poda | 🟢 |
+
+---
+
+## §23 REDOSLIJED GRADNJE (od nule)
+```
+ 1. config.py (env §4, Key Vault) + main.py skeleton + /api/ai/health
+ 2. db/schema.sql (ai.*) + repository.py (Message/UserSession/ToolCallLog)
+ 3. adapters/base.py + infobip.py (HMAC, parse, send; M2/M4) — testovi
+ 4. webhook rute → repo.insert_inbound (dedup M14) → 200
+ 5. outbox/loop.py (claim/process/mark; M10 recovery) — testovi
+ 6. engine SAFETY (rate/PII/injection/crisis) — po modulu test
+ 7. identity (strict tenant §16) + special_intents
+ 8. actions.json + action_registry + action_validator
+ 9. llm_router (30 shema) + formatter
+10. params (pending u ai.UserSession) + mutation_gate
+11. executor + api_gateway (auth §12) + api_error_translator
+12. auth_preflight (§13) + contract harness (§17)
+13. e2e razgovori (S1-S10) + benchmark
+14. App Insights + deploy na AKS (Boris) → pilot
+```
+
+---
+
+## §24 OTVORENI GATEOVI (vanjski)
+1. Boris skele `mobilityone-ai` deployment (standardno).
+2. `ai` schema DDL potvrda (EF migracija vs raw SQL — Borisov standard).
+3. Auth: Managed Identity vs client_credentials + scope grant.
+4. Cross-tenant lookup po broju (§16) — dizajn za skaliranje.
+5. Backend ugovori §17 (idempotency, timezone, envelope, error shape).
+6. Viber sender registracija (Infobip, ops).
+7. Granularne rute vs `/actions` Business API (tko orkestrira — World A/B) — može i granularno za start.
+
+---
+
+## §25 SAMOPROVJERA GRADITELJA (nakon svakog koraka + prije "gotovo")
+```
+[ ] Suite koraka ZELENA (ne "kasnije")?
+── INVARIJANTE §1 ── write bez Da/Ne? PII prije LLM? tenant bez env-defaulta?
+   crisis/GDPR terminal? svaki izlaz→answered ILI failed+alarm? idempotencija?
+── MINE §1.5 ── slanje: ErrorCode.value ne literal (M1); recipient hook (M2)?
+   auth: verified ne samo ok (M3)? outbox: answered TEK nakon slanja (M10)?
+   dedup na upisu (M14)? datetime Europe/Zagreb (M8)?
+── BUILD-INTEGRITY §1.6 ── sposobnost ima e2e (BI-1)? svaki write ima read (BI-2)?
+   config/modul/tablica ima potrošača (BI-6/7/8)? nema Redis/worker artefakata (BI-9)?
+   adapter je jedini s kanal-formatom (BI-12)? svaki šav ima test (BI-13)?
+── CONFIG §4.5 ── nijedna tajna u git; nijedan hardkodiran host; env preko settings?
+── PRIJE "GOTOVO" ── svih ~30 akcija ×6 (§21)? benchmark 90/97/0? showstopper bez 🔴?
+   preflight ok AND verified? Key Vault/Managed Identity za sve tajne?
+```
+**Ako je i jedan red crven — samoocjena NIJE 10/10. Nastavi raditi.**
