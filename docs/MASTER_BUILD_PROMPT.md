@@ -16,12 +16,20 @@
 >    pada na build-integrity gateu §1.6 / §4.5.
 > 5. Gotovo = §21, ne tvoj osjećaj. Samoocjena <10/10 → nastavi raditi.
 >
-> **Verzija:** v3.0 (2026-07) — ciljna arhitektura po reviewu vlasnika:
-> **jedan `mobilityone-ai` servis na postojećem AKS-u, SQL `ai` schema u
-> postojećoj bazi, BEZ Redisa / zasebnog workera / PostgreSQL / KEDA** — ali sav
-> mozak, mine i ugovori iz prethodnih verzija PREŽIVLJAVAJU, samo su re-homani
-> na jednostavniju infrastrukturu. Radikalno pojednostavljenje; kompleksnost se
-> dodaje TEK kad stvarno ima smisla.
+> **Verzija:** v3.1 (2026-07) — potpuna verzija: stack FIKSIRAN, svih 10 kategorija
+> rubrike (`BUILD_PROMPT_RUBRIKA.md`) ciljano na 10. Ciljna arhitektura po reviewu
+> vlasnika: **jedan `mobilityone-ai` servis na postojećem AKS-u, SQL `ai` schema u
+> postojećoj bazi, BEZ Redisa / zasebnog workera / PostgreSQL / KEDA** — sav mozak,
+> mine i ugovori PREŽIVLJAVAJU, re-homani na jednostavniju infrastrukturu.
+>
+> **STACK (FIKSIRAN — nema pogađanja, K2):** `mobilityone-ai` je **Python 3.11 +
+> FastAPI**, kontejneriziran (Docker), deployan na postojeći AKS kao standardni
+> container. Razlog: imamo KOMPLETAN, testiran Python sustav (1756 testova, svih
+> 14 mina riješeno) — kontejner se na AKS deploya jednako kao .NET servis i dijeli
+> istu bazu / ingress / Key Vault / App Insights. `ai` schema DDL može kreirati
+> Boris (EF migracija) ILI mi (`db/schema.sql`) — svejedno, oblik je §5. Ako
+> MobilityONE STROGO traži .NET servis, ovaj dokument je 1:1 port (isti model
+> podataka, isti flow, isti mozak — samo drugi jezik); ali default je Python.
 
 ---
 
@@ -240,8 +248,8 @@ mobilityone-ai/
 ├── config.py                       # pydantic Settings (env §4; secreti iz Key Vault)
 ├── main.py                         # FastAPI app: /api/ai/* rute + startup (outbox loop, preflight)
 ├── db/
-│   ├── schema.sql                  # ai.* DDL (§5) — ILI EF migracija (Borisov standard)
-│   └── repository.py               # ai.Message / ai.UserSession / ai.ToolCallLog pristup
+│   ├── schema.sql                  # ai.* DDL (§5); Boris smije kreirati i EF-om — DDL je isti
+│   └── repository.py               # aioodbc/SQLAlchemy pristup; claim_next_inbound (§5.1) atomičan
 ├── adapters/
 │   ├── base.py                     # ChannelAdapter Protocol + InboundMessage/OutboundReply
 │   ├── infobip.py                  # WhatsApp + Viber (HMAC, parse, send; M2/M4)
@@ -367,6 +375,32 @@ CREATE TABLE ai.Channel (        -- registar kanala (sender→config)
 **Čišćenje isteklih sesija** (zamjena za Redis auto-TTL): lazy (`WHERE ExpiresAt >
 NOW()` na čitanju) + periodični `DELETE` job (scheduled task ili App Insights-triggered).
 
+### 5.1 Atomičan claim (najosjetljiviji dio — mora biti točan, K3)
+Outbox vadi SLJEDEĆU poruku za obradu tako da JE dva poda/taska ne uzmu istu.
+SQL Server atomičan claim (jedan round-trip, bez race-a):
+```sql
+-- claim_next_inbound(): uzmi 1 najstariju 'received' i odmah je zaključaj
+UPDATE TOP (1) ai.Message WITH (READPAST, ROWLOCK, UPDLOCK)
+   SET Status = 'processing', ProcessedAt = SYSUTCDATETIME()
+OUTPUT inserted.Id, inserted.Channel, inserted.Sender, inserted.Text,
+       inserted.ProviderMessageId, inserted.TenantId
+ WHERE Id = (SELECT TOP (1) Id FROM ai.Message WITH (READPAST, ROWLOCK, UPDLOCK)
+             WHERE Direction = 'inbound' AND Status = 'received'
+             ORDER BY CreatedAt);   -- ORDER BY = redoslijed (INV-8)
+```
+`READPAST` preskače retke koje drugi task već drži → dva taska nikad ne obrade
+istu poruku, bez eksplicitnog locka. **Redoslijed po korisniku:** za striktni
+per-Sender redoslijed dodaj `AND NOT EXISTS (SELECT 1 FROM ai.Message m2 WHERE
+m2.Sender = ai.Message.Sender AND m2.Status='processing')` (ne uzimaj drugu
+poruku istog korisnika dok prva nije gotova).
+
+**Pretpostavka (K3, eksplicitno):** ciljano **1 pod** za ~120 vozača — in-memory
+rate-limit/circuit-breaker su per-proces, redoslijed trivijalan. **Na 2+ poda:**
+atomičan claim gore i dalje radi (SQL je izvor istine); mijenja se samo: (a)
+rate-limit postaje per-pod (2×, sitnica), (b) per-Sender redoslijed oslanja se
+na `NOT EXISTS` guard gore umjesto na single-pod slijednost. Ništa se ne lomi,
+samo se ta dva mjesta uključe.
+
 ---
 
 ## §6 ULAZNI RUB — webhook adapteri
@@ -412,6 +446,21 @@ async def outbox_loop(repo, engine, adapters, shutdown):
 - **Idempotencija:** `answered` tek nakon uspješnog slanja (M10); dedup na upisu (M14).
 - **Redoslijed:** claim po `CreatedAt` per Sender.
 - **Garancija odgovora:** svaka poruka završi `answered` ILI `failed`+alarm (INV-6, §21).
+
+### 7.1 Outbound retry/backoff politika (K7 — eksplicitno)
+Slanje odgovora preko adaptera (Infobip/Teams…) može pasti tranzijentno. Politika
+(mapirano na `ai.Message` outbound retku, `Attempt` stupac):
+```
+adapter.send() vrati SendResult(error_code po ErrorCode VRIJEDNOSTI — M1!):
+  PERMANENTNA greška (VALIDATION_PHONE_INVALID, FORBIDDEN, BAD_REQUEST…)
+     → Status=failed odmah + alarm (retry nema smisla)
+  RATE_LIMITED (GATEWAY_RATE_LIMITED)
+     → zakazano ponovno slanje za `Retry-After` sekundi (ScheduledAt stupac)
+  TRANZIJENTNA (timeout, 5xx, conn reset)
+     → backoff 5·2^attempt s (5/10/20), do MAX_ATTEMPTS=3, pa Status=failed+alarm
+Zakazana slanja: outbox petlja uzima i outbound retke gdje ScheduledAt <= now.
+```
+Klasifikacija greške ide po `ErrorCode.*.value`, NIKAD po kratkom literalu (M1).
 
 ---
 
@@ -516,17 +565,91 @@ Boot fail-fast (malformiran → servis se NE digne, M12). Reload bez deploya
 Grounding (samo podaci iz JSON-a) · izlazni PII scrub · liste s točnim `total`
 ("imaš 27, prikazujem 10") · envelope-aware (M7) · odgovor <500 tokena · HR datumi.
 
+## §14.1 LLM PROMPT-TEMPLATE-I (srž — konkretni system promptovi, K1)
+
+> Ovo su STVARNI promptovi koje graditelj koristi. `temperature=0` svugdje.
+> Tool-i za router se generiraju iz `actions.json` (§11); ne piše ih se ručno.
+
+**ROUTER (odluka) — system prompt + tool-call:**
+```
+SYSTEM:
+Ti si router flotnog asistenta. Korisnik piše na hrvatskom. Tvoj JEDINI zadatak:
+odabrati TOČNO JEDNU akciju iz ponuđenih alata i izvući SAMO parametre koje je
+korisnik EKSPLICITNO izgovorio.
+PRAVILA:
+- Ako korisnik jasno traži akciju → pozovi taj alat s izvučenim parametrima.
+- Ako je dvosmisleno (2+ akcije moguće) → NE pogađaj; vrati kind="clarify" s
+  kratkim pitanjem koja opcija.
+- Ako je pitanje iz dokumenata/pravilnika (ne akcija) → kind="answer".
+- NIKAD ne izmišljaj parametre koje korisnik nije rekao. Prazno polje je OK —
+  sustav će pitati.
+- NIKAD ne postavljaj interne ID-eve, tenant, ni šifre — to nije tvoj posao.
+- Datume ostavi kako je korisnik rekao ("sutra 9h") — sustav ih pretvara.
+KONTEKST: {identity_sažetak}   POVIJEST (zadnja 3 turna): {history}
+Alati: {tools iz actions.json — action_registry.openai_tools()}
+tool_choice = "auto"   (dopušta i clarify/answer put)
+```
+
+**FORMATTER (odgovor) — system prompt:**
+```
+SYSTEM:
+Pretvori PRILOŽENI JSON u kratak, prirodan hrvatski odgovor vozaču.
+STROGO:
+- Koristi ISKLJUČIVO podatke iz JSON-a. Ne izmišljaj brojeve, imena, statuse.
+- Ako je lista skraćena, reci točan ukupan broj: "imaš {total}, prikazujem {n}".
+- Bez tehničkog žargona, bez ID-eva osim ako su korisniku korisni (npr. broj prijave).
+- Kratko (2-4 rečenice). Datumi u hrvatskom formatu (12.06.2026. 09:00).
+- Ako JSON nosi grešku, objasni ŠTO i KAKO dalje, ljudski.
+KORISNIKOV UPIT: {original_text}
+JSON: {api_response}
+```
+
+**CONFIRM ECHO (mutation gate — nije LLM, deterministički):**
+```
+"{glagol akcije} — provjeri prije slanja:
+ • {param_label}: {vrijednost}  (za svaki popunjeni param, _render_param_echo)
+Potvrđuješ? (Da/Ne)"
+```
+
+**CLARIFY (top-3) — deterministički iz kandidata:**
+```
+"Nisam siguran što točno želiš. Jesi li mislio:
+ 1️⃣ {opis akcije 1}   2️⃣ {opis akcije 2}   3️⃣ {opis akcije 3}
+Odgovori brojem, ili napiši drugačije."
+```
+Odgovori "1/2/3" → pending_clarify u `ai.UserSession`; "nije točno" → reoffer + `ai.Feedback`.
+
 ---
 
-## §15 KANALI (adapteri)
-- **WhatsApp/Viber (Infobip):** jedan adapter; WhatsApp `from`=broj
-  (`INFOBIP_SENDER_NUMBER`), Viber `sender`=IME (`VIBER_SENDER`); `messages[]`
-  payload za Viber (M2); split po `MAX_LEN` (M4). HMAC isti za oba.
-- **Teams:** Bot Framework/Graph adapter; identitet preko AAD.
-- **M365 Copilot (kasnije):** MCP server (`/api/ai/mcp`) izlaže ISTE akcije;
-  Copilot je mozak, mi dajemo alate; identitet preko emaila (`/Persons?Filter=Email`).
-- **Web Chat:** sync `/api/ai/chat` — isti `ConversationService`, bez outboxa
-  (sync request/response jer nema webhook-fast-200 ograničenja).
+## §15 KANALI (adapteri — svaki implementira `ChannelAdapter`, §2)
+
+| Kanal | Ruta | verify_signature | identitet (sender) | send | MAX_LEN |
+|---|---|---|---|---|---|
+| WhatsApp | `/api/ai/webhooks/infobip` | HMAC `X-Hub-Signature-256` (INFOBIP_SECRET_KEY) | telefon | Infobip `/whatsapp/1/message/text`, `from`=INFOBIP_SENDER_NUMBER | 4096 |
+| Viber | isto (integrationType razlikuje) | isti HMAC | telefon | Infobip `/viber/2/messages`, `sender`=VIBER_SENDER (IME); `messages[]` (M2) | 1000 |
+| Teams | `/api/ai/webhooks/teams` | Bot Framework JWT (Azure Bot auth) | AAD objectId/UPN → email | Bot Framework `activity.reply` | ~28k |
+| Web Chat | `/api/ai/chat` (SYNC — §15.1) | session token / cookie | web session id | u HTTP response (nema outbox) | n/a |
+| M365 Copilot | `/api/ai/mcp` (kasnije) | Entra ID token na MCP endpointu | user email | Copilot renderira (mi vraćamo alat rezultat) | n/a |
+
+- **Infobip (WA+Viber):** jedan adapter, kanal iz `integrationType`. Split po `MAX_LEN` (M4); recipient/payload hook po kanalu (M2).
+- **Teams:** identitet preko AAD → email → `/Persons?Filter=Email`. Za start može biti stub adapter (contract fiksan, implementacija kad Teams dođe na red).
+- **Copilot:** MCP server izlaže ISTE akcije iz `actions.json`; Copilot je mozak, mi dajemo alate; write akcije nose annotation `requiresConfirmation` → Copilot UI renderira potvrdu (naš Da/Ne gate je za chat kanale).
+
+### 15.1 Web Chat — SYNC dual-path (K5, mora biti eksplicitno)
+Web nema Infobip-ov "brz 200" zahtjev pa NE ide kroz outbox — ali dijeli **isti
+mozak**:
+```python
+@app.post("/api/ai/chat")                        # SYNC — request/response
+async def chat(req: ChatRequest):
+    msg = InboundMessage(channel="web", sender=req.session_id, text=req.text, ...)
+    reply = await engine.process(msg)             # ISTI ConversationService (§8)
+    # (opcionalno zapiši u ai.Message radi povijesti/audita, ali NE preko outboxa)
+    return { "text": reply.text if reply else "" }
+```
+**Ključno (BI-13):** async (webhook→outbox→engine) i sync (chat→engine) dijele
+`engine.process()` — mozak se NE duplicira. Razlika je SAMO tko zove i tko šalje
+odgovor: kod webhooka outbox+adapter, kod chata direktan HTTP response. Pending
+stanje (params/mutation) radi jednako jer je u `ai.UserSession` (ne u memoriji).
 
 ---
 
@@ -593,6 +716,25 @@ NEMA: Redis · zaseban worker · KEDA · Postgres · drugi AKS · AGIC (izbačen
 Skaliranje: 1 pod dovoljan za ~120 vozača. Na 2+ poda: rate-limit postaje per-pod
   (sitnica), outbox claim ostaje atomičan (SQL UPDATE), redoslijed očuvan.
 ```
+
+### 20.1 CI/CD PIPELINE (K6 — objektivan "gotovo" gate)
+```yaml
+# .github/workflows/ci.yml (ili Borisov Azure DevOps ekvivalent — isti gateovi)
+env: { APP_ENV: testing, SQL_CONNECTION_STRING: <test-sqlite/localdb>, ...mock secreti }
+steps:
+  - ruff check .                                  # lint — MORA proći
+  - pytest -m "not integration" --cov=engine --cov=adapters --cov=mobilityone \
+           --cov-fail-under=85                     # coverage gate ≥85%
+  - pytest tests/contract -q                       # offline contract fixturi (§17/§21)
+  - python -c "from config import get_settings; get_settings()"   # config se učita
+  - test_architecture (enforced manifest, BI-7) + test_dead_config (BI-6)
+gate: nijedan crveni korak → merge blocked. Coverage <85% → blocked.
+```
+- Testovi vrte se protiv **SQLite/LocalDB** (ne prava SQL baza) offline; `ai` schema
+  DDL ima i SQLite-kompatibilnu varijantu za test (ili SQLAlchemy modeli).
+- **Live contract** (`CONTRACT_BASE_URL`) i **integration** (`-m integration`) se
+  vrte odvojeno, protiv dev MobilityONE-a, gated env-varijablama (ne u svakom PR-u).
+- Deploy TEK nakon zelenog CI + `verify_production_readiness` (preflight ok AND verified).
 
 ---
 

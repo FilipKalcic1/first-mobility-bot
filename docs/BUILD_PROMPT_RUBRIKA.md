@@ -70,7 +70,40 @@ Vuče K2 (6), K9 (7), i djelomično K1/K10. Odluka koju SAMO ti/Boris možete:
 
 ---
 
+## OCJENA v3.1 (nakon zatvaranja 7 gapova — iskreno)
+
+| # | Kategorija | v3.0 | v3.1 | Što je zatvoreno / preostalo |
+|---|---|---|---|---|
+| K1 | Potpunost opsega | 8 | **10** | +LLM prompt-template-i (§14.1), +adapter-ugovori tablica (§15), +CI (§20.1) |
+| K2 | Buildability | 6 | **10** | stack FIKSIRAN (Python/FastAPI); +atomic claim SQL (§5.1); struktura+kod konkretni |
+| K3 | Korektnost | 9 | **10** | single-pod pretpostavke eksplicitne + 2-pod delta + READPAST claim (§5.1) |
+| K4 | Anti-višak | 9 | **10** | "NEMA:" popis (§20) + BI-9 eksplicitni |
+| K5 | Integritet flowa | 8 | **10** | sync `/api/ai/chat` dual-path (§15.1) + BI-13 |
+| K6 | Provjerljivost | 8 | **10** | CI pipeline s coverage/contract gateom (§20.1) |
+| K7 | Otpornost | 9 | **10** | eksplicitna outbound retry/backoff politika (§7.1) |
+| K8 | Sigurnost | 9 | **10** | HMAC/auth po kanalu (§15 tablica) + §19 |
+| K9 | Konzistentnost | 7 | **10** | jedan jezik (Python) kroz cijeli dokument; .NET samo kao port-alternativa |
+| K10 | Iskoristivost | 9 | **9** | ⚠ vidi residual dolje |
+
+### UKUPNO v3.1: **9/10** — još NE prihvaćeno (jedna iskrena rupa)
+
+**Preostala rupa (K10, i dijelom K1):** dokument je pisan kao **build-from-scratch**,
+a Filipova STVARNOST je **re-homing postojećeg radnog Python sustava** (Postgres→SQL,
+Redis→outbox, 2-procesa→1-servis+adapteri) — NE gradnja od nule. Za pravi 10/10
+za NAŠU situaciju treba još:
+- **REUSE-MAPA:** što se ZADRŽAVA iz postojećeg koda (engine/mozak, 14 mina, actions
+  ugovor) vs što se RE-PLUMBA (storage, outbox, adapteri) — da graditelj ne piše
+  ispočetka ono što već imamo i radi.
+- (opcionalno) još 3-4 `actions.json` primjera osim `report_incident`.
+
+To je jedina stvar između nas i 10/10 — i ovisi o odluci: **daješ li prompt
+svježem modelu (from-scratch, onda je 9→10 samo +par action primjera) ILI ga
+koristimo za evoluciju postojećeg (onda treba REUSE-MAPA)?** Vidi pitanje u chatu.
+
+---
+
 ## POVIJEST OCJENA
-| Verzija | Datum | Ukupno | Blokator |
+| Verzija | Datum | Ukupno | Blokator / residual |
 |---|---|---|---|
 | v3.0 | 2026-07 | 6/10 | K2 stack neodređen |
+| v3.1 | 2026-07 | 9/10 | K10 from-scratch vs re-home framing (reuse-mapa) |
