@@ -563,6 +563,14 @@ Nijedna stanica ne "propušta šutke"; ništa se ne šalje bez ⑦ (echo + Da).
 Boot fail-fast (malformiran → servis se NE digne, M12). Reload bez deploya
 (`/api/ai/admin` cache-invalidate). Novi param uvijek `required:false` (aditivno).
 
+> **FAZA 1 (dogovoreno) = TOČNO 2 akcije:** `book_vehicle` (demo za srijedu) i
+> `report_incident` (prijava štete). KONKRETNI M1 pozivi (auth, Persons,
+> MasterData, AvailableVehicles, VehicleCalendar) + payload booking-a su u
+> **`docs/M1_API_PLAYBOOK.md`**. Ostalih ~28 akcija je BUDUĆNOST (§27 ih pušta
+> bez dirania jezgre). Za Fazu 1: booking ide dvokorak u botu
+> (`GET AvailableVehicles` → `POST VehicleCalendar`) dok backend ne izloži jednu
+> `/actions/book-vehicle`.
+
 **Tri vrste parametara:** korisnik izgovori → `ai.parameters`; iz identiteta →
 `policy.inject`; interni kod/default → backend (AI ne dira).
 
