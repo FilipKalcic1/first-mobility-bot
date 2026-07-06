@@ -15,14 +15,18 @@ never does I/O, so it is fully unit-testable without a network/M1 token.
 from __future__ import annotations
 
 import re
-import unicodedata
+
+from services.text_normalizer import normalize_diacritics
 
 
 def _norm(s: str) -> str:
-    """Lowercase, strip Croatian diacritics, collapse whitespace."""
-    s = (s or "").strip().lower()
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(c for c in s if not unicodedata.combining(c))
+    """Lowercase, strip Croatian diacritics, collapse whitespace.
+
+    Delegates to the canonical translate-table normalizer — the previous
+    NFKD-only implementation left `đ` intact (U+0111 has no canonical
+    decomposition), so a type name like "Građevinski" never matched the
+    user's diacritic-less "gradevinski"."""
+    s = normalize_diacritics((s or "").strip().lower())
     return re.sub(r"\s+", " ", s).strip()
 
 

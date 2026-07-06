@@ -26,7 +26,7 @@
 
 | Datoteka | LOC | Dokaz |
 |---|---|---|
-| `services/v2/confidence_gate.py` | 132 | Nema `import confidence_gate` u živom kodu; engine.py:519 ga spominje SAMO u komentaru ("replace the … confidence_gate path entirely"). Stari L5 gate, zamijenjen Model A + pending_clarify |
+| ~~`services/v2/confidence_gate.py`~~ | 132 | **OBRISANO (Faza 0)** — nije bilo `import confidence_gate` u živom kodu; stari L5 gate, zamijenjen Model A + pending_clarify. Obrisan i `tests/v2/test_confidence_gate.py`. |
 | `tool_routing.py` (root) | 30 | Tombstone — hardkodiran routing UKLONJEN u 11.0.4 |
 | `analyze_orphans.py` (root) | 137 | Dev skripta za pronalaženje orphana; nije dio koda (DEV_ONLY/scratch) |
 
@@ -38,8 +38,8 @@
 
 | Datoteka | LOC | Importer |
 |---|---|---|
-| `services/v2/active_learning.py` | 348 | scripts/run_active_learning.py |
-| `services/v2/anchor_audit.py` | 418 | scripts/audit_anchor_quality.py |
+| ~~`services/v2/active_learning.py`~~ | 348 | **OBRISANO (Faza 0)** — offline-analitika ugašena; s njim obrisani `scripts/run_active_learning.py` + `tests/v2/test_active_learning.py` |
+| ~~`services/v2/anchor_audit.py`~~ | 418 | **OBRISANO (Faza 0)** — s njim obrisani `scripts/audit_anchor_quality.py` + `tests/v2/test_anchor_audit.py` |
 | `services/v2/atomic_io.py` | 42 | scripts/sync_tools.py i dr. (config regeneracija) + testovi |
 | `services/registry/embedding_engine.py` | 463 | scripts/sync_tools.py |
 | `services/registry/entity_mappings.py` | 548 | embedding_engine.py (sam DEV_ONLY) |

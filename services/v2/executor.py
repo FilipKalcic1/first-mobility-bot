@@ -30,7 +30,13 @@ logger = logging.getLogger(__name__)
 FAIL_THRESHOLD = 3
 OPEN_SECONDS = 30
 HALF_OPEN_RE_FAIL_SECONDS = 60
-TIMEOUT_SECONDS = 5.0
+# Total budget for one tool call. At 5.0 the budget expired during the
+# gateway's OWN recovery work (cold OAuth token fetch ~2-4s, 401-refresh
+# retry, backoff after a 429/5xx) — a recoverable transient surfaced as
+# "timeout" to the user, and three of those needlessly opened the circuit.
+# 15s covers token fetch + one retry leg for typical latencies while still
+# cutting pathological hangs early. Worker's outer budget is 90s.
+TIMEOUT_SECONDS = 15.0
 
 # Circuit states.
 STATE_CLOSED = "closed"

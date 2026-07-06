@@ -151,6 +151,53 @@ def verify_pii_masking():
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+async def verify_auth_preflight():
+    """PP1: OAuth scope introspection + route probe against the live API.
+
+    Skips gracefully (returns True) when M1 credentials/network are absent
+    (offline CI) — the check is meaningful only against a real environment.
+    Fails when a required scope is missing, a probed route answers 401/403,
+    or (with live credentials) no POSITIVE verification was obtained
+    (report.verified False — dead credentials / IdP down / no HTTP answer).
+    """
+    required_env = ("MOBILITY_API_URL", "MOBILITY_AUTH_URL",
+                    "MOBILITY_CLIENT_ID", "MOBILITY_CLIENT_SECRET",
+                    "MOBILITY_TENANT_ID")
+    if any(not os.environ.get(k) or "example.com" in os.environ.get(k, "")
+           for k in required_env):
+        logger.warning(
+            "[SKIP] auth_preflight — nema live M1 kredencijala pa auth NIJE "
+            "verificiran (offline run). [SKIP] nije dokaz da auth radi: "
+            "prije deploya pokreni skriptu s pravim MOBILITY_* varijablama."
+        )
+        return True
+    try:
+        from services.api_gateway import APIGateway
+        from services.auth_preflight import (
+            log_report, required_scopes_from_env, run_preflight,
+        )
+        gateway = APIGateway()
+        try:
+            report = await run_preflight(
+                gateway.token_manager, gateway,
+                tenant_id=os.environ["MOBILITY_TENANT_ID"],
+                required=required_scopes_from_env(),
+            )
+        finally:
+            await gateway.close()
+        log_report(report)
+        # Uz live kredencijale tražimo POZITIVNU potvrdu, ne samo "nema
+        # dokazanog problema" — mrtvi kredencijali/mreža ne smiju proći.
+        if report.ok and not report.verified:
+            logger.error(
+                "[FAIL] auth_preflight — bez pozitivne potvrde "
+                "(verified=False) uz live kredencijale")
+        return bool(report.ok and report.verified)
+    except Exception as e:  # noqa: BLE001 — readiness must report, not crash
+        logger.error(f"auth_preflight errored: {e}")
+        return False
+
+
 async def main():
     logger.info("=" * 60)
     logger.info("Production Readiness Verification Suite")
@@ -161,6 +208,7 @@ async def main():
 
     # Run async checks
     results["lua_cache"] = await verify_lua_script_cache()
+    results["auth_preflight"] = await verify_auth_preflight()
 
     # Run sync checks
     results["memory_baseline"] = verify_memory_baseline()

@@ -1,0 +1,40 @@
+# One-shot Alembic migration. Run BEFORE rolling a new image version:
+#   kubectl -n mobility-bot delete job bot-migrate --ignore-not-found
+#   kubectl -n mobility-bot apply -f k8s/migrate-job.yaml
+#   kubectl -n mobility-bot wait --for=condition=complete job/bot-migrate --timeout=120s
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bot-migrate
+  namespace: mobility-bot
+  labels:
+    job: bot-migrate
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        job: bot-migrate
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+      containers:
+        - name: migrate
+          image: ghcr.io/filipkalcic1/nova-verzija:latest  # same tag as the rollout
+          command: ["/usr/bin/tini", "--", "alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: bot-config
+            - secretRef:
+                name: bot-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

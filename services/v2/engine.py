@@ -6,16 +6,18 @@ Wiring (top-down):
     L-1 RateLimiter        → blocked? short-circuit with cooldown msg
     L0.5 PIIScrubber       → safe text for LLM downstream
     L0   IdentityContext   → personId + masterData (cached)
+    PENDING continuations  → params → mutation → reoffer → clarify → flow
+                             (a saved state consumes the message FIRST)
+    L0.7-L0.85 guards      → crisis / negation / multi-intent / meta
     L1   SpecialIntents    → terminal if matched (welcome/GDPR/help)
-    L4   Flow continuation → if mid-flow, route through engine
+    L1.5 Unknown phone     → enrollment message for unregistered numbers
     L2a  IntentType        → type bucket (or safe fallback)
-    L2b  DriverBasics      → if intent_type=question_about_self
-                              and anchor matches, serve from cached masterData
-    L3   Recognition       → otherwise top-K + LLM Judge
-    L5   Confidence Gate   → high/med/low decision
-    L6   Mutation Safeguard→ confirm dialog if mutating
-    L7   Executor          → API call (with circuit breaker)
-    L8   Formatter         → Croatian response
+    L4   Flow start        → keyword-gated booking/mileage/case
+    L2b  DriverBasics      → anchor match → serve from cached masterData
+    Model A cascade        → Turn 1: action picker; Turn 2: scoped L3
+                             router → top-3 tool picker; Turn 3: params →
+                             L6 mutation gate → L7 executor → L8 formatter
+                             (no LLM auto-execute)
 
 Failure-mode rule: every layer either returns or short-circuits. The
 engine never crashes — it returns a Croatian fallback message instead.
@@ -515,8 +517,8 @@ class V2Engine:
             )
 
         # Dormant V2_USE_TOOL_USE / V2_USE_UNIFIED_RESPONDER / V2_USE_V3_ROUTER
-        # branches removed 2026-05-12. The new L3 LLM router (Phase 4) will
-        # replace the recognition + confidence_gate path entirely.
+        # branches removed 2026-05-12; the old L5 confidence-gate path was
+        # deleted in Faza 0 (replaced by Model A router + pending_clarify).
 
         # ---- L2a Intent Type ----
         itype = await self.intent_type.classify(safe_query)
@@ -1495,8 +1497,14 @@ class V2Engine:
                 tkb_lookup=lambda tid: self.tkb_intents.get(tid, ""),
             )
             if not tool_options.cards:
+                # Tell the user instead of returning None — None would re-route
+                # their pick digit ("2") as a fresh query, which lands back on
+                # the action picker and reads like the bot ignored them.
                 await self.pending_clarify_store.clear(phone)
-                return None
+                return (
+                    f"Nisam našao prikladan alat za '{chosen_label}' "
+                    f"za tvoj upit. Reci drugačije što tražiš."
+                )
 
             # Preserve router's parsed params ONLY on the candidate the router
             # picked as top-1 — picking a different candidate means router was
@@ -1794,6 +1802,10 @@ class V2Engine:
         pdef = (self.tool_parameters.get(tool_id) or {}).get(param)
         label = (await self._label_for(tool_id, param, pdef)) or param
         names = ", ".join(str(n) for _, n in pairs[:20])
+        if len(pairs) > 20:
+            # The matcher accepts ALL pairs — tell the user the list is cut
+            # so they know an unlisted name can still be typed.
+            names += f" (i još {len(pairs) - 20})"
         return (
             f"Koji {label}? Dostupno: {names}. "
             "Napiši naziv ili 'odustani' za otkaz."
@@ -2165,6 +2177,7 @@ class V2Engine:
             return await self._render_execution_failure(exec_result, tool_id)
         # Save reoffer state for "nije točno" handler (Filip 2026-06-05).
         # Only fires when called from clarify flow with the top-50 context.
+        reoffer_saved = False
         if (reoffer_top50 is not None
                 and self.pending_clarify_store is not None):
             shown = list(reoffer_shown or [])
@@ -2179,13 +2192,20 @@ class V2Engine:
                     last_executed_tool=tool_id,
                     can_reoffer=True,
                 )
+                reoffer_saved = True
             except Exception as e:  # noqa: BLE001 — never break the reply
                 logger.warning("save reoffer state failed: %s", e)
-        return await self._format_reply(
+        reply = await self._format_reply(
             query=query, tool_id=tool_id, api_data=exec_result.data,
             identity=identity, field_hint=field_hint,
             extra_context={"entity_label": identity.vehicle_name or "rezultata"},
         )
+        # Teach the reoffer phrase whenever the state to honor it exists.
+        # The template formatter appends this itself; the LLM path didn't —
+        # so LLM-formatted replies silently lost the feedback loop.
+        if reoffer_saved and "nije točno" not in reply:
+            reply += "\n\nAko nije točno, napiši 'nije točno'."
+        return reply
 
     async def _continue_pending_mutation(
         self, phone: str, pending, user_input: str,
@@ -2205,6 +2225,19 @@ class V2Engine:
             return "U redu, odustajem."
 
         if action == "ambiguous":
+            # Numeric replies: users answer menus with digits. NEVER map a
+            # digit to execute (false-execute is the one unrecoverable
+            # outcome — same asymmetry as parse_reply); "1" gets an explicit
+            # 'napiši Da' re-prompt, 2/3 cancel safely.
+            _digit = user_input.strip().rstrip(".!?,;")
+            if _digit in ("2", "3", "2️⃣", "3️⃣"):
+                await self.pending_mut_store.clear(phone)
+                return "U redu, otkazao sam potvrdu. Pošalji novi upit."
+            if _digit in ("1", "1️⃣"):
+                return (
+                    "Za izvršenje napiši izričito 'Da' "
+                    "(ili 'Ne' za odustajanje)."
+                )
             # Multi-pending guard (#66): if user sent something that
             # looks like a NEW query (long, contains action verbs),
             # they probably forgot the pending confirm. Surface both
@@ -2223,11 +2256,8 @@ class V2Engine:
             if looks_like_new_query:
                 return (
                     f"Imaš nedovršenu potvrdu za: {pending.tool_id}.\n\n"
-                    "Što hoćeš:\n"
-                    "  1️⃣ Izvrši pending\n"
-                    "  2️⃣ Odustani i napravi novo (tvoju zadnju poruku)\n"
-                    "  3️⃣ Samo otkaži\n\n"
-                    "Odgovori brojem 1, 2 ili 3."
+                    "Napiši 'Da' da je izvršim, ili 'Ne' da je otkažem — "
+                    "pa mi nakon toga ponovno pošalji novi upit."
                 )
             return (
                 "Nisam siguran je li to bilo Da ili Ne. "
@@ -2551,7 +2581,17 @@ async def make_v2_engine_for_production(
     repo_root = _Path(__file__).resolve().parents[2]
     tool_data_path = repo_root / "config" / "tool_data.json"
     registry_json_path = repo_root / "config" / "processed_tool_registry.json"
-    anchor_cache_path = repo_root / "tests" / "benchmarks" / "router_anchor_cache.json"
+    # Embedded-anchor cache (~11k phrases). Overridable so orchestrated
+    # deployments can mount it on a persistent volume — without that, every
+    # worker restart re-embeds the whole catalog (minutes of startup, real
+    # Azure cost, 429 exposure). Default stays the in-repo path used by
+    # dev/tests.
+    import os as _os
+    _cache_override = (_os.environ.get("ANCHOR_CACHE_PATH") or "").strip()
+    anchor_cache_path = (
+        _Path(_cache_override) if _cache_override
+        else repo_root / "tests" / "benchmarks" / "router_anchor_cache.json"
+    )
 
     # SINGLE SOURCE OF TRUTH (Phase 2 of data consolidation, 2026-05-15).
     # tool_data.json union-merges what used to be three fragmented files:

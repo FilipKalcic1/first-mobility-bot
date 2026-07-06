@@ -1,8 +1,8 @@
 """L5.5 — Clarify UI: Top-3 candidate cards as user-facing disambiguation.
 
-When confidence_gate returns DECISION_FALLBACK or borderline EXECUTE_WITH_CONFIRM,
-this module renders the top-3 candidate tools as an interactive list so the
-user can disambiguate with a single tap (or text reply).
+When the L3 router is not confident in a single tool, this module renders
+the top-3 candidate tools as an interactive list so the user can
+disambiguate with a single tap (or text reply).
 
 Two output modes:
   - TEXT: numbered list ("1️⃣ X / 2️⃣ Y / 3️⃣ Z") — safe fallback when
@@ -143,7 +143,7 @@ def build_action_picker(candidates: list[dict]) -> ClarifyOptions:
 def methods_for_action_label(label: str) -> set[str]:
     """Reverse lookup: given a Step 1 selection (e.g. "IZMIJENITI"), return
     the HTTP methods to filter candidates by (e.g. {"PUT", "PATCH"})."""
-    return {m for m, l in ACTION_LABELS.items() if l == label}
+    return {m for m, lbl in ACTION_LABELS.items() if lbl == label}
 
 
 def build_clarify_options(
@@ -174,9 +174,9 @@ def build_from_router_candidates(
     tkb_lookup: Callable[[str], str],
     max_cards: int = 3,
 ) -> ClarifyOptions:
-    """Build top-3 cards from confidence_gate.GateDecision.fallback_candidates.
+    """Build top-3 cards from router fallback candidates.
 
-    The gate gives `[(tool_id, anchor_score), ...]` — no descriptions. We
+    The caller gives `[(tool_id, anchor_score), ...]` — no descriptions. We
     look up each tool's `intent_summary` from TKB via the injected callback
     so we don't pull tool_knowledge_base.json into clarify_ui as a dep.
 

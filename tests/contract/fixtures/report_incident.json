@@ -1,0 +1,23 @@
+{
+  "action": "report_incident",
+  "method": "POST",
+  "path": "/actions/report-incident",
+  "request": {
+    "registration_plate": "ZG-1234-AB",
+    "description": "pukla guma prednja lijeva",
+    "person_id": "person-77",
+    "tenant_id": "tenant-A"
+  },
+  "response": {
+    "status": "success",
+    "incident_id": "<any-string>",
+    "vehicle_status": "<any-string>"
+  },
+  "errors": [
+    {
+      "when": "nepostojeća registracija",
+      "request_override": { "registration_plate": "XX-0000-XX" },
+      "expect": { "error_code": "VEHICLE_NOT_FOUND", "message": "<any-string>" }
+    }
+  ]
+}

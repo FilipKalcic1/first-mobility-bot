@@ -49,16 +49,9 @@ class Settings(BaseSettings):
         ...,  # REQUIRED - must be set via environment variable
         description="Redis connection string (e.g., redis://host:6379/0)"
     )
-    REDIS_MAX_CONNECTIONS: int = Field(default=100)
-
-    # Redis Sentinel (optional - for HA failover)
-    REDIS_SENTINEL_ENABLED: bool = Field(default=False)
-    REDIS_SENTINEL_HOSTS: Optional[str] = Field(
-        default=None,
-        description="Comma-separated sentinel hosts (e.g., sentinel1:26379,sentinel2:26379)"
-    )
-    REDIS_SENTINEL_MASTER: str = Field(default="mymaster")
-    REDIS_SENTINEL_PASSWORD: Optional[str] = Field(default=None)
+    # (REDIS_MAX_CONNECTIONS + REDIS_SENTINEL_* uklonjeni 2026-07-04 — mrtvi:
+    #  pool cap je hardkodiran po procesu (redis_factory=5, worker=10);
+    #  Sentinel HA nikad nije spojen u redis_factory.)
     
     # ---
     # INFOBIP (WhatsApp) - Optional, not required for startup
@@ -70,10 +63,16 @@ class Settings(BaseSettings):
         description="Secret key for webhook HMAC-SHA256 signature validation"
     )
     INFOBIP_SENDER_NUMBER: Optional[str] = Field(default=None)
-    WHATSAPP_VERIFY_TOKEN: Optional[str] = Field(
+    VIBER_SENDER: Optional[str] = Field(
         default=None,
-        description="Token for WhatsApp webhook verification (hub.verify_token)"
+        description=(
+            "Infobip Viber Business Messages sender NAME (registrirano ime, "
+            "ne broj). Neset → Viber kanal isključen (poruke idu u DLQ s "
+            "VIBER_NOT_CONFIGURED)."
+        ),
     )
+    # (WHATSAPP_VERIFY_TOKEN uklonjen 2026-07-04 — GET verifikacija webhooka
+    #  je bezuvjetni reachability "ok" i nikad ga nije čitala.)
     
     # ---
     # MOBILITYONE API - REQUIRED (no defaults, must be set via environment)
@@ -103,20 +102,10 @@ class Settings(BaseSettings):
     # `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` (already wired) — not by adding
     # a direct-OpenAI escape hatch.
 
-    # ---
-    # AI SETTINGS
-    # ---
-    AI_MAX_ITERATIONS: int = Field(default=6)
-    AI_TEMPERATURE: float = Field(default=0.2)
-    AI_MAX_TOKENS: int = Field(default=1500)
-    EMBEDDING_BATCH_SIZE: int = Field(default=5)
-    SIMILARITY_THRESHOLD: float = Field(default=0.55)
+    # (AI SETTINGS blok — AI_MAX_ITERATIONS/AI_TEMPERATURE/AI_MAX_TOKENS/
+    #  EMBEDDING_BATCH_SIZE/SIMILARITY_THRESHOLD/MAX_TOOLS_FOR_LLM uklonjeni
+    #  2026-07-04 — mrtvi: nijedan LLM/embedding modul ih ne čita.)
 
-    MAX_TOOLS_FOR_LLM: int = Field(
-        default=25,
-        description="Maximum tools shown to LLM per request."
-    )
-    
     # ---
     # RATE LIMITING
     # ---
@@ -126,25 +115,13 @@ class Settings(BaseSettings):
     # ---
     # CACHE TTL (seconds)
     # ---
-    CACHE_TTL_TOKEN: int = Field(default=3500)
-    CACHE_TTL_USER: int = Field(default=300)
-    CACHE_TTL_CONTEXT: int = Field(default=86400)
-    CACHE_TTL_TOOLS: int = Field(default=3600)
-    CACHE_TTL_CONVERSATION: int = Field(default=1800)
+    CACHE_TTL_USER: int = Field(default=300)       # context_service (živ)
+    CACHE_TTL_CONTEXT: int = Field(default=86400)  # context_service (živ)
+    # (CACHE_TTL_TOKEN/TOOLS/CONVERSATION uklonjeni 2026-07-04 — mrtvi;
+    #  token TTL je iz expires_in, tools/conversation nemaju čitača.)
     
-    # ---
-    # COST TRACKING (LLM token pricing)
-    # ---
-    LLM_INPUT_PRICE_PER_1K: float = Field(default=0.00015, description="Input token price per 1K tokens")
-    LLM_OUTPUT_PRICE_PER_1K: float = Field(default=0.0006, description="Output token price per 1K tokens")
-    DAILY_COST_BUDGET_USD: float = Field(default=50.0, description="Daily cost budget alert threshold in USD")
-
-    # ---
-    # MODEL DRIFT DETECTION
-    # ---
-    DRIFT_BASELINE_DAYS: int = Field(default=7, description="Days of data for baseline metrics")
-    DRIFT_ANALYSIS_HOURS: int = Field(default=6, description="Hours of recent data to analyze for drift")
-    DRIFT_MIN_SAMPLES: int = Field(default=50, description="Minimum samples needed for valid drift analysis")
+    # (COST TRACKING i MODEL DRIFT varijable uklonjene 2026-07-04 — čitao ih
+    #  je samo config; potrošači su obrisani (admin_api) ili nikad spojeni.)
 
     # ---
     # GDPR
@@ -157,11 +134,8 @@ class Settings(BaseSettings):
     RAG_REFRESH_INTERVAL_HOURS: int = Field(default=6, description="Hours between RAG index refreshes")
     RAG_LOCK_TTL_SECONDS: int = Field(default=600, description="Lock TTL for RAG refresh (prevents concurrent refreshes)")
 
-    # ---
-    # CONFLICT RESOLVER
-    # ---
-    CONFLICT_LOCK_TTL_MINUTES: int = Field(default=30, description="Edit lock duration in minutes")
-    CONFLICT_SNAPSHOT_TTL_DAYS: int = Field(default=90, description="Config snapshot retention for compliance")
+    # (CONFLICT_LOCK_TTL_MINUTES/CONFLICT_SNAPSHOT_TTL_DAYS uklonjeni
+    #  2026-07-04 — mrtvi; nema conflict-resolver potrošača.)
 
     # ---
     # ADMIN API
@@ -178,24 +152,15 @@ class Settings(BaseSettings):
     ADMIN_DATABASE_URL: Optional[str] = Field(default=None, description="Full-access DB URL for admin (falls back to DATABASE_URL)")
 
     # ---
-    # ERROR TRACKING & LOGGING
+    # LOGGING  (SENTRY_DSN uklonjen 2026-07-04 — deklariran a nikad inicijaliziran;
+    #  vrati se TEK sa sentry_sdk.init() u main.py/worker.py, ne prije)
     # ---
-    SENTRY_DSN: Optional[str] = Field(default=None)
-
     # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
     # In production, set to WARNING or ERROR to reduce noise
     LOG_LEVEL: str = Field(default="INFO", description="Logging level (DEBUG/INFO/WARNING/ERROR)")
 
-    # ---
-    # RESPONSE SANITY CHECKER
-    # ---
-    # Last-gate inspector that catches wrong-shape responses (empty data,
-    # all-zero numerics, stale cache, HTML leak) before user sees them.
-    # See services/response_sanity.py.
-    SANITY_CHECKER_ENABLED: bool = Field(
-        default=True,
-        description="Enable response sanity checks before formatter render",
-    )
+    # (SANITY_CHECKER_ENABLED uklonjen 2026-07-04 — mrtav flag;
+    #  services/response_sanity.py ne gate-a na njemu.)
 
     # ---
     # CONCURRENCY / SCALING (audit fix — 2026-05-08)
@@ -211,14 +176,8 @@ class Settings(BaseSettings):
         default=5,
         description="Worker concurrent message processing slots",
     )
-    BURST_MAX_MESSAGES: int = Field(
-        default=100,
-        description="Burst-mode worker exits after processing this many messages",
-    )
-    BURST_IDLE_TIMEOUT: int = Field(
-        default=300,
-        description="Burst-mode worker exits after this many seconds idle",
-    )
+    # (BURST_MAX_MESSAGES/BURST_IDLE_TIMEOUT uklonjeni 2026-07-04 — mrtvi;
+    #  burst-mode worker nikad nije implementiran.)
     CACHE_INVALIDATION_SECRET: Optional[str] = Field(
         default=None,
         description="HMAC secret for /admin/cache-invalidate webhook",

@@ -17,13 +17,15 @@ Infobip POST → webhook → Redis stream → worker → V2Engine.process_messag
    L0.7 crisis / L0.75 negation / L0.8 multi-intent / L0.85 meta
    L1 special intents (GDPR/welcome/handover) / L1.5 unknown-phone gate
    L2 driver quick-path (regex, 0 LLM) / L2a intent type / L2b basics anchor
-   L3 LLM router [services/router/]:
-     anchor_index.top_k(query) → 50 candidates
-     tool_schema_builder → OpenAI tools=[]
-     gpt-4o-mini chat.completions.create(tools=..., tool_choice="auto")
-     → RouterResult{tool_id, params, confidence, anchor_score}
-   L5 confidence_gate → execute / clarify / fallback
-   L6 mutation gate → confirm dialog for POST/PUT/PATCH/DELETE
+   Model A 3-turn cascade (no LLM auto-execute):
+     Turn 1: save query → universal action picker (POGLEDATI/UNIJETI/IZMIJENITI/IZBRISATI)
+     Turn 2: scoped L3 router [services/router/]:
+       anchor_index.top_k(query) → 50 candidates
+       tool_schema_builder → OpenAI tools=[]
+       gpt-4o-mini chat.completions.create(tools=..., tool_choice="required")
+       → RouterResult{tool_id, params, confidence, anchor_score} → top-3 tool picker
+     Turn 3: user picks tool → param collection (pending_params)
+   L6 mutation gate → confirm dialog (Da/Ne) for POST/PUT/PATCH/DELETE
    L7 executor → services/api_gateway (OAuth, circuit breaker, x-tenant)
    L8 LLM formatter [services/formatter/]:
      output_sanitize → prune → gpt-4o-mini Croatian response → PII scrub
@@ -52,7 +54,7 @@ Infobip POST → webhook → Redis stream → worker → V2Engine.process_messag
 | [services/api_gateway.py](services/api_gateway.py) | MobilityOne HTTP client (OAuth, retries, circuit breaker, tenant headers) |
 | [services/registry/](services/registry/) | Offline registry build (sync_tools, embedding helper for scripts) |
 | [config/](config/) | Tool registry (950 tools), TKB, anchor enrichments, quick-path patterns, typo synonyms |
-| [tests/](tests/) | pytest suite (~1180 passing) |
+| [tests/](tests/) | pytest suite (~1700 passing) |
 | [scripts/](scripts/) | Tool sync, anchor + TKB regeneration, router benchmark, param enrichment |
 | [k8s/_archive/](k8s/_archive/) | Old k8s manifests (never production-tested) |
 

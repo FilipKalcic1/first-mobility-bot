@@ -346,21 +346,14 @@ def _webhook_check_ip(ip: str, *, now: float | None = None) -> bool:
     return True
 
 
-@router.post("/whatsapp")
-async def whatsapp_webhook(request: Request):
-    """
-    Receive WhatsApp webhook messages and push to Redis STREAM.
+# Kanal po Infobip integrationType polju; nepoznato/odsutno → default rute.
+# Payload je self-describing kad Infobip pošalje integrationType, ali Viber
+# subscription cilja /webhook/viber pa je kanal determinističan i bez njega.
+_CHANNEL_BY_INTEGRATION = {"WHATSAPP": "whatsapp", "VIBER": "viber"}
 
-    Flow:
-    1. Per-IP rate-limit check (200/60s/IP)
-    2. Validate webhook signature (if enabled)
-    3. Parse JSON body
-    4. Extract message data (sender, text, message_id) from ALL formats
-    5. VALIDATE sender is present
-    6. Handle non-text messages (forward type info to Redis)
-    7. Push to Redis STREAM: "whatsapp_stream_inbound"
-    8. Worker picks up from stream via consumer group
-    """
+
+async def _webhook_entry(request: Request, default_channel: str) -> dict:
+    """Zajednički ulaz za sve Infobip kanale (rate-limit + trace + procesiranje)."""
     _stats["total_received"] += 1
 
     # Rate limit BEFORE any work — cheapest possible reject path.
@@ -378,11 +371,40 @@ async def whatsapp_webhook(request: Request):
     with trace_span(_tracer, "webhook.receive", {
         "request.id": request_id,
         "http.method": "POST",
+        "channel.default": default_channel,
     }) as wh_span:
-        return await _process_webhook(request, request_id, wh_span)
+        return await _process_webhook(request, request_id, wh_span, default_channel)
 
 
-async def _process_webhook(request: Request, request_id: str, span) -> dict:
+@router.post("/whatsapp")
+async def whatsapp_webhook(request: Request):
+    """
+    Receive WhatsApp webhook messages and push to Redis STREAM.
+
+    Flow:
+    1. Per-IP rate-limit check (200/60s/IP)
+    2. Validate webhook signature (if enabled)
+    3. Parse JSON body
+    4. Extract message data (sender, text, message_id) from ALL formats
+    5. VALIDATE sender is present
+    6. Handle non-text messages (forward type info to Redis)
+    7. Push to Redis STREAM: "whatsapp_stream_inbound" (+ channel tag)
+    8. Worker picks up from stream via consumer group
+    """
+    return await _webhook_entry(request, default_channel="whatsapp")
+
+
+@router.post("/viber")
+async def viber_webhook(request: Request):
+    """Infobip Viber Business Messages inbound — identičan pipeline
+    (HMAC, dedup, parse, stream), samo je default kanal "viber".
+    Infobip Viber subscription mora ciljati OVU rutu."""
+    return await _webhook_entry(request, default_channel="viber")
+
+
+async def _process_webhook(
+    request: Request, request_id: str, span, default_channel: str = "whatsapp",
+) -> dict:
     """Inner webhook processing, wrapped by trace span."""
     global _redis_client
     # Graceful shutdown: reject new messages during drain.
@@ -452,6 +474,12 @@ async def _process_webhook(request: Request, request_id: str, span) -> dict:
             )
             message_id = result.get("messageId", result.get("message_id", ""))
 
+            # Kanal: integrationType kad ga Infobip pošalje, inače default
+            # rute (/whatsapp ili /viber). Mozak (worker/engine) je
+            # channel-agnostičan — tag služi outbound dispatchu odgovora.
+            integration = str(result.get("integrationType") or "").strip().upper()
+            channel = _CHANNEL_BY_INTEGRATION.get(integration, default_channel)
+
             # CRITICAL: Validate sender is present
             if not sender:
                 _stats["total_no_sender"] += 1
@@ -519,6 +547,7 @@ async def _process_webhook(request: Request, request_id: str, span) -> dict:
                     "request_id": request_id,
                     "tenant_id": tenant_id,
                     "needs_onboarding": "1" if needs_onboarding else "0",
+                    "channel": channel,
                 }
 
                 for redis_attempt in range(3):
@@ -550,6 +579,7 @@ async def _process_webhook(request: Request, request_id: str, span) -> dict:
                 "request_id": request_id,
                 "tenant_id": tenant_id,
                 "needs_onboarding": "1" if needs_onboarding else "0",
+                "channel": channel,
             }
 
             # Pre-push deduplication.
@@ -963,8 +993,10 @@ async def gdpr_process(request: Request):
     resolver = await get_tenant_resolver()
 
     # Tenant ↔ phone binding sanity check (prevents operator from one tenant
-    # accidentally deleting another tenant's user). Look up CURRENT binding.
-    current_tenant = await resolver.resolve_tenant_for_phone(phone)
+    # accidentally deleting another tenant's user). Look up CURRENT binding
+    # from Postgres directly — a stale cache entry must never decide an
+    # erasure authorization.
+    current_tenant = await resolver.resolve_tenant_for_phone(phone, bypass_cache=True)
     if current_tenant is None:
         # Mapping already gone (or user was never mapped). Still proceed
         # with Redis cleanup — there may be stale cache entries to remove.

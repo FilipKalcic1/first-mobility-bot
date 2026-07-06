@@ -463,11 +463,20 @@ class APIGateway:
                 parts = []
                 for k, v in clean.items():
                     encoded_key = quote(str(k), safe='')
+                    is_filter = k.lower() == "filter"
                     if isinstance(v, bool):
                         # JSON-style 'true'/'false', not Python str(True)='True'
                         # (NALAZ 5, Filip 2026-05-25).
                         v = "true" if v else "false"
-                    if k == "Filter":
+                    elif isinstance(v, (list, tuple)):
+                        # Never str() a Python sequence into the URL — that
+                        # ships "['a', 'b']" (repr with brackets/quotes) which
+                        # MobilityOne rejects. Filter conditions join with
+                        # " and " (documented M1 syntax: Field(op)Value and
+                        # Field(op)Value); other array params join with ",".
+                        joiner = " and " if is_filter else ","
+                        v = joiner.join(str(item) for item in v)
+                    if is_filter:
                         # Don't encode '=' as '%3D' because the API rejects it
                         # safe='=' keeps the equals sign unencoded in the value
                         encoded_val = quote(str(v), safe='=')

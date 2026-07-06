@@ -1,0 +1,24 @@
+{
+  "action": "book_vehicle",
+  "method": "POST",
+  "path": "/actions/book-vehicle",
+  "request": {
+    "date_from": "2026-06-12T09:00:00",
+    "date_to": "2026-06-12T15:00:00",
+    "vehicle_hint": "",
+    "person_id": "person-77",
+    "tenant_id": "tenant-A"
+  },
+  "response": {
+    "status": "success",
+    "booking_id": "<any-string>",
+    "vehicle": "<any>"
+  },
+  "errors": [
+    {
+      "when": "nema slobodnih vozila u periodu",
+      "request_override": { "date_from": "2026-06-12T02:00:00", "date_to": "2026-06-12T02:30:00" },
+      "expect": { "error_code": "VEHICLE_UNAVAILABLE", "message": "<any-string>" }
+    }
+  ]
+}

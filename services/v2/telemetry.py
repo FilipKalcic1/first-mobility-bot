@@ -130,15 +130,25 @@ def get_negation_flag() -> bool:
 
 
 def hash_phone(phone: str) -> str:
-    """Legacy helper retained for callers that still hash phones.
+    """Pseudonymize a phone number for LOGS/telemetry (one-way).
 
-    Not part of the canonical event shape (phone_hash field dropped),
-    but kept exported because tests and a few legacy code paths import
-    it. Returns "" for empty input.
+    Salted with GDPR_HASH_SALT so a leaked/logged hash cannot be reversed
+    to the number via a precomputed table of Croatian MSISDNs (the whole
+    space is tiny — ~10^8 — trivially rainbow-tableable UNSALTED). If the
+    salt is unset (dev), falls back to unsalted for backward-compat.
+
+    Not part of the canonical event shape (phone_hash field dropped), kept
+    exported for tests + a few legacy callers. Returns "" for empty input.
     """
     if not phone:
         return ""
-    return hashlib.sha256(phone.encode("utf-8")).hexdigest()[:16]
+    salt = ""
+    try:
+        from config import get_settings
+        salt = get_settings().GDPR_HASH_SALT or ""
+    except Exception:  # noqa: BLE001 — hashing must never crash a log call
+        salt = ""
+    return hashlib.sha256(f"{salt}{phone}".encode("utf-8")).hexdigest()[:16]
 
 
 # ---------------------------------------------------------------------------

@@ -152,12 +152,18 @@ class TenantResolver:
 
     # ── public API ───────────────────────────────────────────────────────
 
-    async def resolve_tenant_for_phone(self, phone: str) -> Optional[str]:
+    async def resolve_tenant_for_phone(
+        self, phone: str, *, bypass_cache: bool = False
+    ) -> Optional[str]:
         """
         Return the active TenantId for `phone`, or None if unknown.
 
         None means "refuse this request" — the caller MUST NOT default to
         env (V6.2 strict isolation).
+
+        bypass_cache=True skips the Redis read and goes straight to Postgres.
+        Use it where a stale cache entry could authorize the wrong action
+        (e.g. the GDPR tenant↔phone binding check).
         """
         normalized = _normalize_phone(phone)
         if not normalized:
@@ -167,7 +173,7 @@ class TenantResolver:
 
         # 1) Cache
         redis = await self._get_redis()
-        if redis is not None:
+        if redis is not None and not bypass_cache:
             try:
                 hit = await redis.get(cache_key)
                 if hit:

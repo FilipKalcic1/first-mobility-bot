@@ -96,6 +96,52 @@ class TestQuerySerialization:
         assert "keepOld=false" in url
         assert "True" not in url and "False" not in url
 
+    @patch("services.api_gateway.TokenManager")
+    @patch("services.api_gateway._get_settings")
+    def test_filter_list_joined_with_and_not_python_repr(self, mock_settings_fn, mock_tm):
+        """Registry marks Filter as param_type=array — a list value used to be
+        str()-ed into the URL as "['LicencePlate(=)X', ...]" (repr with
+        brackets/quotes), which MobilityOne rejects. M1's documented syntax
+        joins conditions with " and "."""
+        ms = MagicMock()
+        ms.MOBILITY_API_URL = "https://api.example.com"
+        ms.tenant_id = "t"
+        mock_settings_fn.return_value = ms
+        gw = APIGateway()
+        url = gw._build_url(
+            "/Vehicles",
+            {"Filter": ["LicencePlate(=)DA533", "Status(=)Active"]},
+        )
+        assert "%5B" not in url and "%27" not in url  # no [ or ' from repr
+        # '=' stays literal, parens stay %28/%29 (existing Filter contract);
+        # the two conditions join with " and " (%20and%20).
+        assert "Filter=LicencePlate%28=%29DA533%20and%20Status%28=%29Active" in url
+
+    @patch("services.api_gateway.TokenManager")
+    @patch("services.api_gateway._get_settings")
+    def test_lowercase_filter_gets_same_treatment(self, mock_settings_fn, mock_tm):
+        """The registry carries `filter` (lowercase) on 110 tools — same
+        join + same '=' passthrough as `Filter`."""
+        ms = MagicMock()
+        ms.MOBILITY_API_URL = "https://api.example.com"
+        ms.tenant_id = "t"
+        mock_settings_fn.return_value = ms
+        gw = APIGateway()
+        url = gw._build_url("/Trips", {"filter": ["Name(=)X"]})
+        assert "filter=Name%28=%29X" in url
+
+    @patch("services.api_gateway.TokenManager")
+    @patch("services.api_gateway._get_settings")
+    def test_generic_list_param_joined_with_comma(self, mock_settings_fn, mock_tm):
+        ms = MagicMock()
+        ms.MOBILITY_API_URL = "https://api.example.com"
+        ms.tenant_id = "t"
+        mock_settings_fn.return_value = ms
+        gw = APIGateway()
+        url = gw._build_url("/things", {"Ids": [1, 2, 3]})
+        assert "Ids=1%2C2%2C3" in url  # "1,2,3" url-encoded
+        assert "%5B" not in url
+
 
 class TestRowsDefault:
     """Test the GET request Rows default behavior.

@@ -30,8 +30,14 @@ class FakeRedisStream:
         self.groups: dict[str, dict] = {}  # stream_name -> {group_name: last_delivered_id}
         self._counter = 0
 
-    async def xadd(self, stream_name: str, data: dict) -> str:
-        """Add entry to stream (called by webhook)."""
+    async def xadd(
+        self,
+        stream_name: str,
+        data: dict,
+        maxlen: int | None = None,
+        approximate: bool = False,
+    ) -> str:
+        """Add entry to stream (called by webhook; maxlen mirrors real Redis)."""
         self._counter += 1
         msg_id = f"1700000000000-{self._counter}"
 
@@ -303,3 +309,96 @@ class TestWebhookToWorkerPipeline:
         assert stream_entries[0][1]["original_type"] == "IMAGE"
         assert stream_entries[1][1]["text"] == "[NON_TEXT:LOCATION]"
         assert stream_entries[1][1]["original_type"] == "LOCATION"
+
+
+# ============================================================================
+# END-TO-END: Viber kanal (Faza 0 multichannel)
+# ============================================================================
+
+class TestViberPipeline:
+    """Viber inbound kroz ISTI stream/parser — samo channel tag razlikuje
+    kanale; worker po njemu bira outbound servis."""
+
+    pytestmark = pytest.mark.asyncio
+
+    @pytest.fixture
+    def fake_redis(self):
+        return FakeRedisStream()
+
+    @pytest.fixture
+    def client(self, fake_redis):
+        async def mock_get_redis():
+            return fake_redis
+
+        mock_settings = MagicMock()
+        mock_settings.VERIFY_WHATSAPP_SIGNATURE = False
+        mock_settings.REDIS_URL = "redis://fake:6379/0"
+        mock_settings.WHATSAPP_VERIFY_TOKEN = None
+
+        with patch("webhook_simple.get_redis", side_effect=mock_get_redis):
+            with patch("webhook_simple.settings", mock_settings):
+                from webhook_simple import router
+                from fastapi import FastAPI
+
+                app = FastAPI()
+                app.include_router(router, prefix="/webhook")
+                yield TestClient(app)
+
+    async def test_viber_message_reaches_worker_with_channel_tag(
+        self, client, fake_redis,
+    ):
+        """POST /webhook/viber → stream entry channel=viber → worker čita
+        isti data contract (sender/text/message_id/channel)."""
+        viber_payload = {
+            "results": [{
+                "from": "385998765432",
+                "to": "MobilityOne",
+                "integrationType": "VIBER",
+                "receivedAt": "2026-06-15T10:30:00.000+0000",
+                "messageId": "viber-msg-e2e-1",
+                "message": {"type": "TEXT", "text": "Vibera: gdje mi je vozilo?"},
+            }]
+        }
+
+        response = client.post("/webhook/viber", json=viber_payload)
+        assert response.status_code == 200
+
+        stream_entries = fake_redis.stream.get("whatsapp_stream_inbound", [])
+        assert len(stream_entries) == 1
+        _, data = stream_entries[0]
+        assert data["channel"] == "viber"
+        assert data["sender"] == "385998765432"
+        assert data["text"] == "Vibera: gdje mi je vozilo?"
+
+        await fake_redis.xgroup_create(
+            "whatsapp_stream_inbound", "workers", "$", mkstream=True)
+        fake_redis.groups["whatsapp_stream_inbound"]["workers"] = 0
+        worker_messages = await fake_redis.xreadgroup(
+            groupname="workers", consumername="worker_test",
+            streams={"whatsapp_stream_inbound": ">"}, count=5)
+        _, entries = worker_messages[0]
+        _, worker_data = entries[0]
+        assert worker_data["channel"] == "viber"
+        assert worker_data["message_id"] == "viber-msg-e2e-1"
+
+    async def test_wa_and_viber_interleaved_keep_their_channels(
+        self, client, fake_redis,
+    ):
+        """Miješani promet: svaki entry zadržava SVOJ kanal — nema curenja
+        defaulta preko resulta."""
+        client.post("/webhook/whatsapp", json={"results": [{
+            "from": "385991111111", "messageId": "m-wa",
+            "integrationType": "WHATSAPP",
+            "message": {"type": "TEXT", "text": "wa poruka"},
+        }]})
+        client.post("/webhook/viber", json={"results": [{
+            "from": "385992222222", "messageId": "m-vi",
+            "integrationType": "VIBER",
+            "message": {"type": "TEXT", "text": "viber poruka"},
+        }]})
+
+        entries = fake_redis.stream.get("whatsapp_stream_inbound", [])
+        assert [(d["channel"], d["text"]) for _, d in entries] == [
+            ("whatsapp", "wa poruka"),
+            ("viber", "viber poruka"),
+        ]

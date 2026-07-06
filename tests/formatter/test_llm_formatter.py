@@ -173,6 +173,48 @@ async def test_huge_list_pruned_to_15():
 
 
 @pytest.mark.asyncio
+async def test_huge_list_prune_tells_llm_the_true_count():
+    """Pruning to 15 items used to be silent — the LLM saw 15 rows and
+    confidently answered 'imaš 15 stavki' when the backend returned 100.
+    The pruned payload must carry the TRUE total."""
+    llm = _FakeLLM()
+    llm.completions.push_content("Imaš 100 stavki, evo prvih 15.")
+
+    fm = LLMFormatter(llm_client=llm, deployment_name="test", registry=_registry())
+    huge = [{"id": i, "padding": "x" * 300} for i in range(100)]
+    r = await fm.format(query="sve rezervacije", tool_id="get_X", api_data=huge)
+    assert r.truncated
+    user_msg = llm.completions.last_kwargs["messages"][-1]["content"]
+    assert '"ukupno_stavki": 100' in user_msg
+    assert '"prikazano_prvih": 15' in user_msg
+
+
+@pytest.mark.asyncio
+async def test_huge_enveloped_list_keeps_rows_and_true_count():
+    """MobilityOne wraps lists ({"Data": [...], "Total": N}). The old dict
+    pruner projected to per-row output_keys (none match the envelope) and
+    then DROPPED the whole array as a 'huge field' — the LLM answered from
+    an empty envelope. Now the inner list is pruned in place."""
+    llm = _FakeLLM()
+    llm.completions.push_content("Imaš 80 putovanja.")
+
+    fm = LLMFormatter(
+        llm_client=llm, deployment_name="test",
+        registry=_registry({"get_Trips": ["Id", "Name"]}),
+    )
+    huge = {
+        "Data": [{"Id": i, "padding": "x" * 300} for i in range(80)],
+        "Total": 80,
+    }
+    r = await fm.format(query="moja putovanja", tool_id="get_Trips", api_data=huge)
+    assert r.truncated
+    user_msg = llm.completions.last_kwargs["messages"][-1]["content"]
+    assert '"Id": 0' in user_msg          # rows survived
+    assert '"ukupno_stavki": 80' in user_msg
+    assert '"Total": 80' in user_msg      # small envelope fields kept
+
+
+@pytest.mark.asyncio
 async def test_huge_dict_projects_to_output_keys():
     """When dict JSON exceeds budget, project to registry output_keys subset.
 

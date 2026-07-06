@@ -118,6 +118,24 @@ def test_build_suppresses_filter_params():
     assert "UseANDFor" not in props
 
 
+def test_build_suppresses_filter_params_case_insensitively():
+    """The registry carries BOTH casings (`Filter` ×113 / `filter` ×110,
+    `UseANDFor` / `useANDFor`). The old exact-match set let the lowercase
+    half through — the LLM could free-fill a hallucinated filter that the
+    gateway then shipped to MobilityOne."""
+    tool = _mk_tool("get_Trips", parameters={
+        "filter": _mk_param("filter", "array", dep="user_input"),
+        "useANDFor": _mk_param("useANDFor", "array", dep="user_input"),
+        "Rows": _mk_param("Rows", "integer", dep="user_input"),
+    })
+    b = ToolSchemaBuilder.from_registry({"tools": [tool]})
+    schemas = b.build_for_tools([tool], tkb={})
+    props = schemas[0]["function"]["parameters"]["properties"]
+    assert "Rows" in props
+    assert "filter" not in props
+    assert "useANDFor" not in props
+
+
 def test_build_includes_tkb_intent_in_description():
     tool = _mk_tool("get_VehicleContracts")
     tkb = {

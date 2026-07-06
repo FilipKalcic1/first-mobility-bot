@@ -90,7 +90,10 @@ class PIIScrubber:
         redactions: list[Redaction] = []
 
         for kind, placeholder, pattern in _PATTERNS:
-            def _replace(match):
+            # Default-arg binding pins the CURRENT loop values — a bare
+            # closure would late-bind and stamp every redaction with the
+            # LAST pattern's kind if the callback ever outlived the loop.
+            def _replace(match, kind=kind, placeholder=placeholder):
                 redactions.append(Redaction(
                     kind=kind,
                     placeholder=placeholder,

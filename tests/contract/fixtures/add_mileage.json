@@ -1,0 +1,21 @@
+{
+  "action": "add_mileage",
+  "method": "POST",
+  "path": "/actions/add-mileage",
+  "request": {
+    "value": 145000,
+    "person_id": "person-77",
+    "tenant_id": "tenant-A"
+  },
+  "response": {
+    "status": "success",
+    "mileage_id": "<any-string>"
+  },
+  "errors": [
+    {
+      "when": "vrijednost manja od trenutne kilometraže",
+      "request_override": { "value": 1 },
+      "expect": { "error_code": "<any-string>", "message": "<any-string>" }
+    }
+  ]
+}

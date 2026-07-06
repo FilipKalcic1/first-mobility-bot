@@ -91,3 +91,7 @@ PLAN.md
 # --- 11. CLAUDE CODE ---
 .claude/
 CLAUDE.md
+
+# Generated at runtime by AnchorIndex (content-fingerprinted embed cache)
+tests/benchmarks/router_anchor_cache.json
+tests/benchmarks/_excluded_indices.txt

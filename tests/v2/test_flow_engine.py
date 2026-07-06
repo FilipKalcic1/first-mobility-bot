@@ -471,13 +471,21 @@ def test_all_flows_have_params_builder():
 
 from services.v2.flow_engine import _parse_period
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+
+def _zagreb_today():
+    """Parser računa 'danas' u Europe/Zagreb (_parse_period → datetime.now(_ZAGREB)).
+    Test MORA koristiti istu zonu — inače naive datetime.now() blizu UTC-ponoći
+    daje dan razlike (Zagreb je već sutra) i test flakea po zidnom satu."""
+    return datetime.now(ZoneInfo("Europe/Zagreb")).date()
 
 
 def _next_weekday(target_weekday: int):
     """Return next occurrence of weekday (0=Mon). 0-delta means today is
     Monday → returns next Monday (+7), matching _parse_period semantics
     where 'u ponedjeljak' on a Monday is treated as next week."""
-    today = datetime.now().date()
+    today = _zagreb_today()
     delta = (target_weekday - today.weekday()) % 7
     if delta == 0:
         delta = 7
@@ -512,7 +520,7 @@ def test_parse_period_handles_next_week_keyword():
     out = _parse_period("iduci petak 9-15")
     plain = _parse_period("u petak 9-15")
     assert out is not None and plain is not None
-    today_iso = datetime.now().date().isoformat()
+    today_iso = _zagreb_today().isoformat()
     # 'iduci' must never resolve to today, and never before the plain Friday.
     assert out["from_time"][:10] != today_iso
     assert out["from_time"] >= plain["from_time"]
@@ -523,7 +531,7 @@ def test_parse_period_parts_of_day_ujutro():
     """'sutra ujutro' → tomorrow 09:00-12:00 (default morning window)."""
     out = _parse_period("sutra ujutro")
     assert out is not None
-    expected = datetime.now().date() + timedelta(days=1)
+    expected = _zagreb_today() + timedelta(days=1)
     assert out["from_time"].startswith(expected.isoformat())
     assert "09:00:00" in out["from_time"]
     assert "12:00:00" in out["to_time"]
@@ -533,7 +541,7 @@ def test_parse_period_parts_of_day_popodne():
     """'danas popodne' → today 13:00-17:00."""
     out = _parse_period("danas popodne")
     assert out is not None
-    today = datetime.now().date()
+    today = _zagreb_today()
     assert out["from_time"].startswith(today.isoformat())
     assert "13:00:00" in out["from_time"]
     assert "17:00:00" in out["to_time"]
@@ -543,7 +551,7 @@ def test_parse_period_parts_of_day_navecer():
     """'sutra navečer' → tomorrow 18:00-22:00."""
     out = _parse_period("sutra navečer")
     assert out is not None
-    expected = datetime.now().date() + timedelta(days=1)
+    expected = _zagreb_today() + timedelta(days=1)
     assert out["from_time"].startswith(expected.isoformat())
     assert "18:00:00" in out["from_time"]
     assert "22:00:00" in out["to_time"]
@@ -573,3 +581,24 @@ def test_parse_period_returns_none_on_garbage():
     assert _parse_period("kasnim na sastanak") is None
     # Date but no hour and no part-of-day → None
     assert _parse_period("sutra negdje") is None
+
+
+# ---- AUD-4 (2026-06-11 audit): confirm prompts humanize ISO datetimes ----
+
+
+def test_render_prompt_humanizes_iso_datetime():
+    """Booking confirm must read 'od 12.06.2026. 09:00' — not raw ISO."""
+    from services.v2.flow_engine import _render_prompt
+
+    out = _render_prompt(
+        "Rezerviram od {from_time} do {to_time}.",
+        {"from_time": "2026-06-12T09:00:00", "to_time": "2026-06-12T15:00:00"},
+    )
+    assert out == "Rezerviram od 12.06.2026. 09:00 do 12.06.2026. 15:00."
+
+
+def test_render_prompt_leaves_plain_strings_alone():
+    from services.v2.flow_engine import _render_prompt
+
+    out = _render_prompt("Opis: {description}", {"description": "kvar na 4. vratima"})
+    assert out == "Opis: kvar na 4. vratima"

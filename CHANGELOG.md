@@ -1,5 +1,73 @@
 # Changelog
 
+## 13.1.0 — Full-system audit: 16 verified fixes + E2E proof of the core task (2026-06-11)
+
+### Fixed (correctness of the API call — the system's core duty)
+- **api_gateway:** list values in query params serialized per the M1
+  contract (`Filter` family joins with `" and "`, other arrays with `,`)
+  instead of Python `str(list)` repr that M1 rejects.
+- **tool_schema_builder:** `filter`/`useANDFor` (lowercase, 110 tools) now
+  suppressed from LLM tool schemas — the case-sensitive set let the LLM
+  free-fill hallucinated filters while the filter feature is reset to zero.
+- **executor:** per-call budget 5s → 15s. 5s expired during the gateway's
+  own recovery (cold OAuth fetch, 401-refresh, 429 backoff) — recoverable
+  transients surfaced as user-facing timeouts and opened the circuit.
+- **type_resolver:** `đ` survived NFKD normalization (U+0111 has no
+  decomposition) — `Građevinski` never matched a user's `gradevinski`.
+
+### Fixed (no lost replies)
+- **worker outbound:** `data` initialized per-iteration — an exception in
+  `blmove` itself previously hit `UnboundLocalError` inside the except
+  handler and KILLED the outbound pump until pod restart.
+- **worker outbound:** unexpected send exception → DLQ + removal from the
+  processing list (was: stuck invisible until next restart); payloads
+  without a recipient → DLQ; idempotency_key threaded through delayed
+  retries (regenerated second-granularity keys could collapse two
+  same-text retries into one zset member = silently dropped reply).
+- **worker non-text path:** enqueue failure no longer leads to the
+  redelivered message being ACKed as a duplicate.
+
+### Fixed (no interaction dead-ends)
+- **engine:** pending-confirm digit replies — the advertised "1/2/3" menu
+  was parsed by NOTHING (guaranteed re-prompt loop). Digits are now safe
+  (2/3 cancel, 1 → explicit 'Da' re-prompt; a digit never blind-executes)
+  and the guard message only advertises inputs that parse.
+- **engine:** ACTION_GLOBAL with zero tool cards returns a message instead
+  of silent None; *TypeId pick-lists > 20 announce "(i još N)".
+- **flow confirm prompts** humanize ISO datetimes ("od 12.06.2026. 09:00").
+
+### Fixed (correct data to the user)
+- **llm_formatter:** pruned lists carry an explicit `ukupno_stavki` — the
+  LLM saw 15 rows of 200 and confidently answered "imaš 15 stavki";
+  enveloped lists (`{"Data": [...]}`) prune the inner list instead of
+  dropping the whole array as a "huge field".
+- **engine:** LLM-formatted execute replies teach the "nije točno" phrase
+  whenever reoffer state exists (only the template path appended it).
+- **GDPR endpoint:** tenant↔phone binding check reads Postgres directly
+  (`bypass_cache=True`) — a stale cache entry must never decide erasure.
+
+### Added
+- **tests/v2/test_e2e_trips_scenario.py** — end-to-end proof of the core
+  task over the REAL 950-tool registry through the production factory:
+  "Želim vidjeti moja posljednja putovanja" → action picker → scoped
+  router → tool pick → asserts the EXACT MobilityOne call (GET
+  /vehiclemgt/Trips, user's resolved tenant, no body, no hallucinated
+  filters) → grounded Croatian reply → "nije točno" reoffer. Plus the
+  WRITE half: "upiši 145000 km" → flow pre-fill → Da/Ne confirm →
+  exact POST /automation/AddMileage with context-injected VehicleId;
+  "Ne" → zero API calls.
+- 20+ regression tests for every fix above (suite: 1751 passing).
+
+### Maintenance
+- CI de-staled (admin_api.py compile, faiss-cpu install, ignores of
+  deleted test files); `aiosqlite` added to dev deps; webhook tests
+  aligned to the plain-text health contract; `FakeRedisStream.xadd`
+  accepts `maxlen`; ruff clean (pii_scrubber B023 closure late-binding,
+  clarify_ui E741); HANDOFF.md rewritten to match the actual system;
+  README/ARCHITECTURE de-staled (Model A cascade, real config files);
+  runtime anchor-cache artifacts gitignored.
+
+
 ## 13.0.0 — V2Engine telemetry + drop Prometheus instrumentation (2026-05-09)
 
 ### Added

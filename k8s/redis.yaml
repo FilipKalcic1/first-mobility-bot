@@ -1,0 +1,98 @@
+# Redis is LOAD-BEARING STATE, not just a cache: the inbound stream,
+# outbound queue, both DLQs, pending confirm/clarify/param states and the
+# OAuth token cache live here. Two consequences drive this config:
+#
+#   1. PERSISTENCE (AOF everysec): a Redis restart without AOF would drop
+#      queued replies + DLQs + in-flight conversations.
+#   2. maxmemory-policy noeviction: ANY eviction policy could silently
+#      delete a queued reply or a pending mutation. With noeviction, Redis
+#      starts refusing writes when full — loud failure (webhook returns
+#      503 → Infobip retries) instead of silent message loss.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: mobility-bot
+data:
+  redis.conf: |
+    appendonly yes
+    appendfsync everysec
+    maxmemory 384mb
+    maxmemory-policy noeviction
+    save ""
+    tcp-keepalive 60
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: mobility-bot
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: redis
+          image: redis:7.2-alpine
+          command: ["redis-server", "/etc/redis/redis.conf"]
+          ports:
+            - containerPort: 6379
+              name: redis
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+            - name: redis-config
+              mountPath: /etc/redis
+      volumes:
+        - name: redis-config
+          configMap:
+            name: redis-config
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: mobility-bot
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+  clusterIP: None
