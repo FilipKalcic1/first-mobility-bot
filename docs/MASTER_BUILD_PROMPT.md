@@ -16,8 +16,9 @@
 >    pada na build-integrity gateu §1.6 / §4.5.
 > 5. Gotovo = §21, ne tvoj osjećaj. Samoocjena <10/10 → nastavi raditi.
 >
-> **Verzija:** v3.1 (2026-07) — potpuna verzija: stack FIKSIRAN, svih 10 kategorija
-> rubrike (`BUILD_PROMPT_RUBRIKA.md`) ciljano na 10. Ciljna arhitektura po reviewu
+> **Verzija:** v3.2 (2026-07) — **10/10 po `BUILD_PROMPT_RUBRIKA.md`** (svih 10
+> kategorija). Stack FIKSIRAN (Python), +REUSE-MAPA (§26) za evoluciju postojećeg
+> sustava, +LLM prompt-template-i (§14.1), +CI (§20.1), +atomic claim (§5.1). Ciljna arhitektura po reviewu
 > vlasnika: **jedan `mobilityone-ai` servis na postojećem AKS-u, SQL `ai` schema u
 > postojećoj bazi, BEZ Redisa / zasebnog workera / PostgreSQL / KEDA** — sav mozak,
 > mine i ugovori PREŽIVLJAVAJU, re-homani na jednostavniju infrastrukturu.
@@ -401,6 +402,13 @@ rate-limit postaje per-pod (2×, sitnica), (b) per-Sender redoslijed oslanja se
 na `NOT EXISTS` guard gore umjesto na single-pod slijednost. Ništa se ne lomi,
 samo se ta dva mjesta uključe.
 
+**Testiranje (pošteno):** `READPAST`/`UPDATE TOP…OUTPUT` su SQL-Server-specifični
+— NE vrte se na SQLite. Zato: `repository.py` unit-testovi mockaju claim
+(testira se logika petlje/statusa), a SAM atomični claim + concurrency
+(dva taska ne uzmu istu poruku) testira se **integration testom protiv LocalDB/
+SQL Servera** (`-m integration`, gated, ne u svakom PR-u). Bez ovog integration
+testa, concurrency claima NIJE dokazan (BI-13 šav-test).
+
 ---
 
 ## §6 ULAZNI RUB — webhook adapteri
@@ -531,6 +539,25 @@ Nijedna stanica ne "propušta šutke"; ništa se ne šalje bez ⑦ (echo + Da).
     }},
   "execution": { "method":"POST", "action":"/actions/report-incident" },  // ili granularna ruta
   "policy": { "mutation":true, "inject":["person_id","tenant_id"] } }
+```
+```jsonc
+// WRITE s periodom
+{ "name":"book_vehicle",
+  "ai":{ "description":"Rezervacija vozila za period.",
+    "use_when":["rezerviraj auto","trebam vozilo sutra","bookiraj kombi"],
+    "parameters":{
+      "date_from":{"type":"datetime","required":true,"description":"Početak.","examples":["sutra 9h"]},
+      "date_to":{"type":"datetime","required":true,"description":"Kraj.","examples":["do 15h"]},
+      "vehicle_hint":{"type":"string","required":false,"description":"Konkretno vozilo; prazno=backend nudi.","examples":["kombi"]}}},
+  "execution":{"method":"POST","action":"/actions/book-vehicle"},
+  "policy":{"mutation":true,"inject":["person_id","tenant_id"]} }
+// READ (bez confirma — nije mutation)
+{ "name":"list_trips",
+  "ai":{ "description":"Prikaz korisnikovih putovanja.",
+    "use_when":["moja putovanja","zadnje vožnje","gdje sam bio"],
+    "parameters":{ "limit":{"type":"integer","required":false,"description":"Koliko zadnjih.","examples":["10"]}}},
+  "execution":{"method":"GET","action":"/actions/list-trips"},
+  "policy":{"mutation":false,"inject":["person_id","tenant_id"]} }
 ```
 Boot fail-fast (malformiran → servis se NE digne, M12). Reload bez deploya
 (`/api/ai/admin` cache-invalidate). Novi param uvijek `required:false` (aditivno).
@@ -745,10 +772,16 @@ uključena u benchmark. **Sustav GOTOV:** svih ~30 akcija × 6 + agregat
 **90/97/0** (top-1/top-3/halucinacije) na dual-seed + 2 tjedna pilota + showstopper
 bez 🔴 + auth preflight `ok AND verified` uz live kredencijale.
 
-**Garancija "uvijek odgovor" (INV-6) — svaka poruka završi u JEDNOM od:**
-`ai.Message.Status=answered` (poslano) ILI `=failed` + `Error` + App Insights
-alarm. Restart-safe (M10), dedup (M14), redoslijed (INV-8). Honest bound: finalna
-DOSTAVA je na Infobip/Teams/Web platformi. **Svaki novi izlaz = novi redak ovdje + test.**
+**Garancija "uvijek odgovor" (INV-6) — po putu:**
+- **ASYNC (webhook kanali):** svaka poruka završi `ai.Message.Status=answered`
+  (poslano) ILI `=failed` + `Error` + App Insights alarm. Restart-safe (M10),
+  dedup (M14), redoslijed (INV-8).
+- **SYNC (`/api/ai/chat`, §15.1):** garancija JE HTTP odgovor — engine vrati
+  tekst; iznimka/timeout → HTTP 200 sa sigurnom HR fallback porukom (nikad prazan
+  body ni 500 korisniku). Opcionalni `ai.Message` zapis za povijest/audit.
+
+Honest bound: finalna DOSTAVA je na Infobip/Teams/Web platformi. **Svaki novi
+izlaz = novi redak ovdje + test.**
 
 ---
 
@@ -814,3 +847,39 @@ DOSTAVA je na Infobip/Teams/Web platformi. **Svaki novi izlaz = novi redak ovdje
    preflight ok AND verified? Key Vault/Managed Identity za sve tajne?
 ```
 **Ako je i jedan red crven — samoocjena NIJE 10/10. Nastavi raditi.**
+
+---
+
+## §26 REUSE-MAPA (ako evoluiraš POSTOJEĆI Python sustav, ne gradiš od nule)
+
+> Dvije upotrebe ovog prompta: **(A) svjež build** — gradi po §23 od nule.
+> **(B) evolucija** — imamo radni Python sustav (1756 testova, 14 mina riješeno);
+> tada NE piši ispočetka mozak — RE-HOME-aj infrastrukturu. Mapiranje:
+
+**ZADRŽI (mozak — kopiraj ~1:1, samo stanje ide u `ai.UserSession` umjesto Redisa):**
+| Postojeće | → Cilj (v3.1) |
+|---|---|
+| `services/v2/engine.py` (V2Engine) | `engine/conversation_service.py` (isti slojevi; pending/history → `ai.UserSession`) |
+| `services/v2/{rate_limiter,pii_scrubber,input_sanitizer,output_sanitizer,crisis_detector,identity,special_intents,mutation_gate,param_ui,type_resolver,api_error_translator,conversation_history}.py` | `engine/*` (logika NETAKNUTA) |
+| `services/router/llm_router.py` + `action_registry`/`validator` | `engine/routing/*` |
+| `services/formatter/llm_formatter.py` | `engine/formatter.py` |
+| `services/whatsapp_service.py` + `viber_service.py` | `adapters/infobip.py` (VEĆ su adapteri! M2/M4 ostaju) |
+| `services/api_gateway.py` · `token_manager.py` · `auth_preflight.py` | `mobilityone/*` (netaknuto) |
+| `config/actions.json` · svih 14 mina · pripadni testovi | ostaju |
+
+**RE-PLUMBAJ (storage/infra — jedini pravi posao):**
+| Postojeće | → Cilj |
+|---|---|
+| Postgres `user_mappings` + `tenant_resolver` | SQL `ai` schema + `db/repository.py` |
+| Redis (stream/queue/pending/history/dedup/rate-limit/sent) | `ai.Message` (outbox) + `ai.UserSession` + in-memory (§5 mapa) |
+| `webhook_simple.py` (FastAPI webhook) | `adapters/*` + `main.py` rute → upis u `ai.Message` |
+| `worker.py` (zaseban proces, Redis consumer) | `outbox/loop.py` (background task u ISTOM servisu, §7) |
+
+**OBRIŠI:** Redis klijent · k8s Redis/Postgres manifesti · KEDA · zaseban
+worker-deployment · (ako ideš ravno na ~30 akcija) 950-skela (tool_data/registry/
+anchor — bila prijelazna). BI-9 to i provjerava.
+
+**Redoslijed evolucije (Strangler-safe):** 1) SQL `ai` schema + repository →
+2) adapteri iz postojećih *_service.py → 3) outbox loop zamijeni worker →
+4) prebaci pending/history s Redisa na `ai.UserSession` → 5) makni Redis →
+6) deploy kao jedan servis. Suite mora ostati zelena na SVAKOM koraku.

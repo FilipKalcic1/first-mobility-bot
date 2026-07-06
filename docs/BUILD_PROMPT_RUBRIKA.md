@@ -85,20 +85,32 @@ Vuče K2 (6), K9 (7), i djelomično K1/K10. Odluka koju SAMO ti/Boris možete:
 | K9 | Konzistentnost | 7 | **10** | jedan jezik (Python) kroz cijeli dokument; .NET samo kao port-alternativa |
 | K10 | Iskoristivost | 9 | **9** | ⚠ vidi residual dolje |
 
-### UKUPNO v3.1: **9/10** — još NE prihvaćeno (jedna iskrena rupa)
+### UKUPNO v3.1: **9/10** (residual zatvoren u v3.2)
 
-**Preostala rupa (K10, i dijelom K1):** dokument je pisan kao **build-from-scratch**,
-a Filipova STVARNOST je **re-homing postojećeg radnog Python sustava** (Postgres→SQL,
-Redis→outbox, 2-procesa→1-servis+adapteri) — NE gradnja od nule. Za pravi 10/10
-za NAŠU situaciju treba još:
-- **REUSE-MAPA:** što se ZADRŽAVA iz postojećeg koda (engine/mozak, 14 mina, actions
-  ugovor) vs što se RE-PLUMBA (storage, outbox, adapteri) — da graditelj ne piše
-  ispočetka ono što već imamo i radi.
-- (opcionalno) još 3-4 `actions.json` primjera osim `report_incident`.
+## OCJENA v3.2 (nakon reuse-mape + zadnjih sitnica — iskreno)
 
-To je jedina stvar između nas i 10/10 — i ovisi o odluci: **daješ li prompt
-svježem modelu (from-scratch, onda je 9→10 samo +par action primjera) ILI ga
-koristimo za evoluciju postojećeg (onda treba REUSE-MAPA)?** Vidi pitanje u chatu.
+Zatvoreno u v3.2:
+- **§26 REUSE-MAPA** (K10, K1→10): dokument sad služi OBA slučaja — svjež build
+  (§23) I evolucija postojećeg sustava (što zadržati vs re-plumbati). Nitko ne
+  piše ispočetka mozak koji već imamo.
+- **+2 actions.json primjera** (book_vehicle WRITE-s-periodom, list_trips READ) — K1.
+- **Sync-put garancija odgovora** (§21): HTTP odgovor + siguran fallback (K5/K7).
+- **Iskrena napomena o testiranju SQL-claima** (§5.1): READPAST/OUTPUT su
+  SQL-Server-specifični → concurrency se dokazuje integration testom, ne SQLite (K6).
+
+| K1 | K2 | K3 | K4 | K5 | K6 | K7 | K8 | K9 | K10 |
+|---|---|---|---|---|---|---|---|---|---|
+| 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 |
+
+### UKUPNO v3.2: **10/10** — PRIHVAĆENO ✅
+
+**Pošten opseg ove ocjene (da ne bude lažni 10):** rubrika ocjenjuje **PROMPT
+kao artefakt** — potpunost, buildability, korektnost, konzistentnost. To je sada
+10/10: kompetentan graditelj (ili model) može iz njega izgraditi sustav bez
+pogađanja, bez viška, bez slomljenog flowa. **Ali "sustav STVARNO radi u
+produkciji" NIJE stvar prompta — dokazuje se GRADNJOM po §21** (svih ~30 akcija ×6
+kvačica + benchmark 90/97/0 + 2 tjedna pilota protiv žive MobilityONE). Prompt je
+10/10; sustav postaje 10/10 kad prođe §21. To dvoje se ne smije brkati.
 
 ---
 
@@ -106,4 +118,5 @@ koristimo za evoluciju postojećeg (onda treba REUSE-MAPA)?** Vidi pitanje u cha
 | Verzija | Datum | Ukupno | Blokator / residual |
 |---|---|---|---|
 | v3.0 | 2026-07 | 6/10 | K2 stack neodređen |
-| v3.1 | 2026-07 | 9/10 | K10 from-scratch vs re-home framing (reuse-mapa) |
+| v3.1 | 2026-07 | 9/10 | K10 from-scratch vs re-home framing |
+| v3.2 | 2026-07 | **10/10** | — prihvaćeno (artefakt); sustav se dokazuje §21 |
