@@ -21,6 +21,7 @@ prihvaćen TEK kad je SVAKA kategorija 10. Dok nije — radimo dalje.*
 | K9 | **Konzistentnost** | Nula unutarnjih kontradikcija / stale referenci. JEDAN jezik, JEDAN model podataka, JEDNA arhitektura kroz cijeli dokument? |
 | K10 | **Iskoristivost kao prompt** | Redoslijed čitanja (protokol), samoprovjera, nedvosmislen prioritet u konfliktu. Može li se KRIVO protumačiti/zloupotrijebiti → <10. |
 | K11 | **Proširivost / enterprise kvaliteta koda** | Daje li KONKRETNE patterne (ports&adapters, DI) + extension recipes (dodaj kanal/akciju BEZ dirania jezgre) + scalability pravila? Bi li dodavanje kanala tražilo izmjenu jezgre → <10. *(Dodana 2026-07 — Filip točno uočio da 10 kategorija nije izoliralo "KAKO implementirati enterprise/scalable".)*|
+| K12 | **Konverzacijska kvaliteta / UX bota** | Definira li KAKO bot razgovara: persona/ton, out-of-scope graciozan izlaz (ne halucinira akciju), više-intent (ne gubi drugi), promjena teme usred params, mješoviti jezik, zatvaranje? Svako s e2e testom. *(Dodana 2026-07 nakon adversarijalnog audita — 35 agenata; ŠTO/TIJEK bili pokriveni, KAKO bot priča nije.)* |
 
 **Ukupno = min(sve kategorije).** Nije prosjek — jedna 6-ica znači prompt NIJE 10/10.
 
@@ -125,10 +126,39 @@ inversion, EXTENSION RECIPES (dodaj kanal/akciju bez dirania jezgre), scalabilit
 pravila (stateless + SQL source of truth), anti-bloat disciplina, kod standardi,
 WhatsApp-first → K11 = **10**. Svih 11 kategorija = 10.
 
+## OCJENA v3.4 (nakon ADVERSARIJALNOG AUDITA — 35 agenata, 4 leće × verifikacija)
+
+Audit našao **15 stvarnih + 16 djelomičnih rupa** (potvrđenih protiv koda), uklj.
+greške koje sam JA uveo (Python 3.11 vs repo 3.12; ruff ignorira E722/B904 →
+potkopava minu M1). SVE zatvoreno:
+- **§28 KONVERZACIJSKA PRAVILA (K12):** out-of-scope (0 API poziva, ne halucinira),
+  multi-intent (ne gubi drugi; sigurnosni=primary), promjena teme usred params
+  (HIGH — ne guta poruku), persona/ton, mješoviti jezik, zatvaranje. +S11-S13 e2e.
+- **§29 OPS/DATA LIFECYCLE:** GDPR retencija+erasure za ai.*, admin surface
+  (messages/routing-log/pause), observability (imenovane metrike+alarmi),
+  **outbox-heartbeat→ready** (HIGH — petlja ne umire tiho), migracije
+  (forward-only expand-contract), rollback, secret rotation.
+- **§20.1 pooštren:** mypy gate, ruff pooštren (goli except u jezgri crven),
+  benchmark deploy-gate (2-seed 90/97/0 vs baseline), mine-manifest (M1-M14),
+  concurrency-claim integration test, red-team e2e, scenario-manifest, dep-lock.
+- **§26:** +konverzacijski moduli (meta_intents/multi_intent/negation…) +tooling
+  (ruff/mypy/pre-commit/Dockerfile) ZADRŽATI; prune mrtvih deps (numpy/scikit/redis).
+- Činjenično: Python 3.12; capacity 120/>150 = PROCJENE ne izmjereno; API versioning.
+
+| K1 | K2 | K3 | K4 | K5 | K6 | K7 | K8 | K9 | K10 | K11 | K12 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 |
+
+### UKUPNO v3.4: **10/10 kroz 12 kategorija** — PRIHVAĆENO ✅
+Isti pošteni opseg (§21): rubrika ocjenjuje PROMPT-artefakt; "sustav radi" se
+dokazuje gradnjom po §21. Adversarijalni audit je artefakt doveo do stanja gdje
+konkretno ne nalazim više stvarnu rupu koja bi srušila build.
+
 ## POVIJEST OCJENA
 | Verzija | Datum | Ukupno | Blokator / residual |
 |---|---|---|---|
 | v3.0 | 2026-07 | 6/10 | K2 stack neodređen |
 | v3.1 | 2026-07 | 9/10 | K10 from-scratch vs re-home framing |
 | v3.2 | 2026-07 | 10/10 (10 kat.) | prihvaćeno; onda uočena 11. dimenzija |
-| v3.3 | 2026-07 | **10/10 (11 kat.)** | +K11 proširivost/enterprise (§27) |
+| v3.3 | 2026-07 | 10/10 (11 kat.) | +K11 proširivost/enterprise (§27) |
+| v3.4 | 2026-07 | **10/10 (12 kat.)** | +K12 konverzacija (§28) + audit zatvorio 31 rupu |

@@ -16,16 +16,21 @@
 >    pada na build-integrity gateu §1.6 / §4.5.
 > 5. Gotovo = §21, ne tvoj osjećaj. Samoocjena <10/10 → nastavi raditi.
 >
-> **Verzija:** v3.3 (2026-07) — **10/10 po `BUILD_PROMPT_RUBRIKA.md`** (svih 11
-> kategorija). Stack FIKSIRAN (Python), +REUSE-MAPA (§26), +ENGINEERING STANDARDS
-> & PROŠIRIVOST (§27: ports&adapters, extension recipes, scalability, WhatsApp-first),
-> +LLM prompt-template-i (§14.1), +CI (§20.1), +atomic claim (§5.1). Ciljna arhitektura po reviewu
+> **Verzija:** v3.4 (2026-07) — nakon adversarijalnog audita (35 agenata):
+> zatvoreno 15 stvarnih + 16 djelomičnih rupa. +§28 KONVERZACIJSKA PRAVILA
+> (out-of-scope, multi-intent, promjena teme, ton — K12), +§29 OPS/DATA
+> LIFECYCLE (GDPR retencija+erasure za ai.*, admin surface, observability,
+> outbox-heartbeat, migracije, rollback), pooštren §20.1 (mypy+ruff+benchmark
+> gate+mine-manifest), §26 dopunjen (konverzacijski moduli+tooling; prune deps).
+> Ranije (v3.3): +REUSE-MAPA (§26), +ENGINEERING & PROŠIRIVOST (§27),
+> +LLM promptovi (§14.1), +CI (§20.1), +atomic claim (§5.1). Ciljna arhitektura po reviewu
 > vlasnika: **jedan `mobilityone-ai` servis na postojećem AKS-u, SQL `ai` schema u
 > postojećoj bazi, BEZ Redisa / zasebnog workera / PostgreSQL / KEDA** — sav mozak,
 > mine i ugovori PREŽIVLJAVAJU, re-homani na jednostavniju infrastrukturu.
 >
-> **STACK (FIKSIRAN — nema pogađanja, K2):** `mobilityone-ai` je **Python 3.11 +
-> FastAPI**, kontejneriziran (Docker), deployan na postojeći AKS kao standardni
+> **STACK (FIKSIRAN — nema pogađanja, K2):** `mobilityone-ai` je **Python 3.12 +
+> FastAPI** (repo se gradi/tipizira na 3.12 — Dockerfile, ruff, mypy),
+> kontejneriziran (Docker), deployan na postojeći AKS kao standardni
 > container. Razlog: imamo KOMPLETAN, testiran Python sustav (1756 testova, svih
 > 14 mina riješeno) — kontejner se na AKS deploya jednako kao .NET servis i dijeli
 > istu bazu / ingress / Key Vault / App Insights. `ai` schema DDL može kreirati
@@ -123,6 +128,8 @@ scaling, zaseban CI. ALI dijeli sve ostalo (baza, ingress, monitoring, CI/CD).
 /api/ai/mcp       (kasnije)  ← MCP server
 ```
 Dodavanje kanala = novi adapter + nova ruta, BEZ promjene osnovne arhitekture.
+**Verzioniranje:** klijent-okrenute rute nose verziju (`/api/ai/v1/chat`…) ILI
+`Accept: application/vnd.ai.v1+json` — da budući breaking format ne razbije kanale.
 
 **Što NAMJERNO NEMA** (nije opravdano za ovu veličinu; dodaje se tek kad ima
 smisla): PostgreSQL · Redis · KEDA · zaseban worker-deployment · zaseban
@@ -198,7 +205,7 @@ Svako ima GATE (mehanizam koji hvata kršenje). Kršenje IJEDNOG = build NIJE go
 **C) ANTI-SLOMLJEN-FLOW**
 - BI-10: Svaki `ai.Message`/`ai.UserSession` zapis ima definiran skup polja (§5) + čitač s DEFAULTOM. Gate: kontraktni test.
 - BI-11: `ErrorCode` se klasificira po VRIJEDNOSTI ne literalu (M1). Gate: test s pravim vrijednostima.
-- BI-12: Adapter je JEDINO mjesto koje zna kanal-specifičan format; ConversationService je channel-agnostičan. Gate: grep da engine ne importa Infobip/Teams SDK.
+- BI-12: Adapter je JEDINO mjesto koje zna kanal-specifičan format; ConversationService je channel-agnostičan. Gate: grep da `engine/` ne importa NI adapter-SDK (Infobip/Bot Framework) NI `adapters/` sam (`from adapters`, `import infobip`) — oboje = crven build.
 - BI-13: Svaki ŠAV ima test: adapter→ai.Message · outbox→engine · engine→MobilityONE(auth) · engine→adapter(send). Gate: e2e/kontraktni test.
 - BI-14: Nijedan izlaz ne "propušta šutke" — vodi u odgovor ILI `status=failed`+alarm, i ima redak u §21. Gate: garancija-odgovora tablica raste sa svakim izlazom.
 
@@ -621,10 +628,20 @@ PRAVILA:
   sustav će pitati.
 - NIKAD ne postavljaj interne ID-eve, tenant, ni šifre — to nije tvoj posao.
 - Datume ostavi kako je korisnik rekao ("sutra 9h") — sustav ih pretvara.
+- Ako poruka NIJE ni akcija ni pitanje o flotnim podacima/pravilniku (npr.
+  "koliko je sati", vic, vrijeme, "tko si ti", opće ćaskanje) → kind="out_of_scope";
+  NE izmišljaj akciju, NE forsiraj najbliži tool.
+- Ako korisnik u ISTOJ poruci JASNO traži DVIJE različite akcije ("rezerviraj auto
+  I prijavi kvar") → to NIJE clarify. Obradi jednu kao PRIMARY, vrati
+  pending_followup="{sažetak drugog intenta}". Ako je jedan sigurnosni
+  (report_incident/kvar/nezgoda) → on je PRIMARY bez obzira na redoslijed; inače
+  primary = prvi spomenut.
 KONTEKST: {identity_sažetak}   POVIJEST (zadnja 3 turna): {history}
 Alati: {tools iz actions.json — action_registry.openai_tools()}
-tool_choice = "auto"   (dopušta i clarify/answer put)
+tool_choice = "auto"   (dopušta clarify/answer/out_of_scope put)
 ```
+Izlazi rutera: `action | clarify | answer | out_of_scope` (+ `pending_followup`).
+Ponašanje po njima je u §28 (KONVERZACIJSKA PRAVILA).
 
 **FORMATTER (odgovor) — system prompt:**
 ```
@@ -749,8 +766,11 @@ mobilityone-ai:  1 deployment (Boris skele — standardno), ingress /api/ai/*
   · liveness/readiness: /api/ai/health, /api/ai/ready (HTTP — servis IMA port)
   · outbox loop startan u lifespan; na bootu recovery 'processing'→'received'
 NEMA: Redis · zaseban worker · KEDA · Postgres · drugi AKS · AGIC (izbačeno namjerno)
-Skaliranje: 1 pod dovoljan za ~120 vozača. Na 2+ poda: rate-limit postaje per-pod
-  (sitnica), outbox claim ostaje atomičan (SQL UPDATE), redoslijed očuvan.
+Skaliranje: 1 pod PROCIJENJENO dovoljan za ~120 vozača (nije izmjereno pod
+  opterećenjem — potvrditi load testom prije oslanjanja). Na 2+ poda: rate-limit
+  per-pod (sitnica), outbox claim ostaje atomičan (SQL UPDATE), redoslijed očuvan.
+  Pragovi (>150 msg/min → 2 poda; >500 korisnika → SQL read replica) su PROCJENE
+  s brojem, ne izmjerene granice — mjeriti telemetrijom (§29.3), ne pretpostaviti.
 ```
 
 ### 20.1 CI/CD PIPELINE (K6 — objektivan "gotovo" gate)
@@ -758,18 +778,41 @@ Skaliranje: 1 pod dovoljan za ~120 vozača. Na 2+ poda: rate-limit postaje per-p
 # .github/workflows/ci.yml (ili Borisov Azure DevOps ekvivalent — isti gateovi)
 env: { APP_ENV: testing, SQL_CONNECTION_STRING: <test-sqlite/localdb>, ...mock secreti }
 steps:
-  - ruff check .                                  # lint — MORA proći
+  - ruff check .                                  # lint — vidi pooštrenje dolje
+  - mypy engine adapters mobilityone outbox db    # TYPE-CHECK jezgre (§27.5 "type hints svugdje")
   - pytest -m "not integration" --cov=engine --cov=adapters --cov=mobilityone \
            --cov-fail-under=85                     # coverage gate ≥85%
   - pytest tests/contract -q                       # offline contract fixturi (§17/§21)
   - python -c "from config import get_settings; get_settings()"   # config se učita
-  - test_architecture (enforced manifest, BI-7) + test_dead_config (BI-6)
+  - test_architecture (enforced manifest, BI-7) + test_dead_config (BI-6) + mine-manifest (dolje)
 gate: nijedan crveni korak → merge blocked. Coverage <85% → blocked.
+# deploy-blocking (ne per-PR, gated live LLM/DB kredencijalima):
+  - pytest -m benchmark   # LLM-eval nad tests/benchmarks na 2 seeda (seed1337+2024),
+                          # prag top1≥90 top3≥97 halluc==0 diffano vs pinana baseline
+  - pytest -m integration # atomični claim concurrency (§5.1) + restart-recovery (S8/M10)
 ```
-- Testovi vrte se protiv **SQLite/LocalDB** (ne prava SQL baza) offline; `ai` schema
-  DDL ima i SQLite-kompatibilnu varijantu za test (ili SQLAlchemy modeli).
-- **Live contract** (`CONTRACT_BASE_URL`) i **integration** (`-m integration`) se
-  vrte odvojeno, protiv dev MobilityONE-a, gated env-varijablama (ne u svakom PR-u).
+**RUFF POOŠTREN (zatvara: default ignore potkopava minu M1):** za JEZGRU
+(`engine/adapters/mobilityone/outbox/db`) NE nasljeđuj legacy suppressione —
+`select += ["ASYNC","TRY"]`, makni `E722`(goli except)/`B904`(raise bez from)/
+`F401`(mrtvi import) iz global ignore; legacy suppression SAMO per-file za
+`scripts/*`,`tests/*`,`alembic/*`. Goli `except:`/`raise` bez `from` u jezgri =
+crven build (usklađeno s M1 ErrorCode-by-value, BI-11).
+
+**OBAVEZNI test-gateovi (ne samo coverage %):**
+- **MINE-MANIFEST:** svaka mina M1-M14 (§1.5) ima imenovani regression test;
+  `test_mine_manifest` provjeri da svih 14 postoji (kao BI-7 za module).
+- **SCENARIO-MANIFEST:** svaki S1-S13 (§18/§28) ima e2e test; manifest gate.
+- **RED-TEAM e2e:** ne samo string-sanitizer (`test_prompt_injection`) nego e2e
+  napadi (injection kroz cijeli turn, PII u izlazu, cross-tenant pokušaj).
+- **BENCHMARK GATE:** promjena `AZURE_OPENAI_DEPLOYMENT_NAME` ILI §14.1 promptova
+  zahtijeva zelen 2-seed benchmark vs pinana baseline PRIJE deploya (§22#8).
+- **CONCURRENCY:** atomični claim (§5.1) — 2 taska ne uzmu istu poruku — dokazan
+  integration testom protiv LocalDB (SQLite ne podržava READPAST).
+- Reproducibilnost: ovisnosti lockane (`pip-tools requirements.lock --generate-hashes`
+  ili `uv.lock`); CI instalira iz locka.
+- **ZADRŽI postojeći tooling (§26):** `ruff`, `mypy`, `.pre-commit-config.yaml`,
+  `Dockerfile` (multi-stage, non-root) — NE gubi ih u evoluciji.
+- Offline testovi protiv **SQLite/LocalDB**; live contract/integration gated env-om.
 - Deploy TEK nakon zelenog CI + `verify_production_readiness` (preflight ok AND verified).
 
 ---
@@ -852,6 +895,12 @@ izlaz = novi redak ovdje + test.**
    config/modul/tablica ima potrošača (BI-6/7/8)? nema Redis/worker artefakata (BI-9)?
    adapter je jedini s kanal-formatom (BI-12)? svaki šav ima test (BI-13)?
 ── CONFIG §4.5 ── nijedna tajna u git; nijedan hardkodiran host; env preko settings?
+── KONVERZACIJA §28 (K12) ── out-of-scope ima graciozan izlaz (ne halucinira akciju)?
+   multi-intent ne gubi drugi intent? promjena teme usred params ne guta poruku? ton "ti"?
+── OPS §29 ── outbox-heartbeat→ready (petlja ne umre tiho)? GDPR retencija+erasure
+   za ai.*? admin messages/routing-log/pause? App Insights metrike+alarmi? migracije?
+── TEST-RIGOR §20.1 ── mypy gate? ruff pooštren (goli except u jezgri crven)?
+   benchmark deploy-gate? mine-manifest (M1-M14)? concurrency-claim integration test?
 ── PRIJE "GOTOVO" ── svih ~30 akcija ×6 (§21)? benchmark 90/97/0? showstopper bez 🔴?
    preflight ok AND verified? Key Vault/Managed Identity za sve tajne?
 ```
@@ -870,11 +919,13 @@ izlaz = novi redak ovdje + test.**
 |---|---|
 | `services/v2/engine.py` (V2Engine) | `engine/conversation_service.py` (isti slojevi; pending/history → `ai.UserSession`) |
 | `services/v2/{rate_limiter,pii_scrubber,input_sanitizer,output_sanitizer,crisis_detector,identity,special_intents,mutation_gate,param_ui,type_resolver,api_error_translator,conversation_history}.py` | `engine/*` (logika NETAKNUTA) |
+| `services/v2/{meta_intents,multi_intent_detector,negation_handler,intent_type,driver_basics}.py` | `engine/*` — **konverzacijski moduli (§28): out-of-scope, multi-intent, negacija — ne izgubiti/reinventirati!** |
 | `services/router/llm_router.py` + `action_registry`/`validator` | `engine/routing/*` |
 | `services/formatter/llm_formatter.py` | `engine/formatter.py` |
 | `services/whatsapp_service.py` + `viber_service.py` | `adapters/infobip.py` (VEĆ su adapteri! M2/M4 ostaju) |
 | `services/api_gateway.py` · `token_manager.py` · `auth_preflight.py` | `mobilityone/*` (netaknuto) |
 | `config/actions.json` · svih 14 mina · pripadni testovi | ostaju |
+| **TOOLING:** `ruff`/`mypy` config (pyproject) · `.pre-commit-config.yaml` · `Dockerfile` (multi-stage, non-root) · `tests/` infra | ZADRŽATI — ne gubiti u evoluciji |
 
 **RE-PLUMBAJ (storage/infra — jedini pravi posao):**
 | Postojeće | → Cilj |
@@ -887,6 +938,10 @@ izlaz = novi redak ovdje + test.**
 **OBRIŠI:** Redis klijent · k8s Redis/Postgres manifesti · KEDA · zaseban
 worker-deployment · (ako ideš ravno na ~30 akcija) 950-skela (tool_data/registry/
 anchor — bila prijelazna). BI-9 to i provjerava.
+**PRUNE OVISNOSTI (`requirements*.txt`/`pyproject`):** makni `redis` (Redis
+maknut), `fastapi-limiter` (rate-limit in-memory), `asyncpg`/`psycopg2*` (cilj je
+SQL Server → dodaj `pyodbc`/`aioodbc`), `scikit-learn`+`numpy` (mrtvi bez 950-skele).
+BI-9 gate grepa i manifest ovisnosti — mrtva teška ovisnost = crven build.
 
 **Redoslijed evolucije (Strangler-safe):** 1) SQL `ai` schema + repository →
 2) adapteri iz postojećih *_service.py → 3) outbox loop zamijeni worker →
@@ -970,3 +1025,117 @@ Za pilot gradiš SAMO `adapters/infobip.py` + `/api/ai/webhooks/infobip`. Teams/
 Web/Copilot su **contract-stubovi** (sučelje fiksno, implementacija kad dođu na
 red). Kad dođe Teams: recipe 27.2 — 4 koraka, jezgra netaknuta. To je cijela
 poanta ports&adapters dizajna: **WhatsApp danas, ostalo bez boli sutra.**
+
+---
+
+## §28 KONVERZACIJSKA PRAVILA (kako bot RAZGOVARA — K12)
+
+> Mozak zna ŠTO napraviti; ovo je KAKO priča. Ova pravila su i test-checklist
+> (svako ima e2e). Postojeći moduli koji ovo IMPLEMENTIRAJU i ZADRŽAVAJU se
+> (§26): `meta_intents.py`, `multi_intent_detector.py`, `special_intents.py`,
+> `negation_handler.py`, `output_sanitizer.py`.
+
+**Persona / ton:** neformalno **"ti"** (vozači, ne korporativno), kratko (2-4
+rečenice), hrvatski, topao ali profesionalan. Emoji SAMO funkcionalno (1️⃣2️⃣3️⃣ u
+clarify listi); inače bez emoji-spama. Isti ton kroz SVA 4 glasa (formatter,
+clarify, confirm echo, welcome).
+
+**OUT-OF-SCOPE (`kind=out_of_scope`) — HIGH, deterministički, 0 API/LLM poziva:**
+```
+"koliko je sati" / vic / vrijeme / "tko si ti" →
+  "Ja sam AI asistent za tvoj vozni park — mogu ti {Faza 1: rezervirati vozilo
+   ili prijaviti kvar}. S tim ti rado pomažem."
+```
+NIKAD ne halucinira akciju na off-topic (mina: stari router je forsirao najbliži
+tool → izabrao bi list_trips na "koliko je sati"). Novi router ima granu
+out_of_scope (§14.1).
+
+**VIŠE-INTENT u jednoj poruci — MED:** ("rezerviraj auto i prijavi kvar")
+detektira `multi_intent_detector`; obradi PRIMARY (sigurnosni intent uvijek
+primary), `pending_followup` spremi u `ai.UserSession`; nakon uspješnog exec-a
+primarne akcije, u IZLAZ umetni: *"Riješeno. Rekao si i {B} — da to sad?"*
+Drugi intent se NIKAD tiho ne gubi (osobito ako je report_incident).
+
+**PROMJENA TEME usred prikupljanja parametara — HIGH:** dok pending_params čeka
+vrijednost, PRIJE nego tekst tretiraš kao param, proslijedi ga routeru kao
+kandidat. Ako router s povjerenjem prepozna DRUGU akciju ILI tekst signalizira
+novu namjeru ("zapravo…", "ipak…", "ne, radije…") → NE spremaj kao param;
+potvrdi prekid (*"Ok, ostavljam {stara akcija}. {nova}?"*) + očisti pending.
+Inače nastavi kao odgovor na param. (Obrni default raw-fallbacka u param_ui: ne
+gutaj sve kao string.) "odustani" → čisti abort (kao dosad).
+
+**Mješoviti / engleski ulaz:** razumij engleski, ali ODGOVARAJ na hrvatskom
+(vozači pišu HR; poneki upišu "book a car"). Ne prekidaj razgovor zbog jezika.
+
+**Zatvaranje:** "hvala"/"bok"/"to je sve" → kratak topao close ("Nema na čemu,
+javi se kad god trebaš!"), bez pokušaja nove akcije.
+
+**Scenariji (dodaci §18):** S11 OFF-TOPIC ("koliko je sati" → out_of_scope
+template → 0 executor poziva) · S12 MULTI-INTENT ("auto i kvar" → primary=incident,
+followup=booking, oba obrađena) · S13 TOPIC-CHANGE (usred booking params "ipak
+prijavi kvar" → potvrdi prekid, clear pending, re-route). Svaki = e2e test (BI-1)
+koji asertira da executor NIJE krivo pozvan i drugi intent nije izgubljen.
+**§21 garancija:** out_of_scope i close su VALIDNI izlazi (smislen odgovor), ne
+samo mehanički status.
+
+---
+
+## §29 OPS, DATA LIFECYCLE & MIGRACIJE (pravi sustav "u potpunosti")
+
+### 29.1 GDPR — retencija + erasure za `ai.*` (HIGH — nose PII)
+```sql
+-- RETENCIJA (periodični job, isti scheduled task kao §5 session-cleanup):
+DELETE FROM ai.Message      WHERE CreatedAt < DATEADD(day,-90, SYSUTCDATETIME());
+DELETE FROM ai.Conversation WHERE LastActivityAt < DATEADD(day,-90, SYSUTCDATETIME());
+DELETE FROM ai.ToolCallLog  WHERE CreatedAt < DATEADD(day,-90, SYSUTCDATETIME());
+DELETE FROM ai.Feedback     WHERE CreatedAt < DATEADD(day,-180, SYSUTCDATETIME());
+-- ai.UserSession: već ExpiresAt (§5).
+-- ERASURE (Art.17, po Senderu, transakcijski — brisanje na zahtjev):
+BEGIN TRAN;
+  DELETE FROM ai.Message WHERE Sender=@s; DELETE FROM ai.UserSession WHERE Sender=@s;
+  DELETE FROM ai.ToolCallLog WHERE Sender=@s; DELETE FROM ai.Conversation WHERE Sender=@s;
+COMMIT;
+```
+Erasure ide kroz admin GDPR put (isti obrazac kao postojeći `/admin/gdpr-process`).
+
+### 29.2 ADMIN / OPS SURFACE (vidljivost + kill-switch — iza ADMIN_TOKEN)
+```
+GET  /api/ai/admin/messages?status=&limit=N   → zadnjih N ai.Message (failed/stuck/processing)
+GET  /api/ai/admin/routing-log?tenant=&limit=N→ ai.ToolCallLog (zamjena za Redis routing-log)
+POST /api/ai/admin/pause {channel}            → ai.Channel.Enabled=0 (kill-switch po kanalu)
+```
+`ai.Channel.Enabled` MORA imati čitača (BI-2): webhook §6 provjeri Enabled prije
+`insert_inbound` (disabled → 200 ali ne queue). Time kanal-pause stvarno radi.
+
+### 29.3 OBSERVABILITY (App Insights — imenovane metrike + alarmi)
+| Metrika | Alarm |
+|---|---|
+| turn latency (p50/p95) | p95 > 15s |
+| LLM cost / dan (token count × cijena) | > dnevni budžet → alarm (loop-breaker: max N turnova/sesija) |
+| error rate (`ai.Message.Status=failed` count) | > prag → alarm (DLQ-ekvivalent) |
+| outbox lag (najstariji `received` age) | > 60s → petlja zaglavila (vidi 29.4) |
+correlation_id kroz cijeli turn (webhook→outbox→engine→send) u svakom logu.
+
+### 29.4 HEALTH / READINESS + OUTBOX HEARTBEAT (zatvara "outbox tiho umre" — HIGH)
+```
+GET /api/ai/health  → proces živ (200)
+GET /api/ai/ready   → SQL dosežljiv I outbox petlja živa (heartbeat < 30s stara)
+```
+Outbox petlja upisuje heartbeat (timestamp) svaki ciklus; ako stane/zaglavi →
+`ready` pada → k8s restarta pod + alarm. **Bez ovoga garancija §21 ne vrijedi**
+(poruke bi tiho stajale u `received`).
+
+### 29.5 SCHEMA MIGRACIJE (post-v1)
+Migracije: `db/migrations/NNN_opis.sql` (forward-only, numerirane) ILI EF (Borisov
+standard) — ista dualnost kao §5. **Expand-contract, ADITIVNO:** `ADD COLUMN NULL`/
+`CREATE INDEX` dok stari pod radi; drop/rename/alter-type TEK kad je stari kod
+izvan prometa. CI: `migrate step → THEN deploy`; boot preflight "schema na
+očekivanoj verziji". Rollback sheme = nova forward migracija, ne in-place undo.
+
+### 29.6 DEPLOY ROLLBACK + SECRET ROTATION
+- **Rollback:** `kubectl rollout undo`; in-flight poruke su u `ai.Message`
+  (trajne) → novi/stari pod ih preuzme, ništa se ne gubi (expand-contract čini
+  shemu kompatibilnom oba smjera tijekom rollouta).
+- **Secret rotation runbook:** Key Vault nova vrijednost → rolling restart
+  (token_manager forsira refresh na 401). Rotirati: MOBILITY_CLIENT_SECRET,
+  INFOBIP_API_KEY/SECRET, Azure key — SVE zalijepljeno u chat/ngrok-era ODMAH.
