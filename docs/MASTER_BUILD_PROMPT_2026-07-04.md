@@ -8,22 +8,24 @@
 >
 > **PROTOKOL (obavezan):**
 > 1. Pročitaj redom: §0 → §0.5 (CILJ) → §1 (invarijante) → §1.5 (mine) →
+>    §1.6 (build-integrity pravila) → §4.5 (config disciplina) →
 >    §23.1 (odaberi build path po stanju svijeta) — TEK ONDA gradi.
-> 2. Nakon SVAKOG koraka: testovi tog koraka zeleni + samoprovjera §25.6.
+> 2. Nakon SVAKOG koraka: testovi tog koraka zeleni + samoprovjera §25.6
+>    (uključuje BI-1..16 i CD-1..5 gateove).
 > 3. Nešto nije specificirano? Konzervativni default + ZAPIŠI odluku u
 >    DECISIONS.md. Nešto proturječi? §0.5/§1/§1.5 pobjeđuju sve ostalo.
-> 4. NIKAD ne isporuči korak koji krši ijedan redak §1 ili ponavlja minu §1.5.
+> 4. NIKAD ne isporuči korak koji krši ijedan redak §1, ponavlja minu §1.5,
+>    ili pada na build-integrity gateu §1.6/§4.5.
 > 5. Gotovo = §21.2, ne tvoj osjećaj. Samoocjena <10/10 → nastavi raditi.
 >
-> **Verzija:** 2026-07-04 **v2.0** — "nepogrešiv build spec": +ciljana
-> arhitektura box-dijagram (§0.5), +KRITIČNA ZNANJA/mine (§1.5), +copy-paste
-> `.env` template (§4.3), +samoprovjera graditelja (§25.6), +graditeljski
-> PROTOKOL (header). Ranije: v1.1 (ciljno stanje normativno §0.5, skela
-> karantenizirana §9.2/§22.5, potpunost per-akcija §21.2). Konsolidacija 5
-> dokumenata (TEHNIČKA SPECIFIKACIJA, PRESSURE POINTS, PLAN KONVERGENCIJA,
-> USPOREDBA ARHITEKTURA, M1 ADDENDUM) + **stvarno stanje koda** (suite:
-> 1754 passed / 0 failed, coverage 87%). Gdje se spec i implementacija
-> razlikuju, OVAJ dokument nosi istinu.
+> **Verzija:** 2026-07-04 **v2.1** — +BUILD-INTEGRITY pravila (§1.6:
+> anti-nepotpun/višak/slomljen, 16 pravila s gateovima) + CONFIG DISCIPLINA
+> (§4.5: precizno no-hardcoding). Ranije: v2.0 (ciljana arhitektura §0.5,
+> mine §1.5, `.env` template §4.3, samoprovjera §25.6, PROTOKOL); v1.1
+> (ciljno stanje normativno, skela karantenizirana §22.5, potpunost
+> per-akcija §21.2). Konsolidacija 5 dokumenata + **stvarno stanje koda**
+> (suite: 1756 passed / 0 failed, coverage 87%). Gdje se spec i
+> implementacija razlikuju, OVAJ dokument nosi istinu.
 
 ---
 
@@ -203,6 +205,46 @@ ako ponoviš ijednu, build NIJE nepogrešiv. Sve su pinane testom (kolona dokaz)
 
 > **Pravilo za graditelja:** prije nego zatvoriš modul koji dira slanje, auth,
 > tenant, PII, datetime ili katalog — pročitaj pripadnu minu i dodaj njen test.
+
+---
+
+## §1.6 BUILD-INTEGRITY PRAVILA — protiv NEPOTPUNOG / VIŠKA / SLOMLJENOG builda
+
+**Ovo je srce prompta za svjež build.** Cilj: nemoguće je proglasiti "gotovo" a
+da neki dio tiho ne radi, da postoji višak koji ne radi, ili da flow pukne na
+šavu. Svako pravilo ima GATE (mehanizam koji hvata kršenje). Kršenje IJEDNOG =
+build NIJE gotov, bez obzira na samoocjenu.
+
+### A) ANTI-NEPOTPUN (ništa polu-spojeno)
+| # | Pravilo | Gate koji hvata kršenje |
+|---|---|---|
+| BI-1 | Sposobnost je "gotova" SAMO uz END-TO-END dokaz (poruka uđe → točan odgovor izađe), NIKAD "modul postoji" | e2e razgovorni test po sposobnosti (§21.2 #5); bez njega akcija ostaje OFF |
+| BI-2 | Svaki `pending_*` store (params/mutation/clarify) ima I writer I reader u istom PR-u | grep-test: svaki `save/set` u pending store ima odgovarajući `load/get` u engine dispatchu |
+| BI-3 | Svaka akcija u `actions.json` ima: executor put + `policy.inject` + (ako `mutation`) confirm gate | test: za svaku akciju executor rutira bez `KeyError`; mutation akcija bez confirma = fail |
+| BI-4 | Svaki podatak koji sloj PROIZVEDE mora imati POTROŠAČA (channel tag→dispatch, tenant→x-tenant, `total`→formatter, `original_type`→refusal) | šav-test po produkcijsko-potrošačkom paru (vidi C) |
+| BI-5 | Svaki modul napisan da se pozove NA STARTU mora BITI pozvan (naučeno: auth_preflight se lako napiše a ne zakvači) | startup test: mockani gateway → potvrdi da `run_startup_preflight` (i sl.) JEST pozvan |
+| BI-6 | Svaki required parametar koji fali → pending_params pita; NIKAD se ne šalje polu-prazan poziv | e2e missing-param test (S3) |
+
+### B) ANTI-VIŠAK (ništa mrtvo/natrpano)
+| # | Pravilo | Gate |
+|---|---|---|
+| BI-7 | Svaki `config.py` field ima čitača IZVAN config.py (i to preko `settings`, ne raštrkani `os.environ`) | `test_dead_config_vars_stay_removed` + grep; novi field bez čitača = fail |
+| BI-8 | Svaki modul u `services/v2/` je u `LEAF_MODULES` manifestu I ima test; svaki test ima modul | `tests/v2/test_architecture.py` (enforced manifest) |
+| BI-9 | Svaka DB tablica ima ŽIVOG pisca ILI je eksplicitno `# ARHIV`/`# MIGRACIJA-ONLY` označena | grep-test: model bez `INSERT/session.add` izvan testova = mora nositi oznaku |
+| BI-10 | PATH T build (ciljni) NE sadrži NIJEDAN file iz §22.5 (tool_data, registry machinery, anchor, catalog_scoper…) | build-path checklist §23.1; grep da ti fileovi ne postoje |
+| BI-11 | Nijedan duplikat/ostavština u docs ni kodu (jedan redak po varijabli/entitetu) | review + grep na dvostruke definicije |
+
+### C) ANTI-SLOMLJEN-FLOW (šavovi ne pucaju tiho)
+| # | Pravilo | Gate |
+|---|---|---|
+| BI-12 | Svaki Redis stream/queue entry ima DOKUMENTIRAN skup polja (§5) + čitač s DEFAULTOM (backward-compat s in-flight entryjima pri deployu) | kontraktni test po entryju; `data.get(k, default)` obavezan |
+| BI-13 | `SendResult`/error kodovi se klasificiraju po ENUM VRIJEDNOSTI (`ErrorCode.X.value`), NIKAD po kratkom literalu (mina M1) | test s PRAVIM vrijednostima koje servis emitira, ne fake literalima |
+| BI-14 | api i worker su ODVOJENI procesi i komuniciraju SAMO preko Redisa — nijedan in-process poziv preko granice | arhitektura §2/§0.5; grep da worker ne importa FastAPI app i obrnuto |
+| BI-15 | Svaki ŠAV ima test: webhook→stream · stream→worker · engine→executor · executor→gateway(auth headeri) · outbound→send(channel) | e2e/kontraktni test po šavu (S1-S10) |
+| BI-16 | Nijedan izlaz iz koda ne "propušta šutke" — svaki vodi u poruku ILI DLQ+alarm, i ima redak u §21.3 | garancija-odgovora tablica raste sa svakim novim izlazom (CI pravilo) |
+
+> **Kako se koristi:** svaki PR koji dira sloj mora proći pripadne BI-retke; §25.6
+> samoprovjera ih referencira. "Radi na mom stroju" nije dokaz — GATE je dokaz.
 
 ---
 
@@ -503,6 +545,30 @@ mogućnosti sustava. Verificirano grep-om (0 živih potrošača), pročišćeno
   `test_dead_config_vars_stay_removed`.
 - **`GDPR_HASH_SALT`** — bio deklariran ali NEprimijenjen (hash je bio
   nesaljen); od 2026-07-04 **spojen** u `telemetry.hash_phone` → sada JE živ.
+
+### 4.5 CONFIG DISCIPLINA — pravilo o hardkodiranju (NIJE "sve u .env")
+
+Točna disciplina (jer je i "sve u .env" greška — pre-konfiguracija; obrisali smo
+19 mrtvih knobova):
+
+| Vrsta vrijednosti | Ide u | Nikad |
+|---|---|---|
+| Tajne (API keys, DB pass, tokeni, HMAC secret, salt) | **env / k8s Secret** | u kod, u git, ni u `.env.example` (samo placeholder!) |
+| Hostovi / URL-ovi / kredencijali / per-OKOLINA vrijednosti (dev≠prod) | **env** (`settings`) | hardkodirani u kod |
+| Ponašanje / algoritamske konstante (timeouti, pragovi, TTL-ovi, pool cap) | **kod** (konstanta) | env — OSIM ako stvarno trebaju per-deploy tuning |
+| Nova config varijabla | env **samo ako ima živog čitača** | dodavati "za svaki slučaj" (postaje mrtav knob) |
+
+**Tvrda pravila (svako s gate-om):**
+- CD-1: **Nijedna tajna u git ni u `.env.example`** — samo `CHANGE_ME`/placeholder. Gate: secret-scan u CI (`gitleaks`/`trufflehog` pattern) + review.
+- CD-2: **Nijedan hardkodiran host/URL/per-okolina broj** u kodu — ide kroz `settings`. Gate: grep-lint na `https?://` literale i MSISDN/UUID literale izvan testova/configa.
+- CD-3: **Svaki env potrošač čita preko `settings`**, ne raštrkani `os.environ` (da nema silent drifta među procesima). Gate: grep `os.environ.get` izvan config.py/worker-bootstrapa → mora biti opravdan.
+- CD-4: **Svaki `config.py` field ima živog čitača** (BI-7). Gate: `test_dead_config_vars_stay_removed`.
+- CD-5: `VERIFY_WHATSAPP_SIGNATURE=false` i sl. dev-only olakšice su **kodom zabranjene u prod** (config validator). Gate: postojeći prod validatori.
+
+**Poznata prihvaćena iznimka (tech-debt, ne blokira):** Redis pool cap (5/10) i
+`audience="none"` su danas hardkodirani. To su PONAŠANJE konstante (ne
+per-okolina), pa su po CD-3 dopuštene kao kod — ALI ako ikad zatrebaju
+per-deploy tuning, sele u `settings`. Zabilježeno da nije "zaboravljeno".
 
 ---
 
@@ -1415,6 +1481,17 @@ NIKAD ne brisati (bez obzira na fazu): crisis_detector · pii_scrubber ·
 [ ] Ako datetime: TZ pretpostavka zapisana + ugovorena (M8)?
 [ ] Ako katalog: boot fail-fast na malformiran actions.json (M12)?
 [ ] Ako LLM shema: filter/useandfor suppressani (M13)?
+
+── BUILD-INTEGRITY (§1.6 + §4.5) — protiv nepotpunog/viška/slomljenog ──
+[ ] ANTI-NEPOTPUN: sposobnost ima e2e dokaz, ne "modul postoji" (BI-1); svaki
+    pending store ima writer+reader (BI-2); svaki produciran podatak ima
+    potrošača (BI-4); startup moduli su POZVANI (BI-5)?
+[ ] ANTI-VIŠAK: nema config/modula/tablice bez živog potrošača (BI-7/8/9);
+    PATH T bez ijednog §22.5 filea (BI-10)?
+[ ] ANTI-SLOMLJEN: svaki stream entry ima čitač s defaultom (BI-12); kodovi
+    po ENUM vrijednosti ne literalu (BI-13); svaki šav ima test (BI-15)?
+[ ] CONFIG DISCIPLINA: nijedna tajna u git/.env.example (CD-1); nijedan
+    hardkodiran host/URL/per-okolina broj (CD-2); env preko settings (CD-3)?
 
 ── HIGIJENA ──
 [ ] Nisam dodao config var bez živog potrošača (test_dead_config_vars)?
