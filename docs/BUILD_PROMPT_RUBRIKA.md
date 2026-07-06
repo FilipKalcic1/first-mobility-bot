@@ -20,6 +20,7 @@ prihvaćen TEK kad je SVAKA kategorija 10. Dok nije — radimo dalje.*
 | K8 | **Sigurnost / compliance** | Secreti (Key Vault), PII (scrub pre-LLM), GDPR, auth (preflight), tenant izolacija — sve pokriveno + gateovi? |
 | K9 | **Konzistentnost** | Nula unutarnjih kontradikcija / stale referenci. JEDAN jezik, JEDAN model podataka, JEDNA arhitektura kroz cijeli dokument? |
 | K10 | **Iskoristivost kao prompt** | Redoslijed čitanja (protokol), samoprovjera, nedvosmislen prioritet u konfliktu. Može li se KRIVO protumačiti/zloupotrijebiti → <10. |
+| K11 | **Proširivost / enterprise kvaliteta koda** | Daje li KONKRETNE patterne (ports&adapters, DI) + extension recipes (dodaj kanal/akciju BEZ dirania jezgre) + scalability pravila? Bi li dodavanje kanala tražilo izmjenu jezgre → <10. *(Dodana 2026-07 — Filip točno uočio da 10 kategorija nije izoliralo "KAKO implementirati enterprise/scalable".)*|
 
 **Ukupno = min(sve kategorije).** Nije prosjek — jedna 6-ica znači prompt NIJE 10/10.
 
@@ -114,9 +115,20 @@ kvačica + benchmark 90/97/0 + 2 tjedna pilota protiv žive MobilityONE). Prompt
 
 ---
 
+## OCJENA v3.3 (dodana K11 — proširivost/enterprise; Filipov nalaz)
+
+Filip uočio pravi gap: prompt dobro pokriva ŠTO i TIJEK, ali "KAKO implementirati
+enterprise/scalable/bez gomilanja" nije bio izoliran kroz K1-K10. Dodana K11.
+Prije §27: K11 ≈ 7 (ports&adapters koncept u §2, bez eksplicitnih patterna/recipes).
+Nakon §27 (ENGINEERING STANDARDS + PROŠIRIVOST): ports&adapters + dependency
+inversion, EXTENSION RECIPES (dodaj kanal/akciju bez dirania jezgre), scalability
+pravila (stateless + SQL source of truth), anti-bloat disciplina, kod standardi,
+WhatsApp-first → K11 = **10**. Svih 11 kategorija = 10.
+
 ## POVIJEST OCJENA
 | Verzija | Datum | Ukupno | Blokator / residual |
 |---|---|---|---|
 | v3.0 | 2026-07 | 6/10 | K2 stack neodređen |
 | v3.1 | 2026-07 | 9/10 | K10 from-scratch vs re-home framing |
-| v3.2 | 2026-07 | **10/10** | — prihvaćeno (artefakt); sustav se dokazuje §21 |
+| v3.2 | 2026-07 | 10/10 (10 kat.) | prihvaćeno; onda uočena 11. dimenzija |
+| v3.3 | 2026-07 | **10/10 (11 kat.)** | +K11 proširivost/enterprise (§27) |

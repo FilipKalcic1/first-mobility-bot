@@ -16,9 +16,10 @@
 >    pada na build-integrity gateu §1.6 / §4.5.
 > 5. Gotovo = §21, ne tvoj osjećaj. Samoocjena <10/10 → nastavi raditi.
 >
-> **Verzija:** v3.2 (2026-07) — **10/10 po `BUILD_PROMPT_RUBRIKA.md`** (svih 10
-> kategorija). Stack FIKSIRAN (Python), +REUSE-MAPA (§26) za evoluciju postojećeg
-> sustava, +LLM prompt-template-i (§14.1), +CI (§20.1), +atomic claim (§5.1). Ciljna arhitektura po reviewu
+> **Verzija:** v3.3 (2026-07) — **10/10 po `BUILD_PROMPT_RUBRIKA.md`** (svih 11
+> kategorija). Stack FIKSIRAN (Python), +REUSE-MAPA (§26), +ENGINEERING STANDARDS
+> & PROŠIRIVOST (§27: ports&adapters, extension recipes, scalability, WhatsApp-first),
+> +LLM prompt-template-i (§14.1), +CI (§20.1), +atomic claim (§5.1). Ciljna arhitektura po reviewu
 > vlasnika: **jedan `mobilityone-ai` servis na postojećem AKS-u, SQL `ai` schema u
 > postojećoj bazi, BEZ Redisa / zasebnog workera / PostgreSQL / KEDA** — sav mozak,
 > mine i ugovori PREŽIVLJAVAJU, re-homani na jednostavniju infrastrukturu.
@@ -883,3 +884,81 @@ anchor — bila prijelazna). BI-9 to i provjerava.
 2) adapteri iz postojećih *_service.py → 3) outbox loop zamijeni worker →
 4) prebaci pending/history s Redisa na `ai.UserSession` → 5) makni Redis →
 6) deploy kao jedan servis. Suite mora ostati zelena na SVAKOM koraku.
+
+---
+
+## §27 ENGINEERING STANDARDS + PROŠIRIVOST (kako da bude enterprise, ne gomila se, scalable)
+
+> Ovo je "KAKO implementirati", ne "što". Cilj: dodavanje kanala/akcije NIKAD ne
+> dira jezgru; kod ostaje čist i skalabilan. Ovo je K11 rubrike.
+
+### 27.1 Ports & Adapters (hexagonalno) — zašto se ništa NE gomila
+```
+      ADAPTERI (rub — mijenja se često)              JEZGRA (mozak — stabilna)
+  Infobip/Teams/Web ─implements─▶ ChannelPort ─┐
+  MobilityONE API   ─implements─▶ FleetPort    ─┤
+  Azure OpenAI      ─implements─▶ LLMPort       ─┼─▶ ConversationService
+  SQL repository    ─implements─▶ StorePort     ─┘    ovisi SAMO o PORTOVIMA
+                                                       (sučeljima), NE o konkretnim
+                                                       Infobip/SQL/OpenAI klasama
+```
+**Dependency inversion:** jezgra ovisi o SUČELJIMA, ne o konkretnim klasama.
+Posljedica: zamjena providera (Infobip→drugi, Azure→drugi LLM) = novi adapter,
+jezgra NETAKNUTA. To je jedini razlog zašto dodavanje ne gomila kod.
+
+### 27.2 EXTENSION RECIPES (korak-po-korak — dokaz da je proširivo)
+**Dodati NOVI KANAL (npr. Teams):**
+```
+1. adapters/teams.py: implementiraj ChannelAdapter (parse_inbound/send/verify_signature/MAX_LEN)
+2. registriraj u adapter-registry: ADAPTERS["teams"] = TeamsAdapter()
+3. main.py: dodaj rutu @app.post("/api/ai/webhooks/teams")  (3 linije, isti obrazac §6)
+4. tests/test_teams_adapter.py
+→ NULA promjena u ConversationService, routeru, executoru, SQL-u.
+```
+**Dodati NOVU AKCIJU (npr. add_mileage):**
+```
+1. config/actions.json: dodaj entry (schema §11) — opis + use_when + examples + params
+2. ako backend orkestrira (/actions/*): NIŠTA VIŠE.  ako granularno: 1 mapiranje u executor
+3. tests/contract/fixtures/add_mileage.json + e2e razgovorni test
+4. uključi (per-action flag)
+→ NULA promjena u routeru/mozgu (router čita actions.json dinamički).
+```
+**Dodati MobilityONE endpoint:** proširi api_gateway mapiranje; jezgra netaknuta.
+
+> **Test proširivosti (BI):** ako dodavanje kanala/akcije traži izmjenu
+> `conversation_service.py` ili `llm_router.py` — dizajn je POGREŠAN. Jezgra je
+> zatvorena za izmjenu, otvorena za proširenje (Open/Closed).
+
+### 27.3 SCALABILITY (konkretno, ne fraza)
+- **Servis je STATELESS** — SVE stanje u SQL (`ai.Message`, `ai.UserSession`).
+  Horizontalno skaliranje = samo dodaj pod (SQL je source of truth, claim atomičan §5.1).
+- Nema in-process stanja koje se gubi (osim rate-limit/breaker — per-pod, OK).
+- **SQL kao granica:** connection pooling; indeks `IX_Message_pending`; pri
+  volumenu → read replica ili particija po TenantId (TEK kad metrika pokaže).
+- **LLM je usko grlo prije infre** — 2 poziva/turn; kvota se diže zahtjevom;
+  async svugdje da jedan spori LLM poziv ne blokira druge.
+- Pragovi rasta su ODLUKE s brojem (§20), ne nagađanja: >150 msg/min → 2 poda;
+  >500 korisnika → SQL read replica. Ne gradi unaprijed (YAGNI).
+
+### 27.4 ANTI-BLOAT DISCIPLINA (pozitivno)
+- **YAGNI:** gradi za DANAS (1 pod, ~120 vozača). Kompleksnost TEK kad metrika
+  pokaže potrebu. Svaki "za svaki slučaj" je budući mrtav kod.
+- Svaki modul: JEDNA odgovornost + test + potrošač (BI-6/7/8).
+- **Config-driven > code-driven** gdje god ide (actions.json, ai.Channel) —
+  nova sposobnost bez deploya.
+- **Brisanje je feature:** mrtav kod van (dead-config test, enforced manifest).
+
+### 27.5 KOD STANDARDI (enterprise)
+- Type hints svugdje; `@dataclass` za modele; `async` za sav I/O.
+- **Dependency Injection:** ovisnosti se INJEKTIRAJU kroz konstruktor, NE kreiraju
+  unutar modula (testabilnost — svaki dio testabilan u izolaciji s fake portovima).
+- Jezgra NE importa adapter-SDK (Infobip/Bot Framework) — BI-12; grep to čuva.
+- Structured logging (App Insights) + correlation_id kroz cijeli turn (webhook→outbox→engine→send).
+- Svaki javni put ima test; contract testovi na SVAKOJ granici (port).
+- Greške po `ErrorCode` VRIJEDNOSTI (M1); nikad gole iznimke koje se gutaju.
+
+### 27.6 WHATSAPP-FIRST (i zašto dodavanje ostalog nije problem)
+Za pilot gradiš SAMO `adapters/infobip.py` + `/api/ai/webhooks/infobip`. Teams/
+Web/Copilot su **contract-stubovi** (sučelje fiksno, implementacija kad dođu na
+red). Kad dođe Teams: recipe 27.2 — 4 koraka, jezgra netaknuta. To je cijela
+poanta ports&adapters dizajna: **WhatsApp danas, ostalo bez boli sutra.**
